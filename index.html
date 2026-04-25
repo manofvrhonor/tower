@@ -1,15 +1,97 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tower of Time</title>
-  <style>
-    body { margin: 0; overflow: hidden; background: #000; }
-    canvas { display: block; }
-  </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tower — VR Workshop</title>
+    <link rel="icon" href="data:,">
+
+  <!-- A-Frame core (через jsDelivr — стабильно работает из РФ) -->
+  <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe-master.min.js"></script>
+
+  <!-- Стили -->
+  <link rel="stylesheet" href="css/style.css" />
+
+  <!-- Конфиг и логика (defer = выполнятся после парсинга HTML) -->
+  <script src="js/config.js" defer></script>
+  <script src="js/main.js" defer></script>
 </head>
+
 <body>
-  <script type="module" src="/src/main.js"></script>
+  <a-scene background="color: #1a1a1a">
+
+    <!-- ====== КОМНАТА (куб 3×3×3 м) ====== -->
+
+    <!-- Пол: 3м × 3м, на уровне y=0 -->
+    <a-plane
+      position="0 0 0"
+      rotation="-90 0 0"
+      width="3"
+      height="3"
+      color="#8a8580">
+    </a-plane>
+
+    <!-- Потолок: 3м × 3м, на высоте y=3 -->
+    <a-plane
+      position="0 3 0"
+      rotation="90 0 0"
+      width="3"
+      height="3"
+      color="#f0ede5">
+    </a-plane>
+
+    <!-- Стена СЕВЕР (z = -1.5, смотрит на игрока) -->
+    <a-plane
+      position="0 1.5 -1.5"
+      width="3"
+      height="3"
+      color="#d4cfc0">
+    </a-plane>
+
+    <!-- Стена ЮГ (z = +1.5, за спиной игрока) -->
+    <a-plane
+      position="0 1.5 1.5"
+      rotation="0 180 0"
+      width="3"
+      height="3"
+      color="#d4cfc0">
+    </a-plane>
+
+    <!-- Стена ЗАПАД (x = -1.5) -->
+    <a-plane
+      position="-1.5 1.5 0"
+      rotation="0 90 0"
+      width="3"
+      height="3"
+      color="#d4cfc0">
+    </a-plane>
+
+    <!-- Стена ВОСТОК (x = +1.5) -->
+    <a-plane
+      position="1.5 1.5 0"
+      rotation="0 -90 0"
+      width="3"
+      height="3"
+      color="#d4cfc0">
+    </a-plane>
+
+
+    <!-- ====== ПЬЕДЕСТАЛ ====== -->
+    <!-- Цилиндр диаметром 0.6м, высотой 1м, центр на y=0.5 -->
+    <a-cylinder
+      position="0 0.5 0"
+      radius="0.3"
+      height="1"
+      color="#3a3a3a">
+    </a-cylinder>
+
+
+    <!-- ====== ИГРОК ====== -->
+    <!-- Стартовая позиция: 1м южнее стола, лицом к пьедесталу -->
+    <a-entity id="player" position="0 0 1">
+      <a-camera position="0 1.6 0" look-controls wasd-controls></a-camera>
+    </a-entity>
+
+  </a-scene>
 </body>
 </html>
