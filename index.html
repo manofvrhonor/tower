@@ -34,30 +34,26 @@
     <a-box id="test-cube" position="0 2.5 0" width="0.1" height="0.1" depth="0.1"
            color="#e74c3c" dynamic-body="mass: 1"></a-box>
 
+    <!-- ====== ДИАГНОСТИКА: статичные маркеры в мире ====== -->
+
+    <!-- Большой ЖЁЛТЫЙ шар прямо над пьедесталом, не должен пропустить никто -->
+    <a-sphere position="0 1.5 0" radius="0.15" color="#ffeb3b"></a-sphere>
+
+    <!-- ЗЕЛЁНЫЙ шар слева от тебя на уровне пояса -->
+    <a-sphere position="-0.5 1 0.5" radius="0.08" color="#4caf50"></a-sphere>
+
+    <!-- СИНИЙ шар справа от тебя на уровне пояса -->
+    <a-sphere position="0.5 1 0.5" radius="0.08" color="#03a9f4"></a-sphere>
+
+    <!-- ОРАНЖЕВЫЙ шар прямо перед лицом игрока -->
+    <a-sphere position="0 1.6 0.5" radius="0.05" color="#ff9800"></a-sphere>
+
     <!-- ====== ИГРОК ====== -->
-    <!-- Стоит у южной стены, лицом к пьедесталу -->
     <a-entity id="player" position="0 0 1">
       <a-camera position="0 1.6 0" look-controls wasd-controls></a-camera>
     </a-entity>
 
-    <!-- ====== ЛЕВАЯ РУКА ====== -->
-    <!-- На одну entity вешаем два компонента сразу:
-         hand-controls сработает если активен контроллер,
-         hand-tracking-controls сработает если активен hand-tracking.
-         Внутри — яркая жёлтая сфера-маркер, которая будет видна ВСЕГДА,
-         даже если ни один из вышеуказанных компонентов не нашёл источник. -->
-    <a-entity id="leftHand"
-              hand-controls="hand: left; handModelStyle: lowPoly; color: #ffffff"
-              hand-tracking-controls="hand: left">
-      <a-sphere radius="0.04" color="#ffeb3b"></a-sphere>
-    </a-entity>
-
-    <!-- ====== ПРАВАЯ РУКА ====== -->
-    <a-entity id="rightHand"
-              hand-controls="hand: right; handModelStyle: lowPoly; color: #ffffff"
-              hand-tracking-controls="hand: right">
-      <a-sphere radius="0.04" color="#03a9f4"></a-sphere>
-    </a-entity>
+    <!-- РУКИ ВРЕМЕННО УБРАНЫ — диагностируем сцену саму по себе -->
 
   </a-scene>
 </body>
