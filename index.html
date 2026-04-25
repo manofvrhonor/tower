@@ -6,14 +6,10 @@
   <title>Tower — VR Workshop</title>
   <link rel="icon" href="data:,">
 
-  <!-- A-Frame core (через jsDelivr — стабильно работает из РФ) -->
   <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe-master.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@c-frame/aframe-physics-system@4.2.2/dist/aframe-physics-system.min.js"></script>
 
-  <!-- Стили -->
   <link rel="stylesheet" href="css/style.css" />
-
-  <!-- Конфиг и логика (defer = выполнятся после парсинга HTML) -->
   <script src="js/config.js" defer></script>
   <script src="js/main.js" defer></script>
 </head>
@@ -21,64 +17,46 @@
 <body>
   <a-scene background="color: #1a1a1a" physics="driver: local; gravity: -9.8; debug: false">
 
-    <!-- ====== АССЕТЫ ====== -->
-    <!-- Кастомные модели рук временно отключены: используем встроенные lowPoly от hand-controls,
-         чтобы убедиться, что руки трекаются и видны. Подключим свои модели позже отдельным компонентом. -->
-    <a-assets>
-      <!-- <a-asset-item id="leftHandModel" src="assets/models/leftHandLow.glb"></a-asset-item> -->
-      <!-- <a-asset-item id="rightHandModel" src="assets/models/rightHandLow.glb"></a-asset-item> -->
-    </a-assets>
+    <a-assets></a-assets>
 
-    <!-- ====== КОМНАТА (куб 3×3×3 м) ====== -->
-
-    <!-- Пол -->
+    <!-- ====== КОМНАТА ====== -->
     <a-plane position="0 0 0" rotation="-90 0 0" width="3" height="3" color="#8a8580" static-body></a-plane>
-
-    <!-- Потолок -->
     <a-plane position="0 3 0" rotation="90 0 0" width="3" height="3" color="#f0ede5"></a-plane>
-
-    <!-- Стена СЕВЕР (z = -1.5) -->
     <a-plane position="0 1.5 -1.5" width="3" height="3" color="#d4cfc0"></a-plane>
-
-    <!-- Стена ЮГ (z = +1.5, за спиной игрока) -->
     <a-plane position="0 1.5 1.5" rotation="0 180 0" width="3" height="3" color="#d4cfc0"></a-plane>
-
-    <!-- Стена ЗАПАД (x = -1.5) -->
     <a-plane position="-1.5 1.5 0" rotation="0 90 0" width="3" height="3" color="#d4cfc0"></a-plane>
-
-    <!-- Стена ВОСТОК (x = +1.5) -->
     <a-plane position="1.5 1.5 0" rotation="0 -90 0" width="3" height="3" color="#d4cfc0"></a-plane>
-
 
     <!-- ====== ПЬЕДЕСТАЛ ====== -->
     <a-cylinder position="0 0.5 0" radius="0.3" height="1" color="#3a3a3a" static-body></a-cylinder>
 
-
-    <!-- ====== ТЕСТОВЫЙ КУБИК (для проверки физики) ====== -->
-    <a-box
-      id="test-cube"
-      position="0 2.5 0"
-      width="0.1" height="0.1" depth="0.1"
-      color="#e74c3c"
-      dynamic-body="mass: 1">
-    </a-box>
-
+    <!-- ====== ТЕСТОВЫЙ КУБИК ====== -->
+    <a-box id="test-cube" position="0 2.5 0" width="0.1" height="0.1" depth="0.1"
+           color="#e74c3c" dynamic-body="mass: 1"></a-box>
 
     <!-- ====== ИГРОК ====== -->
-    <!-- rig в центре комнаты на полу -->
-    <a-entity id="player" position="0 0 0">
+    <!-- Стоит у южной стены, лицом к пьедесталу -->
+    <a-entity id="player" position="0 0 1">
       <a-camera position="0 1.6 0" look-controls wasd-controls></a-camera>
     </a-entity>
 
-    <!-- ====== VR-КОНТРОЛЛЕРЫ РУК ====== -->
-    <!-- Снаружи rig'а: WebXR сам синхронизирует их с камерой.
-         Без gltf-model — используются встроенные lowPoly-модели hand-controls. -->
+    <!-- ====== ЛЕВАЯ РУКА ====== -->
+    <!-- На одну entity вешаем два компонента сразу:
+         hand-controls сработает если активен контроллер,
+         hand-tracking-controls сработает если активен hand-tracking.
+         Внутри — яркая жёлтая сфера-маркер, которая будет видна ВСЕГДА,
+         даже если ни один из вышеуказанных компонентов не нашёл источник. -->
     <a-entity id="leftHand"
-              hand-controls="hand: left; handModelStyle: lowPoly; color: #ffffff">
+              hand-controls="hand: left; handModelStyle: lowPoly; color: #ffffff"
+              hand-tracking-controls="hand: left">
+      <a-sphere radius="0.04" color="#ffeb3b"></a-sphere>
     </a-entity>
 
+    <!-- ====== ПРАВАЯ РУКА ====== -->
     <a-entity id="rightHand"
-              hand-controls="hand: right; handModelStyle: lowPoly; color: #ffffff">
+              hand-controls="hand: right; handModelStyle: lowPoly; color: #ffffff"
+              hand-tracking-controls="hand: right">
+      <a-sphere radius="0.04" color="#03a9f4"></a-sphere>
     </a-entity>
 
   </a-scene>
