@@ -4,10 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tower — VR Workshop</title>
-    <link rel="icon" href="data:,">
+  <link rel="icon" href="data:,">
 
   <!-- A-Frame core (через jsDelivr — стабильно работает из РФ) -->
   <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe-master.min.js"></script>
+   <script src="https://cdn.jsdelivr.net/npm/@c-frame/aframe-physics-system@4.2.2/dist/aframe-physics-system.min.js"></script>
 
   <!-- Стили -->
   <link rel="stylesheet" href="css/style.css" />
@@ -18,7 +19,7 @@
 </head>
 
 <body>
-  <a-scene background="color: #1a1a1a">
+  <a-scene background="color: #1a1a1a" physics="driver: local; gravity: -9.8; debug: false">
 
     <!-- ====== КОМНАТА (куб 3×3×3 м) ====== -->
 
@@ -28,7 +29,8 @@
       rotation="-90 0 0"
       width="3"
       height="3"
-      color="#8a8580">
+      color="#8a8580"
+      static-body>
     </a-plane>
 
     <!-- Потолок: 3м × 3м, на высоте y=3 -->
@@ -82,14 +84,37 @@
       position="0 0.5 0"
       radius="0.3"
       height="1"
-      color="#3a3a3a">
+      color="#3a3a3a"
+      static-body>
     </a-cylinder>
+
+
+    <!-- ====== ТЕСТОВЫЙ КУБИК (временно, для проверки физики) ====== -->
+    <!-- Падает с высоты 2.5м прямо над пьедесталом -->
+    <a-box
+      id="test-cube"
+      position="0 2.5 0"
+      width="0.1"
+      height="0.1"
+      depth="0.1"
+      color="#e74c3c"
+      dynamic-body="mass: 1">
+    </a-box>
 
 
     <!-- ====== ИГРОК ====== -->
     <!-- Стартовая позиция: 1м южнее стола, лицом к пьедесталу -->
     <a-entity id="player" position="0 0 1">
       <a-camera position="0 1.6 0" look-controls wasd-controls></a-camera>
+    </a-entity>
+
+        <!-- VR-контроллеры рук (Quest 3) -->
+    <a-entity id="leftHand"
+              hand-controls="hand: left; handModelStyle: lowPoly; color: #ffffff">
+    </a-entity>
+
+    <a-entity id="rightHand"
+              hand-controls="hand: right; handModelStyle: lowPoly; color: #ffffff">
     </a-entity>
 
   </a-scene>
