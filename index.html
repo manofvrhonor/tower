@@ -19,7 +19,13 @@
 </head>
 
 <body>
-  <a-scene background="color: #1a1a1a" physics="driver: local; gravity: -9.8; debug: false">
+    <a-scene background="color: #1a1a1a" physics="driver: local; gravity: -9.8; debug: false">
+
+    <!-- ====== АССЕТЫ ====== -->
+    <a-assets>
+      <a-asset-item id="leftHandModel" src="assets/models/leftHandLow.glb"></a-asset-item>
+      <a-asset-item id="rightHandModel" src="assets/models/rightHandLow.glb"></a-asset-item>
+    </a-assets>
 
     <!-- ====== КОМНАТА (куб 3×3×3 м) ====== -->
 
@@ -110,11 +116,13 @@
 
         <!-- VR-контроллеры рук (Quest 3) -->
     <a-entity id="leftHand"
-              hand-controls="hand: left; handModelStyle: lowPoly; color: #ffffff">
+              hand-controls="hand: left; handModelStyle: lowPoly; color: #ffffff"
+              gltf-model="#leftHandModel">
     </a-entity>
 
     <a-entity id="rightHand"
-              hand-controls="hand: right; handModelStyle: lowPoly; color: #ffffff">
+              hand-controls="hand: right; handModelStyle: lowPoly; color: #ffffff"
+              gltf-model="#rightHandModel">
     </a-entity>
 
   </a-scene>
