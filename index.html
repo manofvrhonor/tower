@@ -8,7 +8,9 @@
 
   <!-- A-Frame core (через jsDelivr — стабильно работает из РФ) -->
   <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe-master.min.js"></script>
-   <script src="https://cdn.jsdelivr.net/npm/@c-frame/aframe-physics-system@4.2.2/dist/aframe-physics-system.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@c-frame/aframe-physics-system@4.2.2/dist/aframe-physics-system.min.js"></script>
+  <!-- super-hands для хватания объектов -->
+  <script src="https://cdn.jsdelivr.net/npm/@c-frame/aframe-super-hands-component@3.0.0/dist/aframe-super-hands-component.min.js"></script>
 
   <!-- Стили -->
   <link rel="stylesheet" href="css/style.css" />
@@ -104,7 +106,9 @@
       height="0.1"
       depth="0.1"
       color="#e74c3c"
-      dynamic-body="mass: 1">
+      dynamic-body="mass: 1"
+      grabbable="mass: 1"
+      static-body>
     </a-box>
 
 
@@ -115,12 +119,14 @@
       <!-- VR-контроллеры рук (Quest 3) — дети rig'а игрока -->
       <a-entity id="leftHand"
                 hand-controls="hand: left; handModelStyle: lowPoly; color: #ffffff"
-                gltf-model="#leftHandModel">
+                gltf-model="#leftHandModel"
+                super-hands="collider: #leftHand; grabButtons: trigger; rayOrigin: hand">
       </a-entity>
 
       <a-entity id="rightHand"
                 hand-controls="hand: right; handModelStyle: lowPoly; color: #ffffff"
-                gltf-model="#rightHandModel">
+                gltf-model="#rightHandModel"
+                super-hands="collider: #rightHand; grabButtons: trigger; rayOrigin: hand">
       </a-entity>
     </a-entity>
 
