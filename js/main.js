@@ -1,29 +1,33 @@
-/**
- * main.js — точка входа JS.
- *
- * Здесь:
- *  - регистрируем кастомные компоненты A-Frame (по мере появления);
- *  - подписываемся на события сцены (loaded, enter-vr, exit-vr).
- */
+window.addEventListener('DOMContentLoaded', () => {
+  const setup = (id) => {
+    const el = document.getElementById(id);
+    if (!el) {
+      console.warn(`[setup] element #${id} not found`);
+      return;
+    }
 
-// Ждём пока A-Frame полностью построит сцену
-document.addEventListener('DOMContentLoaded', () => {
-  const scene = document.querySelector('a-scene');
+    // События от sphere-collider
+    el.addEventListener('hit', (e) => console.log(`[${id}] HIT:`, e.detail));
+    el.addEventListener('hitstart', (e) => console.log(`[${id}] HITSTART:`, e.detail));
+    el.addEventListener('hitend', (e) => console.log(`[${id}] HITEND:`, e.detail));
 
-  if (!scene) {
-    console.error('[Tower] <a-scene> не найдена в DOM!');
-    return;
-  }
+    // События кнопок контроллера
+    el.addEventListener('gripdown', () => console.log(`[${id}] GRIPDOWN`));
+    el.addEventListener('triggerdown', () => console.log(`[${id}] TRIGGERDOWN`));
+    el.addEventListener('gripup', () => console.log(`[${id}] GRIPUP`));
+    el.addEventListener('triggerup', () => console.log(`[${id}] TRIGGERUP`));
 
-  scene.addEventListener('loaded', () => {
-    console.log('[Tower] Сцена загружена. CONFIG:', window.CONFIG);
-  });
+    // События super-hands
+    el.addEventListener('grab-start', (e) => console.log(`[${id}] GRAB-START`, e.detail));
+    el.addEventListener('grab-end', (e) => console.log(`[${id}] GRAB-END`, e.detail));
+  };
 
-  scene.addEventListener('enter-vr', () => {
-    console.log('[Tower] Вход в VR-режим');
-  });
-
-  scene.addEventListener('exit-vr', () => {
-    console.log('[Tower] Выход из VR-режима');
-  });
+  setTimeout(() => {
+    setup('leftHand');
+    setup('rightHand');
+    console.log('=== Hand event listeners attached ===');
+    console.log('sphere-collider registered:', !!AFRAME.components['sphere-collider']);
+    console.log('super-hands registered:', !!AFRAME.components['super-hands']);
+    console.log('grabbable elements found:', document.querySelectorAll('.grabbable').length);
+  }, 1000);
 });

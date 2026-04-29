@@ -6,11 +6,14 @@
   <title>Tower — VR Workshop</title>
   <link rel="icon" href="data:,">
 
-  <!-- A-Frame core (через jsDelivr — стабильно работает из РФ) -->
-  <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe-master.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@c-frame/aframe-physics-system@4.2.2/dist/aframe-physics-system.min.js"></script>
+  <!-- A-Frame core -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
+  <!-- Physics (c-frame fork, актуальный для A-Frame 1.5) -->
+  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.2/dist/aframe-physics-system.min.js"></script>
+
   <!-- super-hands для хватания объектов -->
-  <script src="https://cdn.jsdelivr.net/npm/@c-frame/aframe-super-hands-component@3.0.0/dist/aframe-super-hands-component.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-super-hands-component@3.0.4/dist/super-hands.min.js"></script>
 
   <!-- Стили -->
   <link rel="stylesheet" href="css/style.css" />
@@ -31,63 +34,21 @@
 
     <!-- ====== КОМНАТА (куб 3×3×3 м) ====== -->
 
-    <!-- Пол: 3м × 3м, на уровне y=0 -->
-    <a-plane
-      position="0 0 0"
-      rotation="-90 0 0"
-      width="3"
-      height="3"
-      color="#8a8580"
-      static-body>
-    </a-plane>
-
-    <!-- Потолок: 3м × 3м, на высоте y=3 -->
-    <a-plane
-      position="0 3 0"
-      rotation="90 0 0"
-      width="3"
-      height="3"
-      color="#f0ede5">
-    </a-plane>
-
-    <!-- Стена СЕВЕР (z = -1.5, смотрит на игрока) -->
-    <a-plane
-      position="0 1.5 -1.5"
-      width="3"
-      height="3"
-      color="#d4cfc0">
-    </a-plane>
-
-    <!-- Стена ЮГ (z = +1.5, за спиной игрока) -->
-    <a-plane
-      position="0 1.5 1.5"
-      rotation="0 180 0"
-      width="3"
-      height="3"
-      color="#d4cfc0">
-    </a-plane>
-
-    <!-- Стена ЗАПАД (x = -1.5) -->
-    <a-plane
-      position="-1.5 1.5 0"
-      rotation="0 90 0"
-      width="3"
-      height="3"
-      color="#d4cfc0">
-    </a-plane>
-
-    <!-- Стена ВОСТОК (x = +1.5) -->
-    <a-plane
-      position="1.5 1.5 0"
-      rotation="0 -90 0"
-      width="3"
-      height="3"
-      color="#d4cfc0">
-    </a-plane>
+    <!-- Пол -->
+    <a-plane position="0 0 0" rotation="-90 0 0" width="3" height="3" color="#8a8580" static-body></a-plane>
+    <!-- Потолок -->
+    <a-plane position="0 3 0" rotation="90 0 0" width="3" height="3" color="#f0ede5"></a-plane>
+    <!-- Стена СЕВЕР -->
+    <a-plane position="0 1.5 -1.5" width="3" height="3" color="#d4cfc0"></a-plane>
+    <!-- Стена ЮГ -->
+    <a-plane position="0 1.5 1.5" rotation="0 180 0" width="3" height="3" color="#d4cfc0"></a-plane>
+    <!-- Стена ЗАПАД -->
+    <a-plane position="-1.5 1.5 0" rotation="0 90 0" width="3" height="3" color="#d4cfc0"></a-plane>
+    <!-- Стена ВОСТОК -->
+    <a-plane position="1.5 1.5 0" rotation="0 -90 0" width="3" height="3" color="#d4cfc0"></a-plane>
 
 
     <!-- ====== ПЬЕДЕСТАЛ ====== -->
-    <!-- Цилиндр диаметром 0.6м, высотой 1м, центр на y=0.5 -->
     <a-cylinder
       position="0 0.5 0"
       radius="0.3"
@@ -97,18 +58,17 @@
     </a-cylinder>
 
 
-    <!-- ====== ТЕСТОВЫЙ КУБИК (временно, для проверки физики) ====== -->
-    <!-- Падает с высоты 2.5м прямо над пьедесталом -->
+    <!-- ====== ТЕСТОВЫЙ КУБИК ====== -->
     <a-box
       id="test-cube"
+      class="grabbable"
       position="0 2.5 0"
       width="0.1"
       height="0.1"
       depth="0.1"
       color="#e74c3c"
       dynamic-body="mass: 1"
-      grabbable="mass: 1"
-      static-body>
+      grabbable>
     </a-box>
 
 
@@ -120,13 +80,18 @@
       <a-entity id="leftHand"
                 hand-controls="hand: left; handModelStyle: lowPoly; color: #ffffff"
                 gltf-model="#leftHandModel"
-                super-hands="collider: #leftHand; grabButtons: trigger; rayOrigin: hand">
+                sphere-collider="objects: .grabbable; radius: 0.1"
+                super-hands="grabStartButtons: gripdown, triggerdown; grabEndButtons: gripup, triggerup">
+        <!-- ВРЕМЕННЫЙ маркер коллайдера для отладки -->
+        <a-sphere radius="0.1" color="#00ff00" opacity="0.3" material="transparent: true"></a-sphere>
       </a-entity>
 
       <a-entity id="rightHand"
                 hand-controls="hand: right; handModelStyle: lowPoly; color: #ffffff"
                 gltf-model="#rightHandModel"
-                super-hands="collider: #rightHand; grabButtons: trigger; rayOrigin: hand">
+                sphere-collider="objects: .grabbable; radius: 0.1"
+                super-hands="grabStartButtons: gripdown, triggerdown; grabEndButtons: gripup, triggerup">
+        <a-sphere radius="0.1" color="#00ff00" opacity="0.3" material="transparent: true"></a-sphere>
       </a-entity>
     </a-entity>
 
