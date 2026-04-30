@@ -6,25 +6,34 @@
   <title>Tower — VR Workshop</title>
   <link rel="icon" href="data:,">
 
-  <!-- A-Frame core -->
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <!-- A-Frame core (1.7.1, требуется для @c-frame/physx) -->
+  <script src="https://cdn.jsdelivr.net/npm/aframe@1.7.1/dist/aframe-master.min.js"></script>
 
-  <!-- Physics (c-frame fork, актуальный для A-Frame 1.5) -->
-  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.2/dist/aframe-physics-system.min.js"></script>
+  <!-- PhysX engine (@c-frame/physx v0.3.0) -->
+  <script src="https://cdn.jsdelivr.net/gh/c-frame/physx@v0.3.0/dist/physx.min.js"></script>
 
-  <!-- super-hands для хватания объектов -->
-  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-super-hands-component@3.0.4/dist/super-hands.min.js"></script>
+  <!-- Локальный компонент захвата (joint-based, dynamic bodies сохраняются) -->
+  <script src="js/components/physx-grab.js"></script>
 
   <!-- Стили -->
   <link rel="stylesheet" href="css/style.css" />
 
   <!-- Конфиг и логика (defer = выполнятся после парсинга HTML) -->
   <script src="js/config.js" defer></script>
+  <script src="js/components/floating-cube.js"></script>
   <script src="js/main.js" defer></script>
 </head>
 
 <body>
-    <a-scene background="color: #1a1a1a" physics="driver: local; gravity: -9.8; debug: false">
+  <a-scene
+    background="color: #1a1a1a"
+    physx="
+      autoLoad: true;
+      delay: 1000;
+      useDefaultScene: false;
+      gravity: 0 -9.8 0;
+      wasmUrl: https://cdn.jsdelivr.net/gh/c-frame/physx@v0.3.0/wasm/physx.release.wasm
+    ">
 
     <!-- ====== АССЕТЫ ====== -->
     <a-assets>
@@ -35,17 +44,23 @@
     <!-- ====== КОМНАТА (куб 3×3×3 м) ====== -->
 
     <!-- Пол -->
-    <a-plane position="0 0 0" rotation="-90 0 0" width="3" height="3" color="#8a8580" static-body></a-plane>
+    <a-plane position="0 0 0" rotation="-90 0 0" width="3" height="3" color="#8a8580"
+             physx-body="type: static"></a-plane>
     <!-- Потолок -->
-    <a-plane position="0 3 0" rotation="90 0 0" width="3" height="3" color="#f0ede5"></a-plane>
+    <a-plane position="0 3 0" rotation="90 0 0" width="3" height="3" color="#f0ede5"
+             physx-body="type: static"></a-plane>
     <!-- Стена СЕВЕР -->
-    <a-plane position="0 1.5 -1.5" width="3" height="3" color="#d4cfc0"></a-plane>
+    <a-plane position="0 1.5 -1.5" width="3" height="3" color="#d4cfc0"
+             physx-body="type: static"></a-plane>
     <!-- Стена ЮГ -->
-    <a-plane position="0 1.5 1.5" rotation="0 180 0" width="3" height="3" color="#d4cfc0"></a-plane>
+    <a-plane position="0 1.5 1.5" rotation="0 180 0" width="3" height="3" color="#d4cfc0"
+             physx-body="type: static"></a-plane>
     <!-- Стена ЗАПАД -->
-    <a-plane position="-1.5 1.5 0" rotation="0 90 0" width="3" height="3" color="#d4cfc0"></a-plane>
+    <a-plane position="-1.5 1.5 0" rotation="0 90 0" width="3" height="3" color="#d4cfc0"
+             physx-body="type: static"></a-plane>
     <!-- Стена ВОСТОК -->
-    <a-plane position="1.5 1.5 0" rotation="0 -90 0" width="3" height="3" color="#d4cfc0"></a-plane>
+    <a-plane position="1.5 1.5 0" rotation="0 -90 0" width="3" height="3" color="#d4cfc0"
+             physx-body="type: static"></a-plane>
 
 
     <!-- ====== ПЬЕДЕСТАЛ ====== -->
@@ -54,44 +69,58 @@
       radius="0.3"
       height="1"
       color="#3a3a3a"
-      static-body>
+      physx-body="type: static">
     </a-cylinder>
 
 
     <!-- ====== ТЕСТОВЫЙ КУБИК ====== -->
     <a-box
       id="test-cube"
-      class="grabbable"
       position="0 2.5 0"
       width="0.1"
       height="0.1"
       depth="0.1"
       color="#e74c3c"
-      dynamic-body="mass: 1"
-      grabbable>
+      physx-body="type: dynamic; mass: 1">
     </a-box>
+
+    <!-- Плавающий кубик #1 (задача 2.2, Шаг 3 — первая визуальная проверка) -->
+    <a-entity
+    id="floating-cube-1"
+    geometry="primitive: box; width: 0.1; height: 0.1; depth: 0.1"
+    material="color: #4A90E2"
+    position="0.2 1.7 0.2"
+    physx-body="type: dynamic"
+    floating-cube>
+    </a-entity>
 
 
     <!-- ====== ИГРОК ====== -->
     <a-entity id="player" position="0 0 1">
       <a-camera position="0 1.6 0" look-controls wasd-controls></a-camera>
 
-      <!-- VR-контроллеры рук (Quest 3) — дети rig'а игрока -->
+      <!-- Левая рука: hand-controls + physx-grab + дочерний коллайдер -->
       <a-entity id="leftHand"
                 hand-controls="hand: left; handModelStyle: lowPoly; color: #ffffff"
                 gltf-model="#leftHandModel"
-                sphere-collider="objects: .grabbable; radius: 0.1"
-                super-hands="grabStartButtons: gripdown, triggerdown; grabEndButtons: gripup, triggerup">
-        <!-- ВРЕМЕННЫЙ маркер коллайдера для отладки -->
-        <a-sphere radius="0.1" color="#00ff00" opacity="0.3" material="transparent: true"></a-sphere>
+                physx-grab>
+        <a-sphere id="leftHandCollider"
+                  radius="0.05"
+                  visible="false"
+                  physx-body="type: kinematic; emitCollisionEvents: true">
+        </a-sphere>
       </a-entity>
 
+      <!-- Правая рука: hand-controls + physx-grab + дочерний коллайдер -->
       <a-entity id="rightHand"
                 hand-controls="hand: right; handModelStyle: lowPoly; color: #ffffff"
                 gltf-model="#rightHandModel"
-                sphere-collider="objects: .grabbable; radius: 0.1"
-                super-hands="grabStartButtons: gripdown, triggerdown; grabEndButtons: gripup, triggerup">
-        <a-sphere radius="0.1" color="#00ff00" opacity="0.3" material="transparent: true"></a-sphere>
+                physx-grab>
+        <a-sphere id="rightHandCollider"
+                  radius="0.05"
+                  visible="false"
+                  physx-body="type: kinematic; emitCollisionEvents: true">
+        </a-sphere>
       </a-entity>
     </a-entity>
 

@@ -1,4 +1,4 @@
-/* global AFRAME, CONFIG */
+/* global AFRAME, CONFIG, PhysX */
 
 /**
  * Компонент floating-cube
@@ -9,102 +9,127 @@
  *   - стартовый импульс задаётся отдельно (Шаг 4 задачи 2.2);
  *   - захват рукой работает через стандартный physx-grab.
  *
- * Состояние state хранится в компоненте:
- *   - 'float'   — текущий режим (вне купола, без гравитации);
- *   - 'gravity' — будущий режим (внутри купола, с гравитацией). Появится в задаче 2.1.
+ * Состояние state:
+ *   - 'float'   — текущий режим;
+ *   - 'gravity' — будущий режим (задача 2.1).
+ *
+ * Готовность тела определяется ПОЛЛИНГОМ rigidBody, а не событием —
+ * имя события зависит от версии @c-frame/physx и не гарантировано.
  *
  * См. CURRENT_TASK.md, задача 2.2.
  */
 AFRAME.registerComponent('floating-cube', {
-  schema: {
-    // Пока без параметров — всё берём из CONFIG.floatingCubes.
-    // Если в будущем понадобится переопределять на конкретной сущности —
-    // добавим сюда поля.
-  },
+  schema: {},
 
   init: function () {
     console.log('[floating-cube] init on', this.el.id || '(no id)');
 
-    // Внутреннее состояние. Для задачи 2.2 всегда 'float'.
     this.state = 'float';
-
-    // Параметры из конфига (на будущее: damping, импульс — пригодятся в Шагах 4–5).
     this.cfg = (typeof CONFIG !== 'undefined' && CONFIG.floatingCubes) || {};
+    this._physicsApplied = false;
 
-    // Применить «невесомость» нужно ПОСЛЕ того, как PhysX создал rigid body.
-    // Событие 'body-loaded' эмитится компонентом physx-body, когда тело готово.
-    this.el.addEventListener('body-loaded', this._onBodyLoaded.bind(this));
+    // План А: подписаться на возможные события готовности тела.
+    var onReady = this._tryApply.bind(this);
+    this.el.addEventListener('body-loaded', onReady);
+    this.el.addEventListener('physx-body-loaded', onReady);
+    this._onReady = onReady;
+
+    // План Б: поллинг rigidBody. Срабатывает в любом случае.
+    this._pollStartTime = performance.now();
+    this._pollIntervalId = setInterval(this._tryApply.bind(this), 100);
   },
 
-  _onBodyLoaded: function () {
-    console.log('[floating-cube] body-loaded on', this.el.id || '(no id)');
-    this._applyFloatPhysics();
-  },
+  _tryApply: function () {
+    if (this._physicsApplied) return;
 
-  /**
-   * Перевести тело в режим float:
-   *   - выключить гравитацию;
-   *   - выставить damping из CONFIG.
-   *
-   * Используем оба пути: атрибут physx-body (декларативно) и API rigidBody
-   * (на случай, если декларативный путь не поддерживается версией физики).
-   */
-  _applyFloatPhysics: function () {
-    var el = this.el;
-    var cfg = this.cfg;
-
-    // 1) Декларативный путь: обновить компонент physx-body.
-    //    В @c-frame/physx разные сборки используют разные имена свойств,
-    //    поэтому пишем то, что чаще встречается. Лишние свойства игнорируются.
-    try {
-      el.setAttribute('physx-body', {
-        linearDamping: cfg.linearDamping !== undefined ? cfg.linearDamping : 0.1,
-        angularDamping: cfg.angularDamping !== undefined ? cfg.angularDamping : 0.1,
-      });
-    } catch (e) {
-      console.warn('[floating-cube] setAttribute physx-body failed:', e);
-    }
-
-    // 2) Прямой путь к rigidBody — гарантированный способ выключить гравитацию.
-    var rb = el.components['physx-body'] && el.components['physx-body'].rigidBody;
+    var bodyComp = this.el.components['physx-body'];
+    var rb = bodyComp && bodyComp.rigidBody;
     if (!rb) {
-      console.warn('[floating-cube] rigidBody not available after body-loaded');
+      // Тело ещё не готово. Если ждём слишком долго — предупреждаем.
+      var waited = performance.now() - this._pollStartTime;
+      if (waited > 5000 && !this._timeoutWarned) {
+        console.warn('[floating-cube] rigidBody still not ready after 5s on', this.el.id);
+        this._timeoutWarned = true;
+      }
       return;
     }
 
-    // PhysX SDK: ActorFlag.eDISABLE_GRAVITY = 1 << 1 = 2.
-    // Доступ через PhysX, который физический модуль выкладывает в window.
-    if (typeof PhysX !== 'undefined' && PhysX.PxActorFlag) {
-      try {
-        rb.setActorFlag(PhysX.PxActorFlag.eDISABLE_GRAVITY, true);
-        console.log('[floating-cube] gravity disabled via PxActorFlag');
-      } catch (e) {
-        console.warn('[floating-cube] setActorFlag failed:', e);
-      }
-    } else {
-      // Fallback: некоторые сборки имеют метод setGravityEnabled.
-      if (typeof rb.setGravityEnabled === 'function') {
-        rb.setGravityEnabled(false);
-        console.log('[floating-cube] gravity disabled via setGravityEnabled');
-      } else {
-        console.warn('[floating-cube] no API to disable gravity found on rigidBody');
-      }
-    }
+    console.log('[floating-cube] rigidBody detected on', this.el.id || '(no id)');
+    this._applyFloatPhysics(rb);
+    this._physicsApplied = true;
 
-    // Damping через API (дублирует setAttribute, но надёжнее).
+    // Останавливаем поллинг.
+    if (this._pollIntervalId) {
+      clearInterval(this._pollIntervalId);
+      this._pollIntervalId = null;
+    }
+  },
+
+  /**
+   * Перевести тело в режим float: выключить гравитацию + выставить damping.
+   * Пробуем разные API подряд — сообщаем в консоль, какой сработал.
+   */
+  _applyFloatPhysics: function (rb) {
+    var cfg = this.cfg;
     var ld = cfg.linearDamping !== undefined ? cfg.linearDamping : 0.1;
     var ad = cfg.angularDamping !== undefined ? cfg.angularDamping : 0.1;
+
+    // === ОТКЛЮЧЕНИЕ ГРАВИТАЦИИ ===
+    // PhysX-WASM ожидает в setActorFlag объект-обёртку enum'а (с полем .value),
+    // а не голое число. Объект лежит на sceneEl.systems.physx.PhysX.PxActorFlag.
+    var sys = this.el.sceneEl.systems.physx;
+    var PX = sys && sys.PhysX;
+    var gravityDisabled = false;
+
+    if (PX && PX.PxActorFlag && PX.PxActorFlag.eDISABLE_GRAVITY) {
+      try {
+        rb.setActorFlag(PX.PxActorFlag.eDISABLE_GRAVITY, true);
+        console.log('[floating-cube] gravity disabled via PxActorFlag.eDISABLE_GRAVITY');
+        gravityDisabled = true;
+      } catch (e) {
+        console.error('[floating-cube] setActorFlag with enum object failed:', e);
+      }
+    } else {
+      console.error('[floating-cube] PxActorFlag.eDISABLE_GRAVITY not found on system.PhysX');
+    }
+
+    // На всякий: разбудим тело, чтобы изменение флага применилось немедленно.
+    if (gravityDisabled && typeof rb.wakeUp === 'function') {
+      try { rb.wakeUp(); } catch (e) {}
+    }
+
+    // === DAMPING ===
     if (typeof rb.setLinearDamping === 'function') {
       rb.setLinearDamping(ld);
+      console.log('[floating-cube] linearDamping =', ld);
     }
     if (typeof rb.setAngularDamping === 'function') {
       rb.setAngularDamping(ad);
+      console.log('[floating-cube] angularDamping =', ad);
+    }
+
+    // На случай, если у кубика уже накопилась скорость падения за тики до отключения
+    // гравитации — обнулим её, чтобы стартовое положение было «висит на месте».
+    if (typeof rb.setLinearVelocity === 'function' && PX && PX.PxVec3) {
+      try {
+        var zero = new PX.PxVec3(0, 0, 0);
+        rb.setLinearVelocity(zero, true);
+        if (typeof zero.delete === 'function') zero.delete();
+      } catch (e) {
+        console.warn('[floating-cube] could not zero linear velocity:', e.message);
+      }
     }
 
     console.log('[floating-cube] float physics applied. state =', this.state);
   },
 
   remove: function () {
-    this.el.removeEventListener('body-loaded', this._onBodyLoaded);
+    if (this._pollIntervalId) {
+      clearInterval(this._pollIntervalId);
+    }
+    if (this._onReady) {
+      this.el.removeEventListener('body-loaded', this._onReady);
+      this.el.removeEventListener('physx-body-loaded', this._onReady);
+    }
   },
 });
