@@ -4,3 +4,7 @@ dist
 *.log
 .vscode
 .aider*
+
+# локальные бэкапы
+*.bak
+*.bak2
