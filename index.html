@@ -18,9 +18,14 @@
   <!-- Стили -->
   <link rel="stylesheet" href="css/style.css" />
 
-  <!-- Конфиг и логика (defer = выполнятся после парсинга HTML) -->
-  <script src="js/config.js" defer></script>
+  <!-- Конфиг и логика. Порядок важен:
+       1) config.js — глобальный CONFIG;
+       2) floating-cube.js — компонент должен быть зарегистрирован до парсинга <a-scene>;
+       3) spawn-floating-cubes.js — наполняет #floating-cubes-root по DOMContentLoaded;
+       4) main.js — диагностика, может зависеть от готовой сцены. -->
+  <script src="js/config.js"></script>
   <script src="js/components/floating-cube.js"></script>
+  <script src="js/spawn-floating-cubes.js"></script>
   <script src="js/main.js" defer></script>
 </head>
 
@@ -45,22 +50,28 @@
 
     <!-- Пол -->
     <a-plane position="0 0 0" rotation="-90 0 0" width="3" height="3" color="#8a8580"
-             physx-body="type: static"></a-plane>
+             physx-body="type: static"
+             physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05"></a-plane>
     <!-- Потолок -->
     <a-plane position="0 3 0" rotation="90 0 0" width="3" height="3" color="#f0ede5"
-             physx-body="type: static"></a-plane>
+             physx-body="type: static"
+             physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05"></a-plane>
     <!-- Стена СЕВЕР -->
     <a-plane position="0 1.5 -1.5" width="3" height="3" color="#d4cfc0"
-             physx-body="type: static"></a-plane>
+             physx-body="type: static"
+             physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05"></a-plane>
     <!-- Стена ЮГ -->
     <a-plane position="0 1.5 1.5" rotation="0 180 0" width="3" height="3" color="#d4cfc0"
-             physx-body="type: static"></a-plane>
+             physx-body="type: static"
+             physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05"></a-plane>
     <!-- Стена ЗАПАД -->
     <a-plane position="-1.5 1.5 0" rotation="0 90 0" width="3" height="3" color="#d4cfc0"
-             physx-body="type: static"></a-plane>
+             physx-body="type: static"
+             physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05"></a-plane>
     <!-- Стена ВОСТОК -->
     <a-plane position="1.5 1.5 0" rotation="0 -90 0" width="3" height="3" color="#d4cfc0"
-             physx-body="type: static"></a-plane>
+             physx-body="type: static"
+             physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05"></a-plane>
 
 
     <!-- ====== ПЬЕДЕСТАЛ ====== -->
@@ -69,30 +80,15 @@
       radius="0.3"
       height="1"
       color="#3a3a3a"
-      physx-body="type: static">
+      physx-body="type: static"
+      physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05">
     </a-cylinder>
 
 
-    <!-- ====== ТЕСТОВЫЙ КУБИК ====== -->
-    <a-box
-      id="test-cube"
-      position="0 2.5 0"
-      width="0.1"
-      height="0.1"
-      depth="0.1"
-      color="#e74c3c"
-      physx-body="type: dynamic; mass: 1">
-    </a-box>
-
-    <!-- Плавающий кубик #1 (задача 2.2, Шаг 3 — первая визуальная проверка) -->
-    <a-entity
-    id="floating-cube-1"
-    geometry="primitive: box; width: 0.1; height: 0.1; depth: 0.1"
-    material="color: #4A90E2"
-    position="0.2 1.7 0.2"
-    physx-body="type: dynamic"
-    floating-cube>
-    </a-entity>
+    <!-- ====== ПЛАВАЮЩИЕ КУБИКИ (5 цветных + 6 серых) ======
+         Контейнер пустой; spawn-floating-cubes.js наполняет его на DOMContentLoaded
+         из CONFIG.floatingCubes (targetColors, trashColor, spawnPositions). -->
+    <a-entity id="floating-cubes-root"></a-entity>
 
 
     <!-- ====== ИГРОК ====== -->
