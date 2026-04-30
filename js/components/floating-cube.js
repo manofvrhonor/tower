@@ -1,4 +1,4 @@
-/* global AFRAME, CONFIG, PhysX */
+/* global AFRAME, CONFIG */
 
 /**
  * Компонент floating-cube
@@ -6,17 +6,29 @@
  * Делает кубик «плавающим» (свойство float):
  *   - dynamic-тело без гравитации;
  *   - низкий damping → дрейф по инерции;
- *   - стартовый импульс задаётся отдельно (Шаг 4 задачи 2.2);
+ *   - стартовый импульс случайного направления при старте;
  *   - захват рукой работает через стандартный physx-grab.
  *
  * Состояние state:
  *   - 'float'   — текущий режим;
- *   - 'gravity' — будущий режим (задача 2.1).
+ *   - 'gravity' — будущий режим (задача 3).
  *
- * Готовность тела определяется ПОЛЛИНГОМ rigidBody, а не событием —
- * имя события зависит от версии @c-frame/physx и не гарантировано.
+ * ТЕХНИЧЕСКИЕ ЗАМЕТКИ ПО БИНДИНГУ @c-frame/physx@v0.3.0
+ * (проверено в Сессии 6, см. CURRENT_TASK.md):
  *
- * См. CURRENT_TASK.md, задача 2.2.
+ *   1. Готовность тела ловится ТОЛЬКО поллингом rigidBody —
+ *      события body-loaded / physx-body-loaded в этой версии
+ *      не приходят стабильно.
+ *
+ *   2. Энумы PhysX (PxActorFlag и т.п.) — это объекты-обёртки
+ *      с полем .value. В setActorFlag нужно передавать сам объект,
+ *      а не число. Объект берётся через sceneEl.systems.physx.PhysX.
+ *
+ *   3. Класса PxVec3 в system.PhysX НЕТ, глобального PhysX тоже НЕТ.
+ *      Метод setLinearVelocity принимает обычный {x, y, z}-объект.
+ *      Проверено: способ работает, импульс применяется корректно.
+ *
+ * См. CURRENT_TASK.md, задача 2.
  */
 AFRAME.registerComponent('floating-cube', {
   schema: {},
@@ -28,13 +40,13 @@ AFRAME.registerComponent('floating-cube', {
     this.cfg = (typeof CONFIG !== 'undefined' && CONFIG.floatingCubes) || {};
     this._physicsApplied = false;
 
-    // План А: подписаться на возможные события готовности тела.
+    // Подписка на возможные события готовности тела (план А).
     var onReady = this._tryApply.bind(this);
     this.el.addEventListener('body-loaded', onReady);
     this.el.addEventListener('physx-body-loaded', onReady);
     this._onReady = onReady;
 
-    // План Б: поллинг rigidBody. Срабатывает в любом случае.
+    // Поллинг rigidBody (план Б, основной).
     this._pollStartTime = performance.now();
     this._pollIntervalId = setInterval(this._tryApply.bind(this), 100);
   },
@@ -45,7 +57,6 @@ AFRAME.registerComponent('floating-cube', {
     var bodyComp = this.el.components['physx-body'];
     var rb = bodyComp && bodyComp.rigidBody;
     if (!rb) {
-      // Тело ещё не готово. Если ждём слишком долго — предупреждаем.
       var waited = performance.now() - this._pollStartTime;
       if (waited > 5000 && !this._timeoutWarned) {
         console.warn('[floating-cube] rigidBody still not ready after 5s on', this.el.id);
@@ -58,75 +69,88 @@ AFRAME.registerComponent('floating-cube', {
     this._applyFloatPhysics(rb);
     this._physicsApplied = true;
 
-    // Останавливаем поллинг.
     if (this._pollIntervalId) {
       clearInterval(this._pollIntervalId);
       this._pollIntervalId = null;
     }
   },
 
-  /**
-   * Перевести тело в режим float: выключить гравитацию + выставить damping.
-   * Пробуем разные API подряд — сообщаем в консоль, какой сработал.
-   */
   _applyFloatPhysics: function (rb) {
     var cfg = this.cfg;
     var ld = cfg.linearDamping !== undefined ? cfg.linearDamping : 0.1;
     var ad = cfg.angularDamping !== undefined ? cfg.angularDamping : 0.1;
 
     // === ОТКЛЮЧЕНИЕ ГРАВИТАЦИИ ===
-    // PhysX-WASM ожидает в setActorFlag объект-обёртку enum'а (с полем .value),
-    // а не голое число. Объект лежит на sceneEl.systems.physx.PhysX.PxActorFlag.
-    var sys = this.el.sceneEl.systems.physx;
-    var PX = sys && sys.PhysX;
-    var gravityDisabled = false;
+    var sysPX = this.el.sceneEl.systems.physx && this.el.sceneEl.systems.physx.PhysX;
 
-    if (PX && PX.PxActorFlag && PX.PxActorFlag.eDISABLE_GRAVITY) {
+    if (sysPX && sysPX.PxActorFlag && sysPX.PxActorFlag.eDISABLE_GRAVITY) {
       try {
-        rb.setActorFlag(PX.PxActorFlag.eDISABLE_GRAVITY, true);
-        console.log('[floating-cube] gravity disabled via PxActorFlag.eDISABLE_GRAVITY');
-        gravityDisabled = true;
+        rb.setActorFlag(sysPX.PxActorFlag.eDISABLE_GRAVITY, true);
+        if (typeof rb.wakeUp === 'function') rb.wakeUp();
+        console.log('[floating-cube] gravity disabled');
       } catch (e) {
-        console.error('[floating-cube] setActorFlag with enum object failed:', e);
+        console.error('[floating-cube] setActorFlag failed:', e);
       }
     } else {
-      console.error('[floating-cube] PxActorFlag.eDISABLE_GRAVITY not found on system.PhysX');
-    }
-
-    // На всякий: разбудим тело, чтобы изменение флага применилось немедленно.
-    if (gravityDisabled && typeof rb.wakeUp === 'function') {
-      try { rb.wakeUp(); } catch (e) {}
+      console.error('[floating-cube] PxActorFlag.eDISABLE_GRAVITY not found');
     }
 
     // === DAMPING ===
     if (typeof rb.setLinearDamping === 'function') {
       rb.setLinearDamping(ld);
-      console.log('[floating-cube] linearDamping =', ld);
     }
     if (typeof rb.setAngularDamping === 'function') {
       rb.setAngularDamping(ad);
-      console.log('[floating-cube] angularDamping =', ad);
     }
+    console.log('[floating-cube] damping: linear =', ld, 'angular =', ad);
 
-    // На случай, если у кубика уже накопилась скорость падения за тики до отключения
-    // гравитации — обнулим её, чтобы стартовое положение было «висит на месте».
-    if (typeof rb.setLinearVelocity === 'function' && PX && PX.PxVec3) {
+    // === ОБНУЛЕНИЕ НАКОПЛЕННОЙ СКОРОСТИ + СТАРТОВЫЙ ИМПУЛЬС ===
+    // setLinearVelocity в этом биндинге принимает {x, y, z}-объект.
+    if (typeof rb.setLinearVelocity === 'function') {
       try {
-        var zero = new PX.PxVec3(0, 0, 0);
-        rb.setLinearVelocity(zero, true);
-        if (typeof zero.delete === 'function') zero.delete();
+        rb.setLinearVelocity({ x: 0, y: 0, z: 0 }, true);
       } catch (e) {
-        console.warn('[floating-cube] could not zero linear velocity:', e.message);
+        console.warn('[floating-cube] zero velocity failed:', e.message);
       }
+
+      var speed = (cfg.initialImpulseSpeed !== undefined) ? cfg.initialImpulseSpeed : 0.2;
+      if (speed > 0) {
+        var dir = this._randomUnitVector();
+        var vel = { x: dir.x * speed, y: dir.y * speed, z: dir.z * speed };
+        try {
+          rb.setLinearVelocity(vel, true);
+          console.log('[floating-cube] initial impulse:',
+            vel.x.toFixed(3), vel.y.toFixed(3), vel.z.toFixed(3),
+            '(|v|=' + speed + ')');
+        } catch (e) {
+          console.warn('[floating-cube] impulse failed:', e.message);
+        }
+      }
+    } else {
+      console.warn('[floating-cube] rb.setLinearVelocity is not a function');
     }
 
     console.log('[floating-cube] float physics applied. state =', this.state);
   },
 
+  /**
+   * Случайный единичный вектор, равномерно распределённый по сфере.
+   * Метод отбраковки: точка из куба [-1,1]^3, отброс длинных и нулевых, нормализация.
+   */
+  _randomUnitVector: function () {
+    var x, y, z, len2;
+    do {
+      x = Math.random() * 2 - 1;
+      y = Math.random() * 2 - 1;
+      z = Math.random() * 2 - 1;
+      len2 = x * x + y * y + z * z;
+    } while (len2 > 1 || len2 < 1e-6);
+    var inv = 1 / Math.sqrt(len2);
+    return { x: x * inv, y: y * inv, z: z * inv };
+  },
+
   remove: function () {
-    if (this._pollIntervalId) {
-      clearInterval(this._pollIntervalId);
-    }
+    if (this._pollIntervalId) clearInterval(this._pollIntervalId);
     if (this._onReady) {
       this.el.removeEventListener('body-loaded', this._onReady);
       this.el.removeEventListener('physx-body-loaded', this._onReady);
