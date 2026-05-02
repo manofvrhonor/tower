@@ -22,10 +22,13 @@
        1) config.js — глобальный CONFIG;
        2) floating-cube.js — компонент должен быть зарегистрирован до парсинга <a-scene>;
        3) spawn-floating-cubes.js — наполняет #floating-cubes-root по DOMContentLoaded;
-       4) main.js — диагностика, может зависеть от готовой сцены. -->
+       4) dome-builder.js — строит коллайдер купола из тонких боксов-плиток
+          (должен быть зарегистрирован до парсинга <a-scene>, т.к. навешен на <a-entity>);
+       5) main.js — диагностика, может зависеть от готовой сцены. -->
   <script src="js/config.js"></script>
   <script src="js/components/floating-cube.js"></script>
   <script src="js/spawn-floating-cubes.js"></script>
+  <script src="js/components/dome-builder.js"></script>
   <script src="js/main.js" defer></script>
 </head>
 
@@ -83,6 +86,43 @@
       physx-body="type: static"
       physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05">
     </a-cylinder>
+
+
+    <!-- ====== КУПОЛ (Этап 3, Шаг 2 v2): визуал + тайловый коллайдер ======
+         Визуал — капсула (цилиндр + верхняя полусфера). Нижняя полусфера не нужна,
+         её перекрывает пьедестал (R_купола=0.27 < R_пьедестала=0.30).
+
+         ВАЖНО: physx-body на цилиндр/сферу НЕ навешиваем. Декларативный physx-body
+         строит convex hull = сплошной выпуклый объём, который выталкивает кубики
+         наружу. Вместо этого физический коллайдер строится отдельно компонентом
+         dome-builder из ~89 тонких боксов-плиток (см. js/components/dome-builder.js
+         и CONFIG.dome.collider).
+
+         Числа продублированы из CONFIG.dome намеренно: inline-атрибуты A-Frame
+         не умеют читать window.CONFIG. При смене параметров — менять в обоих местах. -->
+    <a-entity id="dome-visual">
+      <!-- Цилиндрическая стенка (только визуал). open-ended, чтобы видеть полусферу изнутри. -->
+      <a-cylinder
+        position="0 1.15 0"
+        radius="0.27"
+        height="0.30"
+        open-ended="true"
+        material="color: #88ccff; opacity: 0.18; transparent: true; side: double; metalness: 0; roughness: 0.1">
+      </a-cylinder>
+
+      <!-- Верхняя полусфера-крышка (только визуал). theta-length: 90 = верхняя половина. -->
+      <a-sphere
+        position="0 1.30 0"
+        radius="0.27"
+        theta-length="90"
+        material="color: #88ccff; opacity: 0.18; transparent: true; side: double; metalness: 0; roughness: 0.1">
+      </a-sphere>
+    </a-entity>
+
+    <!-- Физический коллайдер купола: ~89 тонких боксов-плиток.
+         Все параметры — в CONFIG.dome.collider.
+         Чтобы увидеть плитки, поставь debugVisible: true в config.js. -->
+    <a-entity id="dome-collider" dome-builder></a-entity>
 
 
     <!-- ====== ПЛАВАЮЩИЕ КУБИКИ (5 цветных + 6 серых) ======
