@@ -113,12 +113,12 @@ const CONFIG = {
     // Полупрозрачный голубоватый «лабораторный» оттенок.
     // side: double — чтобы стенка была видна и снаружи, и изнутри.
     material: {
-      color:      '#88ccff',
-      opacity:    0.18,
+      color:       '#88ccff',
+      opacity:     0.18,
       transparent: true,
-      side:       'double',
-      metalness:  0,
-      roughness:  0.1,
+      side:        'double',
+      metalness:   0,
+      roughness:   0.1,
     },
 
     // --- Тайловый коллайдер (см. dome-builder.js) ---
@@ -136,6 +136,8 @@ const CONFIG = {
 
       // Физ-материал плиток — те же значения, что у пьедестала и стен комнаты,
       // чтобы отскоки кубиков от купола, пола и стен были согласованы.
+      // ВАЖНО: collisionLayers/collidesWithLayers здесь НЕ задаются —
+      // они дописываются в dome-builder.js на каждой плитке (слой DOME).
       physxMaterial: 'restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05',
 
       // Отладка: показать плитки коллайдера полупрозрачными розовыми боксами.
@@ -152,6 +154,40 @@ const CONFIG = {
     },
   },
 
+  /**
+   * Индексы слоёв коллизий для биндинга physx-material (@c-frame/physx).
+   *
+   * Биндинг сам делает (1 << index) под капотом. Никогда не передавай сюда
+   * готовую битовую маску — биндинг распарсит её как один индекс и сделает
+   * (1 << maska), что для значения ≥31 даёт переполнение int32 и краш
+   * "Passing a number ... outside the valid range [0, 4294967295]".
+   * История бага — Сессия 9, рефакторинг 3.5.C.
+   *
+   * Используется ДВУМЯ способами:
+   *   1) Через physx-material="collisionLayers: I; collidesWithLayers: I, J, K"
+   *      — индексы как есть, через запятую.
+   *   2) Внутри physx-grab.js через PxFilterData напрямую — там нужны маски,
+   *      делаем (1 << index) >>> 0 вручную.
+   *
+   * Список (см. CURRENT_TASK.md, Шаг 3.5.C):
+   *   WORLD        — статики (пол/стены/потолок/пьедестал). Индекс 0
+   *                  совпадает с дефолтом @c-frame/physx (word0=1=1<<0).
+   *   DOME         — плитки купола.
+   *   FLOAT_CUBE   — кубик в режиме невесомости.
+   *   GRAVITY_CUBE — кубик в режиме гравитации (Шаг 4).
+   *   GRABBED_CUBE — кубик, схваченный рукой.
+   *   BALL         — красные шары (Этап 6).
+   *   HAND         — зарезервировано, сейчас не используется.
+   */
+  collisionLayers: {
+    WORLD:        0,
+    DOME:         1,
+    FLOAT_CUBE:   2,
+    GRAVITY_CUBE: 3,
+    GRABBED_CUBE: 4,
+    BALL:         5,
+    HAND:         6,
+  },
 };
 
 // Делаем CONFIG доступным глобально, чтобы любой компонент мог его использовать.

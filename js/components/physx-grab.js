@@ -7,15 +7,31 @@
  * Source: https://github.com/c-frame/physx/blob/v0.3.0/examples/components/grab.js
  * Locally copied for project Tower, sandbox step B.
  *
- * Tower-specific modification (Сессия 8, Задача 3, Шаг 3):
- * На время захвата на всех shape'ах кубика снимается флаг eSIMULATION_SHAPE —
- * кубик становится фантомом и свободно проходит сквозь стенки купола
- * (89 плиток-коллайдеров) и любую другую геометрию. Joint типа Fixed
- * удерживает кубик у руки независимо от коллизий. В момент release флаг
- * возвращается, кубик снова физически взаимодействует с миром.
+ * Tower-specific modification (Сессия 9, Задача 3, Шаг 3.5 → рефакторинг 3.5.C):
+ * На время захвата кубик переводится со слоя FLOAT_CUBE на слой GRABBED_CUBE.
+ * Плитки купола живут на слое DOME и сталкиваются с FLOAT_CUBE|GRAVITY_CUBE|BALL,
+ * поэтому схваченный кубик (GRABBED_CUBE) свободно проходит сквозь стенку купола,
+ * оставаясь нормальным физическим телом для всего остального
+ * (стены/пол/потолок/пьедестал = WORLD, другие кубики, шары).
+ * В момент release кубик возвращается на FLOAT_CUBE.
  *
- * Shape'ы лежат в массиве body.shapes (выяснено диагностикой,
- * см. PROJECT_LOG.md, Сессия 8).
+ * Реализация: смена SimulationFilterData на каждом shape кубика.
+ *   word0 = битовая маска "к каким слоям я принадлежу" (один бит на слой)
+ *   word1 = битовая маска "с какими слоями сталкиваюсь" (несколько битов)
+ * Формат подтверждён диагностикой (см. PROJECT_LOG.md, Сессия 9).
+ *
+ * --- ВАЖНО про числа ---
+ *
+ * CONFIG.collisionLayers хранит ИНДЕКСЫ слоёв (0..6). Это сделано ради
+ * биндинга physx-material (@c-frame/physx), который ждёт CSV из индексов
+ * и сам делает (1 << index) под капотом.
+ *
+ * Здесь же мы работаем С PxFilterData НАПРЯМУЮ, в обход биндинга, и нам
+ * нужны ГОТОВЫЕ битовые маски word0/word1. Поэтому из индекса делаем маску
+ * вручную: bit(i) = (1 << i) >>> 0. Оператор >>>0 приводит результат к
+ * uint32 — это страховка от переполнения int32 (1<<31 в JS даёт -2^31,
+ * а PxFilterData принимает только [0, 4294967295]). Подробнее — см.
+ * историю бага «−2147483648», PROJECT_LOG, Сессия 9, рефакторинг 3.5.C.
  */
 
 AFRAME.registerComponent('physx-grab', {
@@ -77,7 +93,7 @@ AFRAME.registerComponent('physx-grab', {
   addJoint(el, target) {
     this.removeJoint();
 
-    this._setSimulationShape(el, false);
+    this._setGrabbedLayer(el, true);
 
     this.joint = document.createElement('a-entity');
     this.joint.setAttribute("physx-joint", `type: Fixed; target: #${target.id}`);
@@ -88,33 +104,66 @@ AFRAME.registerComponent('physx-grab', {
     if (!this.joint) return;
 
     var grabbedEl = this.joint.parentElement;
-    this._setSimulationShape(grabbedEl, true);
+    this._setGrabbedLayer(grabbedEl, false);
 
     this.joint.parentElement.removeChild(this.joint);
     this.joint = null;
   },
 
   /**
-   * Переключает флаг eSIMULATION_SHAPE на всех shape'ах rigidBody.
-   * false → тело становится фантомом, не сталкивается ни с чем.
-   * true  → возвращается в нормальный режим.
+   * Переключает слой кубика между FLOAT_CUBE и GRABBED_CUBE.
+   *   grabbed=true  → кубик уходит на GRABBED_CUBE (купол его игнорирует);
+   *   grabbed=false → кубик возвращается на FLOAT_CUBE (полное взаимодействие, включая купол).
+   *
+   * Здесь явно переключаем И word0, И word1, потому что маска
+   * столкновений у двух режимов отличается на бит DOME.
+   *
+   * Маски строим вручную из индексов CONFIG.collisionLayers через
+   * bit(i) = (1 << i) >>> 0 (см. JSDoc файла, секция "ВАЖНО про числа").
    */
-  _setSimulationShape(el, enabled) {
+  _setGrabbedLayer(el, grabbed) {
     var body = el.components['physx-body'];
-    if (!body || !body.rigidBody || !body.shapes) {
-      console.warn('[physx-grab] body/rigidBody/shapes не готовы для', el.id);
+    if (!body || !body.shapes) {
+      console.warn('[physx-grab] body/shapes не готовы для', el.id);
       return;
     }
     var PX = el.sceneEl.systems.physx.PhysX;
-    if (!PX || !PX.PxShapeFlag) {
-      console.error('[physx-grab] PX.PxShapeFlag недоступен');
+    if (!PX || !PX.PxFilterData) {
+      console.error('[physx-grab] PX.PxFilterData недоступен');
       return;
     }
-    var flag = PX.PxShapeFlag.eSIMULATION_SHAPE;
+
+    // CONFIG.collisionLayers — ИНДЕКСЫ (0..6).
+    // Здесь, в обход биндинга, нам нужны битовые маски — делаем (1<<i) сами.
+    var L = (window.CONFIG && window.CONFIG.collisionLayers) || {
+      WORLD: 0, DOME: 1, FLOAT_CUBE: 2, GRAVITY_CUBE: 3,
+      GRABBED_CUBE: 4, BALL: 5, HAND: 6,
+    };
+    var bit = function (i) { return (1 << i) >>> 0; };  // >>>0 → uint32
+
+    // Слой кубика (word0) и маска "с кем сталкиваться" (word1) в двух режимах.
+    // FLOAT_CUBE сталкивается со всем «физическим» (включая DOME).
+    // GRABBED_CUBE — с тем же, МИНУС DOME (чтобы проносить сквозь купол).
+    var newWord0, newWord1;
+    if (grabbed) {
+      newWord0 = bit(L.GRABBED_CUBE);
+      newWord1 = bit(L.WORLD) | bit(L.FLOAT_CUBE) | bit(L.GRAVITY_CUBE) |
+                 bit(L.GRABBED_CUBE) | bit(L.BALL);
+    } else {
+      newWord0 = bit(L.FLOAT_CUBE);
+      newWord1 = bit(L.WORLD) | bit(L.DOME) | bit(L.FLOAT_CUBE) |
+                 bit(L.GRAVITY_CUBE) | bit(L.GRABBED_CUBE) | bit(L.BALL);
+    }
+    // ещё раз гарантируем uint32 после побитового OR
+    newWord0 = newWord0 >>> 0;
+    newWord1 = newWord1 >>> 0;
+
     var shapes = Array.isArray(body.shapes) ? body.shapes : [body.shapes];
     for (var i = 0; i < shapes.length; i++) {
       var s = shapes[i];
-      if (s && s.setFlag) s.setFlag(flag, enabled);
+      if (!s || !s.setSimulationFilterData) continue;
+      var fd = new PX.PxFilterData(newWord0, newWord1, 0, 0);
+      s.setSimulationFilterData(fd);
     }
   }
 });

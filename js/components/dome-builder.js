@@ -32,9 +32,32 @@
  *
  * --- Использование ---
  *
- * Вешается на любой entity (например, на #dome-collider-root или прямо
+ * Вешается на любой entity (например, на #dome-collider или прямо
  * на #dome-visual). Все плитки создаются как дочерние entity этого
  * хоста; чистятся при remove() компонента.
+ *
+ * --- Слои коллизий (Шаг 3.5.C) ---
+ *
+ * Все плитки размещаются на слое DOME (CONFIG.collisionLayers.DOME)
+ * и сталкиваются с FLOAT_CUBE, GRAVITY_CUBE, BALL. Это даёт:
+ *   - свободные кубики (FLOAT_CUBE) отскакивают от купола нормально;
+ *   - кубики в режиме гравитации (GRAVITY_CUBE, Шаг 4) — тоже;
+ *   - красные шары (BALL, Этап 6) — тоже;
+ *   - схваченные рукой кубики (GRABBED_CUBE) проходят сквозь купол,
+ *     потому что DOME НЕ включает GRABBED_CUBE в свою маску.
+ * Статики (WORLD) с DOME не пересекаются — это и не нужно, плитки
+ * сами static.
+ *
+ * --- ВАЖНО про числа в physx-material ---
+ *
+ * Биндинг physx-material из @c-frame/physx ждёт ИНДЕКСЫ слоёв через
+ * запятую (CSV), а под капотом сам делает (1 << index). Поэтому в строку
+ * атрибута мы складываем ИНДЕКСЫ (0, 1, 2, ...), а НЕ битовые маски.
+ *
+ * Если передать сюда готовую маску (например, 63), биндинг распарсит её
+ * как одно число-индекс и сделает (1 << 63), что в JS-int32 переполняется
+ * в -2147483648 и роняет PhysX с TypeError "outside the valid range
+ * [0, 4294967295]". История бага — Сессия 9, рефакторинг 3.5.C.
  */
 
 AFRAME.registerComponent('dome-builder', {
@@ -54,9 +77,32 @@ AFRAME.registerComponent('dome-builder', {
 
     this.tiles = [];   // ссылки на созданные entity (для cleanup)
 
+    // --- Слои коллизий ---
+    // CONFIG.collisionLayers — это ИНДЕКСЫ (0, 1, 2, ...). Биндинг
+    // physx-material сам делает (1 << index). См. JSDoc файла, секция
+    // "ВАЖНО про числа в physx-material".
+    const layers = (window.CONFIG && window.CONFIG.collisionLayers) || {
+      WORLD: 0, DOME: 1, FLOAT_CUBE: 2, GRAVITY_CUBE: 3,
+      GRABBED_CUBE: 4, BALL: 5, HAND: 6,
+    };
+    // DOME сталкивается с FLOAT_CUBE, GRAVITY_CUBE, BALL.
+    // GRABBED_CUBE намеренно НЕ включён — схваченный кубик проходит сквозь.
+    // WORLD не нужен — плитки и сами static.
+    const collidesWithList = [
+      layers.FLOAT_CUBE,
+      layers.GRAVITY_CUBE,
+      layers.BALL,
+    ].join(', ');
+    this._layerSuffix =
+      '; collisionLayers: ' + layers.DOME +
+      '; collidesWithLayers: ' + collidesWithList;
+
     this._buildAll(cfg);
 
-    console.log(`[dome-builder] построено плиток: ${this.tiles.length}`);
+    console.log(
+      '[dome-builder] построено плиток: ' + this.tiles.length +
+      ' (layer DOME, collides with FLOAT_CUBE,GRAVITY_CUBE,BALL)'
+    );
   },
 
   remove() {
@@ -207,6 +253,9 @@ AFRAME.registerComponent('dome-builder', {
   /**
    * Создаёт <a-box> с physx-body=static и physx-material, добавляет к хосту.
    * При debug=true плитка визуализируется полупрозрачным розовым.
+   *
+   * К базовой строке material из CONFIG.dome.collider.physxMaterial
+   * дописываются collisionLayers/collidesWithLayers (слой DOME, см. init).
    */
   _createTile({ position, rotation, width, height, depth, material, debug }) {
     const el = document.createElement('a-box');
@@ -225,7 +274,7 @@ AFRAME.registerComponent('dome-builder', {
     }
 
     el.setAttribute('physx-body', 'type: static');
-    el.setAttribute('physx-material', material);
+    el.setAttribute('physx-material', material + this._layerSuffix);
 
     this.el.appendChild(el);
     this.tiles.push(el);
