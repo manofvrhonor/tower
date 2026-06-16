@@ -74,6 +74,9 @@
     var positions = cfg.spawnPositions || [];
     var size = cfg.size || 0.1;
     var mass = (cfg.mass !== undefined) ? cfg.mass : 1;
+    var fm = cfg.floatMaterial || {
+      restitution: 0.9, staticFriction: 0.05, dynamicFriction: 0.05,
+    };
 
     var nTargets = targets.length;             // ожидаем 5
     var nTotal = positions.length;             // ожидаем 11
@@ -95,9 +98,11 @@
         'primitive: box; width: ' + size + '; height: ' + size + '; depth: ' + size);
       el.setAttribute('material', 'color: ' + color);
       el.setAttribute('position', p.x + ' ' + p.y + ' ' + p.z);
-      el.setAttribute('physx-body', 'type: dynamic; mass: ' + mass);
+      el.setAttribute('physx-body', 'type: dynamic; mass: ' + mass + '; emitCollisionEvents: true');
       el.setAttribute('physx-material',
-        'restitution: 0.9; staticFriction: 0.05; dynamicFriction: 0.05; ' +
+        'restitution: ' + fm.restitution +
+        '; staticFriction: ' + fm.staticFriction +
+        '; dynamicFriction: ' + fm.dynamicFriction + '; ' +
         'collisionLayers: ' + ownLayer + '; ' +
         'collidesWithLayers: ' + collidesWithList);
       el.setAttribute('floating-cube', '');

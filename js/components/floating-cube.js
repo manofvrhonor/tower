@@ -1,4 +1,4 @@
-/* global AFRAME, CONFIG */
+/* global AFRAME, CONFIG, THREE */
 
 /**
  * Компонент floating-cube
@@ -11,8 +11,13 @@
  *   - захват рукой работает через стандартный physx-grab.
  *
  * Состояние state:
- *   - 'float'   — текущий режим;
- *   - 'gravity' — будущий режим (задача 3).
+ *   - 'float'   — невесомость, слой FLOAT_CUBE;
+ *   - 'gravity' — гравитация включена, слой GRAVITY_CUBE (задача 3, Шаг 4).
+ *
+ * При release (physx-grab → onGrabReleased) центр кубика проверяется
+ * containment-тестом купола: внутри → gravity, снаружи → float.
+ *
+ * Контакт gravity-кубика с #floor → возврат в float (задача 3, Шаг 5).
  *
  * ТЕХНИЧЕСКИЕ ЗАМЕТКИ ПО БИНДИНГУ @c-frame/physx@v0.3.0
  * (проверено в Сессиях 6–7, см. CURRENT_TASK.md):
@@ -51,7 +56,10 @@ AFRAME.registerComponent('floating-cube', {
 
     this.state = 'float';
     this.cfg = (typeof CONFIG !== 'undefined' && CONFIG.floatingCubes) || {};
+    this.domeCfg = (typeof CONFIG !== 'undefined' && CONFIG.dome) || {};
     this._physicsApplied = false;
+    this._worldPos = new THREE.Vector3();
+    this._onContactBegin = this._onContactBegin.bind(this);
 
     // Подписка на возможные события готовности тела (план А).
     var onReady = this._tryApply.bind(this);
@@ -62,6 +70,14 @@ AFRAME.registerComponent('floating-cube', {
     // Поллинг rigidBody (план Б, основной — см. JSDoc, п. 1).
     this._pollStartTime = performance.now();
     this._pollIntervalId = setInterval(this._tryApply.bind(this), 100);
+  },
+
+  play: function () {
+    this.el.addEventListener('contactbegin', this._onContactBegin);
+  },
+
+  pause: function () {
+    this.el.removeEventListener('contactbegin', this._onContactBegin);
   },
 
   _tryApply: function () {
@@ -80,7 +96,7 @@ AFRAME.registerComponent('floating-cube', {
 
     console.log('[floating-cube] rigidBody detected on', this.el.id || '(no id)');
     this._rb = rb; // сохраняем для tick
-    this._applyFloatPhysics(rb);
+    this._applyFloatPhysics(rb, true);
     this._physicsApplied = true;
 
     if (this._pollIntervalId) {
@@ -89,13 +105,255 @@ AFRAME.registerComponent('floating-cube', {
     }
   },
 
-  _applyFloatPhysics: function (rb) {
+  /**
+   * Вызывается из physx-grab при отпускании кубика.
+   * Containment-тест по CONFIG.dome → gravity или float.
+   */
+  onGrabReleased: function () {
+    var pos = this._getWorldPosition();
+    var inside = this._isInsideDome(pos, true);
+
+    if (inside) {
+      this._enterGravityMode();
+    } else {
+      this._enterFloatMode(false);
+    }
+
+    console.log(
+      '[floating-cube] release', this.el.id || '(no id)',
+      inside ? 'inside → gravity' : 'outside → float'
+    );
+  },
+
+  _enterGravityMode: function () {
+    this.state = 'gravity';
+    var rb = this._rb;
+    if (!rb) return;
+    this._applyGravityPhysics(rb);
+    this._applyCubeMaterial('gravity');
+    this._setCollisionLayer('GRAVITY_CUBE');
+  },
+
+  /**
+   * gravity-кубик коснулся #floor → снова float + импульс вверх.
+   * Контакт со столом (пьедестал) не обрабатывается — у него другой id.
+   */
+  _onContactBegin: function (evt) {
+    if (this.state !== 'gravity') return;
+
+    var otherEl = evt.detail.otherComponent && evt.detail.otherComponent.el;
+    if (!otherEl || otherEl.id !== 'floor') return;
+
+    this._returnToFloatFromFloor();
+  },
+
+  _returnToFloatFromFloor: function () {
+    this._enterFloatMode(false);
+
+    var rb = this._rb;
+    if (!rb || typeof rb.setLinearVelocity !== 'function') return;
+
+    var upSpeed = (this.cfg.floorReturnSpeed !== undefined)
+      ? this.cfg.floorReturnSpeed
+      : 0.25;
+    try {
+      rb.setLinearVelocity({ x: 0, y: upSpeed, z: 0 }, true);
+      if (typeof rb.wakeUp === 'function') rb.wakeUp();
+    } catch (e) {
+      console.warn('[floating-cube] floor return impulse failed:', e.message);
+    }
+
+    console.log('[floating-cube] floor contact → float', this.el.id || '(no id)');
+  },
+
+  _enterFloatMode: function (applyImpulse) {
+    this.state = 'float';
+    var rb = this._rb;
+    if (!rb) return;
+    this._applyFloatPhysics(rb, applyImpulse);
+    this._applyCubeMaterial('float');
+    this._setCollisionLayer('FLOAT_CUBE');
+  },
+
+  _getWorldPosition: function () {
+    this.el.object3D.getWorldPosition(this._worldPos);
+    return this._worldPos;
+  },
+
+  /**
+   * Центр кубика внутри капсулы купола?
+   *
+   * @param {object} pos — {x, y, z} мировые координаты центра.
+   * @param {boolean} [forRelease] — true: мягкий тест (R + halfCube), для
+   *   onGrabReleased; false/omit: строгий (R - halfCube).
+   */
+  _isInsideDome: function (pos, forRelease) {
+    var dome = this.domeCfg;
+    var halfCube = (this.cfg.size !== undefined ? this.cfg.size : 0.1) / 2;
+    var R = dome.radius !== undefined ? dome.radius : 0.27;
+    var wallBottomY = dome.cylinderBottomY !== undefined ? dome.cylinderBottomY : 1.0;
+    var wallTopY = dome.cylinderTopY !== undefined ? dome.cylinderTopY : 1.3;
+    var eps = 0.01;
+
+    var useLenient = forRelease;
+    if (forRelease && dome.releaseContainment === 'strict') {
+      useLenient = false;
+    }
+
+    // lenient: хотя бы часть кубика может быть внутри (центр до R + halfCube).
+    // strict:  весь кубик должен помещаться (центр до R - halfCube).
+    var innerR = useLenient ? (R + halfCube + eps) : (R - halfCube + eps);
+    var yOutsideBelow = useLenient
+      ? (wallBottomY - halfCube - eps)
+      : (wallBottomY - eps);
+
+    var x = pos.x;
+    var y = pos.y;
+    var z = pos.z;
+
+    if (y < yOutsideBelow) {
+      return false;
+    }
+
+    if (y <= wallTopY + eps) {
+      return (x * x + z * z) <= innerR * innerR;
+    }
+
+    var dy = y - wallTopY;
+    return (x * x + dy * dy + z * z) <= innerR * innerR;
+  },
+
+  _getPhysX: function () {
+    return this.el.sceneEl.systems.physx && this.el.sceneEl.systems.physx.PhysX;
+  },
+
+  /**
+   * CSV collidesWithLayers для FLOAT_CUBE или GRAVITY_CUBE.
+   */
+  _getCollidesWithCsv: function (layerName) {
+    var L = (typeof CONFIG !== 'undefined' && CONFIG.collisionLayers) || {
+      WORLD: 0, DOME: 1, FLOAT_CUBE: 2, GRAVITY_CUBE: 3,
+      GRABBED_CUBE: 4, BALL: 5, HAND: 6,
+    };
+    var list = [L.WORLD, L.FLOAT_CUBE, L.GRAVITY_CUBE, L.GRABBED_CUBE, L.BALL];
+    if (layerName === 'FLOAT_CUBE') {
+      list.splice(1, 0, L.DOME);
+    }
+    return list.join(', ');
+  },
+
+  /**
+   * Переключает restitution/friction кубика (float ↔ gravity).
+   * Слои коллизий дополнительно синхронизируются через _setCollisionLayer.
+   */
+  _applyCubeMaterial: function (mode) {
+    var cfg = this.cfg;
+    var mat = (mode === 'gravity')
+      ? (cfg.gravityMaterial || { restitution: 0.15, staticFriction: 0.7, dynamicFriction: 0.6 })
+      : (cfg.floatMaterial || { restitution: 0.9, staticFriction: 0.05, dynamicFriction: 0.05 });
+    var layerName = (mode === 'gravity') ? 'GRAVITY_CUBE' : 'FLOAT_CUBE';
+    var L = (typeof CONFIG !== 'undefined' && CONFIG.collisionLayers) || {
+      WORLD: 0, DOME: 1, FLOAT_CUBE: 2, GRAVITY_CUBE: 3,
+      GRABBED_CUBE: 4, BALL: 5, HAND: 6,
+    };
+
+    this.el.setAttribute('physx-material',
+      'restitution: ' + mat.restitution +
+      '; staticFriction: ' + mat.staticFriction +
+      '; dynamicFriction: ' + mat.dynamicFriction +
+      '; collisionLayers: ' + L[layerName] +
+      '; collidesWithLayers: ' + this._getCollidesWithCsv(layerName));
+  },
+
+  /**
+   * Слой FLOAT_CUBE или GRAVITY_CUBE через PxFilterData (как physx-grab).
+   */
+  _setCollisionLayer: function (layerName) {
+    var body = this.el.components['physx-body'];
+    if (!body || !body.shapes) {
+      console.warn('[floating-cube] body/shapes не готовы для слоя', layerName);
+      return;
+    }
+    var PX = this._getPhysX();
+    if (!PX || !PX.PxFilterData) {
+      console.error('[floating-cube] PxFilterData недоступен');
+      return;
+    }
+
+    var L = (typeof CONFIG !== 'undefined' && CONFIG.collisionLayers) || {
+      WORLD: 0, DOME: 1, FLOAT_CUBE: 2, GRAVITY_CUBE: 3,
+      GRABBED_CUBE: 4, BALL: 5, HAND: 6,
+    };
+    var bit = function (i) { return (1 << i) >>> 0; };
+    var layerIndex = L[layerName];
+    if (layerIndex === undefined) {
+      console.error('[floating-cube] неизвестный слой', layerName);
+      return;
+    }
+
+    var newWord0 = bit(layerIndex);
+    // FLOAT_CUBE — барьер купола; GRAVITY_CUBE — проходит сквозь купол.
+    var newWord1 = bit(L.WORLD) | bit(L.FLOAT_CUBE) | bit(L.GRAVITY_CUBE) |
+                   bit(L.GRABBED_CUBE) | bit(L.BALL);
+    if (layerName === 'FLOAT_CUBE') {
+      newWord1 = newWord1 | bit(L.DOME);
+    }
+    newWord0 = newWord0 >>> 0;
+    newWord1 = newWord1 >>> 0;
+
+    var shapes = Array.isArray(body.shapes) ? body.shapes : [body.shapes];
+    for (var i = 0; i < shapes.length; i++) {
+      var s = shapes[i];
+      if (!s || !s.setSimulationFilterData) continue;
+      var fd = new PX.PxFilterData(newWord0, newWord1, 0, 0);
+      s.setSimulationFilterData(fd);
+    }
+  },
+
+  _applyGravityPhysics: function (rb) {
+    var gCfg = (this.domeCfg.gravityMode) || {};
+    var ld = gCfg.linearDamping !== undefined ? gCfg.linearDamping : 0.05;
+    var ad = gCfg.angularDamping !== undefined ? gCfg.angularDamping : 0.05;
+    var sysPX = this._getPhysX();
+
+    if (sysPX && sysPX.PxActorFlag && sysPX.PxActorFlag.eDISABLE_GRAVITY) {
+      try {
+        rb.setActorFlag(sysPX.PxActorFlag.eDISABLE_GRAVITY, false);
+        if (typeof rb.wakeUp === 'function') rb.wakeUp();
+      } catch (e) {
+        console.error('[floating-cube] gravity setActorFlag failed:', e);
+      }
+    }
+
+    if (typeof rb.setLinearDamping === 'function') {
+      rb.setLinearDamping(ld);
+    }
+    if (typeof rb.setAngularDamping === 'function') {
+      rb.setAngularDamping(ad);
+    }
+
+    var sleepTh = gCfg.sleepThreshold !== undefined ? gCfg.sleepThreshold : 25;
+    if (typeof rb.setSleepThreshold === 'function') {
+      try {
+        rb.setSleepThreshold(sleepTh);
+      } catch (e) {
+        console.warn('[floating-cube] gravity sleepThreshold failed:', e.message);
+      }
+    }
+  },
+
+  /**
+   * @param {boolean} applyImpulse — стартовые импульсы (true только при первом спавне).
+   */
+  _applyFloatPhysics: function (rb, applyImpulse) {
+    if (applyImpulse === undefined) applyImpulse = true;
+
     var cfg = this.cfg;
     var ld = cfg.linearDamping !== undefined ? cfg.linearDamping : 0.1;
     var ad = cfg.angularDamping !== undefined ? cfg.angularDamping : 0.1;
 
     // === ОТКЛЮЧЕНИЕ ГРАВИТАЦИИ === (см. JSDoc, п. 2)
-    var sysPX = this.el.sceneEl.systems.physx && this.el.sceneEl.systems.physx.PhysX;
+    var sysPX = this._getPhysX();
 
     if (sysPX && sysPX.PxActorFlag && sysPX.PxActorFlag.eDISABLE_GRAVITY) {
       try {
@@ -125,9 +383,8 @@ AFRAME.registerComponent('floating-cube', {
       }
     }
 
-    // === ОБНУЛЕНИЕ НАКОПЛЕННОЙ СКОРОСТИ + СТАРТОВЫЙ ЛИНЕЙНЫЙ ИМПУЛЬС ===
-    // (см. JSDoc, п. 3 и п. 5 — компенсируем потери в контакте.)
-    if (typeof rb.setLinearVelocity === 'function') {
+    // Стартовые импульсы — только при первом спавне, не при release снаружи.
+    if (applyImpulse && typeof rb.setLinearVelocity === 'function') {
       try {
         rb.setLinearVelocity({ x: 0, y: 0, z: 0 }, true);
       } catch (e) {
@@ -144,38 +401,34 @@ AFRAME.registerComponent('floating-cube', {
           console.warn('[floating-cube] impulse failed:', e.message);
         }
       }
-    } else {
-      console.warn('[floating-cube] rb.setLinearVelocity is not a function');
-    }
 
-    // === СТАРТОВЫЙ УГЛОВОЙ ИМПУЛЬС (вращение) ===
-    // Случайная ось, фиксированный модуль угловой скорости из конфига.
-    if (typeof rb.setAngularVelocity === 'function') {
-      try {
-        rb.setAngularVelocity({ x: 0, y: 0, z: 0 }, true);
-      } catch (e) {
-        console.warn('[floating-cube] zero angular velocity failed:', e.message);
-      }
-
-      var angSpeed = (cfg.initialAngularSpeed !== undefined) ? cfg.initialAngularSpeed : 0.8;
-      if (angSpeed > 0) {
-        var axis = this._randomUnitVector();
-        var angVel = {
-          x: axis.x * angSpeed,
-          y: axis.y * angSpeed,
-          z: axis.z * angSpeed
-        };
+      if (typeof rb.setAngularVelocity === 'function') {
         try {
-          rb.setAngularVelocity(angVel, true);
+          rb.setAngularVelocity({ x: 0, y: 0, z: 0 }, true);
         } catch (e) {
-          console.warn('[floating-cube] angular velocity failed:', e.message);
+          console.warn('[floating-cube] zero angular velocity failed:', e.message);
+        }
+
+        var angSpeed = (cfg.initialAngularSpeed !== undefined) ? cfg.initialAngularSpeed : 0.8;
+        if (angSpeed > 0) {
+          var axis = this._randomUnitVector();
+          var angVel = {
+            x: axis.x * angSpeed,
+            y: axis.y * angSpeed,
+            z: axis.z * angSpeed
+          };
+          try {
+            rb.setAngularVelocity(angVel, true);
+          } catch (e) {
+            console.warn('[floating-cube] angular velocity failed:', e.message);
+          }
         }
       }
-    } else {
-      console.warn('[floating-cube] rb.setAngularVelocity is not a function');
     }
 
-    console.log('[floating-cube] float physics applied. state =', this.state);
+    if (applyImpulse) {
+      console.log('[floating-cube] float physics applied. state =', this.state);
+    }
   },
 
   /**
@@ -214,6 +467,7 @@ AFRAME.registerComponent('floating-cube', {
 
   remove: function () {
     if (this._pollIntervalId) clearInterval(this._pollIntervalId);
+    this.el.removeEventListener('contactbegin', this._onContactBegin);
     if (this._onReady) {
       this.el.removeEventListener('body-loaded', this._onReady);
       this.el.removeEventListener('physx-body-loaded', this._onReady);

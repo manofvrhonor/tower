@@ -21,6 +21,27 @@ const CONFIG = {
     radius: 0.3,     // метры (диаметр 60 см)
     height: 1.0,     // метры
     color: '#3a3a3a',
+    // Деревянная поверхность стола (gravity-кубики). См. main.js → #pedestal.
+    physxMaterial: {
+      restitution:      0.15,
+      staticFriction:   0.70,
+      dynamicFriction:  0.60,
+    },
+  },
+
+  // Материалы статики комнаты (main.js проставляет на #floor и #pedestal).
+  world: {
+    woodMaterial: {
+      restitution:      0.15,
+      staticFriction:   0.70,
+      dynamicFriction:  0.60,
+    },
+    // Стены/потолок — упругие, нужны для дрейфа float-кубиков.
+    bounceMaterial: {
+      restitution:      0.95,
+      staticFriction:   0.05,
+      dynamicFriction:  0.05,
+    },
   },
 
   // === Игрок ===
@@ -33,7 +54,20 @@ const CONFIG = {
   // Используются компонентом floating-cube. См. CURRENT_TASK.md, задача 2.
   floatingCubes: {
     size: 0.1,                  // ребро куба, м
-    mass: 1,                    // масса dynamic-тела
+    mass: 1.0,                  // ~10 см «деревянный» куб, кг
+
+    // physx-material: float — упругий (дрейф в невесомости).
+    floatMaterial: {
+      restitution:      0.9,
+      staticFriction:   0.05,
+      dynamicFriction:  0.05,
+    },
+    // physx-material: gravity — дерево (башня, падения на стол).
+    gravityMaterial: {
+      restitution:      0.15,
+      staticFriction:   0.70,
+      dynamicFriction:  0.60,
+    },
 
     // Физика парения
     disableGravity: true,
@@ -48,6 +82,9 @@ const CONFIG = {
     // Стартовая угловая скорость, рад/с (по модулю).
     // Направление случайное. 0 — без вращения.
     initialAngularSpeed: 0.8,
+
+    // Импульс вверх при возврате в float с пола (задача 3, Шаг 5), м/с.
+    floorReturnSpeed: 0.25,
 
     // Палитра «полезных» цветных (5 шт). Красный исключён —
     // конфликт с красными шарами из Этапа 6.
@@ -149,9 +186,16 @@ const CONFIG = {
     // Применяются при release кубика внутри купола.
     // Подобраны «на глаз», уточним по результатам тестов с башней.
     gravityMode: {
-      linearDamping:  0.05,
-      angularDamping: 0.05,
+      linearDamping:   0.08,
+      angularDamping:  0.12,
+      // Разрешить засыпание в стопке (float ставит 0 — см. floating-cube.js).
+      sleepThreshold:  25,
     },
+
+    // Containment при release (Шаг 4, фикс «протолкнули через стенку»):
+    // 'lenient' — inside, если хотя бы часть кубика пересекает купол (R + halfCube);
+    // 'strict'  — inside, только если центр полностью внутри (R - halfCube).
+    releaseContainment: 'lenient',
   },
 
   /**
@@ -172,7 +216,7 @@ const CONFIG = {
    * Список (см. CURRENT_TASK.md, Шаг 3.5.C):
    *   WORLD        — статики (пол/стены/потолок/пьедестал). Индекс 0
    *                  совпадает с дефолтом @c-frame/physx (word0=1=1<<0).
-   *   DOME         — плитки купола.
+   *   DOME         — плитки купола. Сталкивается с FLOAT_CUBE, BALL (не GRAVITY_CUBE).
    *   FLOAT_CUBE   — кубик в режиме невесомости.
    *   GRAVITY_CUBE — кубик в режиме гравитации (Шаг 4).
    *   GRABBED_CUBE — кубик, схваченный рукой.

@@ -7,10 +7,10 @@ alwaysApply: true
 
 ## Задача 3 — Купол над столом
 
-**Статус:** Шаги 1, 2, 3 закрыты в Сессии 8 (Шаг 3 — временным решением).
-Шаг 3.5 закрыт в Сессии 9 (рефакторинг 3.5.C — индексы слоёв).
-Следующая сессия начинается с **Шага 4** (release-inside → gravity).
-**Этап в `PROJECT_LOG.md`:** Этап 3 — Купол над столом.
+**Статус:** Шаги 1–5 закрыты ✅. Доработки Сессии 11 (lenient release,
+GRAVITY×DOME, деревянная физика) ✅ проверены в Quest.
+**Пауза.** Остался **Шаг 6** — формальное закрытие задачи 3 (финальный QA).
+**Этап в `PROJECT_LOG.md`:** Этап 3 — Купол над столом (~95%).
 
 ---
 
@@ -23,9 +23,18 @@ alwaysApply: true
 3. «Прозрачен» для руки игрока: схваченный кубик можно проносить через
    стенку купола внутрь и наружу. ✅ (через collision layers, Шаг 3.5).
 4. Release **внутри** → кубик переключается в `state: 'gravity'` и падает
-   на пьедестал. ⏳ Шаг 4
-5. Release **снаружи** → кубик остаётся в `'float'`. ⏳ Шаг 4
-6. Контакт `'gravity'`-кубика с полом → возврат в `'float'`. ⏳ Шаг 5
+   на пьедестал. ✅ Шаг 4 (тест 2 в Quest)
+5. Release **снаружи** → кубик остаётся в `'float'`. ✅ Шаг 4 (тест 3 в Quest)
+6. Контакт `'gravity'`-кубика с полом → возврат в `'float'`. ✅ Шаг 5
+
+**Фикс после Шага 5:** release через стенку (частично внутри) → gravity
+(`CONFIG.dome.releaseContainment: 'lenient'`). ✅ Сессия 11.
+
+**Доработка физики (Сессия 11):** два профиля материала кубика —
+`floatMaterial` (упругий, дрейф) и `gravityMaterial` (дерево: restitution
+0.15, friction 0.7). Стол/пол — `CONFIG.pedestal.physxMaterial`. Пары
+`GRAVITY_CUBE × DOME` отключены — кубик на столе может выпасть за край;
+float снаружи — купол барьер.
 
 **Дополнительное требование, выявленное в Сессии 8:**
 Схваченный кубик должен проходить сквозь **только купол**, но **сталкиваться
@@ -38,12 +47,12 @@ alwaysApply: true
 - ✅ Тест 1: бросить плавающий кубик в стенку купола изнутри — отскакивает.
 - ✅ **Тест 1.5:** схваченным кубиком ударить по другому кубику —
   отбивается, не проходит насквозь.
-- ⏳ Тест 2: схватить снаружи, протащить руку через стенку, отпустить
+- ✅ Тест 2: схватить снаружи, протащить руку через стенку, отпустить
   внутри — упал на пьедестал, не отскакивает.
-- ⏳ Тест 3: схватить с пьедестала, вытащить наружу, отпустить — снова
+- ✅ Тест 3: схватить с пьедестала, вытащить наружу, отпустить — снова
   плавает.
-- ⏳ Тест 4: собрать башню, ронять; кубики на столе лежат под гравитацией;
-  кубики, выкатившиеся за край, падают на пол и возвращаются в облако.
+- ✅ Тест 4: кубики на столе под гравитацией; скатившиеся на пол —
+  возвращаются в облако. (проверено в Quest, Сессия 11)
 - ✅ В консоли нет ошибок PhysX.
 
 ---
@@ -85,14 +94,15 @@ alwaysApply: true
 | Слой | Индекс | Назначение | Сталкивается с |
 |---|---|---|---|
 | `WORLD` | 0 | пол, стены, потолок, пьедестал | всем (дефолт `@c-frame/physx`, word0=1) |
-| `DOME` | 1 | 89 плиток купола | FLOAT_CUBE, GRAVITY_CUBE, BALL |
+| `DOME` | 1 | 89 плиток купола | FLOAT_CUBE, BALL — **не** GRAVITY_CUBE |
 | `FLOAT_CUBE` | 2 | плавающий кубик (state: float) | WORLD, DOME, FLOAT_CUBE, GRAVITY_CUBE, GRABBED_CUBE, BALL |
-| `GRAVITY_CUBE` | 3 | кубик в режиме гравитации | то же, что FLOAT_CUBE |
+| `GRAVITY_CUBE` | 3 | кубик в режиме гравитации | WORLD, FLOAT_CUBE, GRAVITY_CUBE, GRABBED_CUBE, BALL — **не DOME** |
 | `GRABBED_CUBE` | 4 | кубик в руке | WORLD, FLOAT_CUBE, GRAVITY_CUBE, BALL — **но не DOME** |
 | `BALL` | 5 | будущие красные шары (Этап 6) | резерв |
 | `HAND` | 6 | контроллеры | резерв |
 
-Ключевая отключённая пара: **`GRABBED_CUBE × DOME`**.
+Ключевые отключённые пары: **`GRABBED_CUBE × DOME`**, **`GRAVITY_CUBE × DOME`**.
+Плавающие снаружи не проникают в купол; кубики на столе могут выпасть.
 
 При grab: слой кубика `FLOAT_CUBE` (или `GRAVITY_CUBE`) → `GRABBED_CUBE`.
 При release: возвращается прежний слой (на Шаге 4 уточнится до
@@ -128,73 +138,57 @@ alwaysApply: true
 
 Подробности и история бага — `PROJECT_LOG.md`, Сессия 9.
 
-### Шаг 4. Release-inside → gravity ← **следующий**
+### Шаг 4. Release-inside → gravity — ✅ ЗАКРЫТ (Quest: тесты 2, 3, 1.5)
 
-- В `floating-cube.js` — хук на release кубика.
-- Containment-тест по Решению 3 (см. ниже, без изменений).
-- Внутри → `state = 'gravity'`: снять `eDISABLE_GRAVITY`, выставить
-  «земные» damping, **сменить collision layer на `GRAVITY_CUBE`**.
-- Снаружи → возврат на `FLOAT_CUBE` (что уже делает Шаг 3.5 по умолчанию).
-- Проверка: тесты 2 и 3.
+- `floating-cube.js`: `onGrabReleased()`, containment-тест `_isInsideDome()`,
+  `_enterGravityMode()` / `_enterFloatMode()`, `_setCollisionLayer()`.
+- `physx-grab.js`: при release вызывает `onGrabReleased()` у floating-cube.
+- Внутри → gravity + слой GRAVITY_CUBE; снаружи → float + FLOAT_CUBE.
+- Подтверждено в Quest: падение на пьедестал, float снаружи, отбивание кубиков.
 
-### Шаг 5. Возврат в float по полу
+### Шаг 5. Возврат в float по полу — ✅ ЗАКРЫТ (Quest, Сессия 11)
 
-- Присвоить полу `id="floor"` в `index.html`.
-- Подписка `contactbegin` в `floating-cube.js`. Если `state === 'gravity'`
-  и партнёр — `#floor` → `'float'`: вернуть `eDISABLE_GRAVITY`,
-  восстановить float damping, маленький импульс вверх, **сменить слой
-  на `FLOAT_CUBE`**.
-- Контакт со столом возврат **не** триггерит.
-- Проверка: тест 4.
+- `index.html`: `#floor`, `#pedestal`.
+- `spawn-floating-cubes.js`: `emitCollisionEvents: true`.
+- `floating-cube.js`: `contactbegin` → `#floor` → float + импульс вверх.
 
-### Шаг 6. QA-прогон на Quest
+### Шаг 6. QA-прогон и закрытие задачи 3 ← **следующая сессия**
 
-- Все 5 тестов (включая 1.5), стабильность фильтрации после серии
-  grab’ов, FPS, устойчивость башни.
+- Формальный прогон всех 5 тестов после паузы.
+- Обновить `PROJECT_LOG.md`: Этап 3 → ✅, обнулить `CURRENT_TASK.md`.
+- Следующий этап: **4 — замедление времени (SUPERHOT)**.
 
 ---
 
-## Containment-тест (Решение 3, без изменений) — справочник для Шага 4
+## Containment-тест (Решение 3 + фикс «протолкнули через стенку»)
 
-Центр кубика проверяется «внутри капсулы»:
-- проекция Y на ось:
-  - `Y ∈ [wallBottomY, wallTopY]` (1.00…1.30) — внутри, нужно
-    `dx² + dz² ≤ (R − halfCube)²`;
-  - `Y > wallTopY` — расстояние до полюса `(0, wallTopY, 0)` должно быть
-    `≤ R − halfCube`;
-  - `Y < wallBottomY` — снаружи.
-- epsilon `0.01` для границы.
+**При release** — мягкий тест (`CONFIG.dome.releaseContainment: 'lenient'`):
+центр до `R + halfCube` → inside, если хотя бы часть кубика в куполе.
 
-`halfCube = CONFIG.floatingCubes.size / 2` (= 0.05), `R`, `wallBottomY`,
-`wallTopY` — из `CONFIG.dome`.
+**Строгий** (`strict` или без forRelease): центр до `R - halfCube`.
+
+Геометрия капсулы:
+- `Y ∈ [wallBottomY, wallTopY]` — `dx² + dz² ≤ innerR²`;
+- `Y > wallTopY` — расстояние до полюса `(0, wallTopY, 0) ≤ innerR`;
+- `Y < wallBottomY` (с поправкой на halfCube в lenient) — снаружи.
+- epsilon `0.01`.
 
 ---
 
 ## Working Context
 
-- `js/config.js` — `CONFIG.dome` (готов), `CONFIG.collisionLayers`
-  (готов, индексы 0..6).
-- `js/components/physx-grab.js` — фантомизация убрана; переключение
-  слоя `FLOAT_CUBE ↔ GRABBED_CUBE` через `PxFilterData` с ручной сборкой
-  масок через `(1 << i) >>> 0`.
-- `js/components/dome-builder.js` — плиткам проставлен слой `DOME`,
-  сталкивается с `FLOAT_CUBE, GRAVITY_CUBE, BALL`.
-- `js/spawn-floating-cubes.js` — кубикам проставлен слой `FLOAT_CUBE`,
-  сталкивается с `WORLD, DOME, FLOAT_CUBE, GRAVITY_CUBE, GRABBED_CUBE, BALL`.
-- `js/components/floating-cube.js` — главный файл Шагов 4–5:
-  release-логика, containment-тест, контакт с полом, переключение state и
-  collision layer.
-- `index.html` — на Шаге 5 добавить `id="floor"`.
+- `js/config.js` — `CONFIG.dome`, `collisionLayers`, `floatMaterial` /
+  `gravityMaterial`, `pedestal.physxMaterial`, `world.woodMaterial`.
+- `js/components/dome-builder.js` — DOME × FLOAT_CUBE|BALL (не GRAVITY_CUBE).
+- `js/components/floating-cube.js` — release, floor, материалы, containment.
+- `js/components/physx-grab.js` — release → `onGrabReleased()`.
+- `index.html` — `#floor`, `#pedestal`, деревянный материал стола/пола.
 
 ---
 
-## Риски на оставшиеся шаги
+## Следующее действие (после паузы)
 
-| Риск | Вероятность | План Б |
-|---|---|---|
-| Имя события release в `physx-grab` неочевидно (для Шага 4) | низкая | Прочитать исходник; альтернатива — слушать `gripup`/`triggerup` на контроллере и определять «свой» кубик через `hitEl`. |
-| Кубик «застревает» ровно на границе купола при release (Шаг 4) | низкая | epsilon `0.01`; маленький импульс к центру стола. |
-| Контакт `gravity`-кубика с #floor не ловится (Шаг 5) | средняя | Проверить `physx-body` пола; иначе ловить по нормали контакта. |
+**Шаг 6:** финальный QA → закрыть Задачу 3 → Этап 4 (time scale).
 
 ---
 

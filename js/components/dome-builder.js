@@ -39,9 +39,10 @@
  * --- Слои коллизий (Шаг 3.5.C) ---
  *
  * Все плитки размещаются на слое DOME (CONFIG.collisionLayers.DOME)
- * и сталкиваются с FLOAT_CUBE, GRAVITY_CUBE, BALL. Это даёт:
- *   - свободные кубики (FLOAT_CUBE) отскакивают от купола нормально;
- *   - кубики в режиме гравитации (GRAVITY_CUBE, Шаг 4) — тоже;
+ * и сталкиваются с FLOAT_CUBE и BALL (не GRAVITY_CUBE). Это даёт:
+ *   - плавающие кубики (FLOAT_CUBE) отскакивают от купола снаружи и изнутри;
+ *   - кубики под гравитацией (GRAVITY_CUBE) проходят сквозь купол — могут
+ *     скатиться со стола и выпасть наружу;
  *   - красные шары (BALL, Этап 6) — тоже;
  *   - схваченные рукой кубики (GRABBED_CUBE) проходят сквозь купол,
  *     потому что DOME НЕ включает GRABBED_CUBE в свою маску.
@@ -85,12 +86,11 @@ AFRAME.registerComponent('dome-builder', {
       WORLD: 0, DOME: 1, FLOAT_CUBE: 2, GRAVITY_CUBE: 3,
       GRABBED_CUBE: 4, BALL: 5, HAND: 6,
     };
-    // DOME сталкивается с FLOAT_CUBE, GRAVITY_CUBE, BALL.
-    // GRABBED_CUBE намеренно НЕ включён — схваченный кубик проходит сквозь.
-    // WORLD не нужен — плитки и сами static.
+    // DOME сталкивается с FLOAT_CUBE и BALL.
+    // GRAVITY_CUBE намеренно НЕ включён — кубик на столе может выпасть
+    // за край купола. GRABBED_CUBE тоже не включён (рука проносит кубик).
     const collidesWithList = [
       layers.FLOAT_CUBE,
-      layers.GRAVITY_CUBE,
       layers.BALL,
     ].join(', ');
     this._layerSuffix =
@@ -101,7 +101,7 @@ AFRAME.registerComponent('dome-builder', {
 
     console.log(
       '[dome-builder] построено плиток: ' + this.tiles.length +
-      ' (layer DOME, collides with FLOAT_CUBE,GRAVITY_CUBE,BALL)'
+      ' (layer DOME, collides with FLOAT_CUBE,BALL)'
     );
   },
 

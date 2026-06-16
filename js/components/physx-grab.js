@@ -9,11 +9,13 @@
  *
  * Tower-specific modification (Сессия 9, Задача 3, Шаг 3.5 → рефакторинг 3.5.C):
  * На время захвата кубик переводится со слоя FLOAT_CUBE на слой GRABBED_CUBE.
- * Плитки купола живут на слое DOME и сталкиваются с FLOAT_CUBE|GRAVITY_CUBE|BALL,
+ * Плитки купола живут на слое DOME и сталкиваются с FLOAT_CUBE|BALL,
+ * не с GRAVITY_CUBE — кубик на столе может выпасть за край купола.
  * поэтому схваченный кубик (GRABBED_CUBE) свободно проходит сквозь стенку купола,
  * оставаясь нормальным физическим телом для всего остального
  * (стены/пол/потолок/пьедестал = WORLD, другие кубики, шары).
- * В момент release кубик возвращается на FLOAT_CUBE.
+ * В момент release у floating-cube вызывается onGrabReleased() (Шаг 4) —
+ * слой FLOAT_CUBE / GRAVITY_CUBE выбирает сам кубик по containment-тесту.
  *
  * Реализация: смена SimulationFilterData на каждом shape кубика.
  *   word0 = битовая маска "к каким слоям я принадлежу" (один бит на слой)
@@ -104,7 +106,12 @@ AFRAME.registerComponent('physx-grab', {
     if (!this.joint) return;
 
     var grabbedEl = this.joint.parentElement;
-    this._setGrabbedLayer(grabbedEl, false);
+    var fc = grabbedEl.components['floating-cube'];
+    if (fc && typeof fc.onGrabReleased === 'function') {
+      fc.onGrabReleased();
+    } else {
+      this._setGrabbedLayer(grabbedEl, false);
+    }
 
     this.joint.parentElement.removeChild(this.joint);
     this.joint = null;
