@@ -185,6 +185,25 @@ Float снаружи — купол барьер; gravity на столе — м
 
 ---
 
+### ADR-12: Время мира (timeScale) и slo-mo VFX
+
+**Решение:**
+- Система `time-scale`: activity головы/рук → `timeScale` 0.05↔1.0; асимметричная
+  разморозка; jitter-filter рук.
+- «Время мира»: `sceneEl.systems['time-scale'].getScale()` — новые объекты (шары, враги)
+  умножают скриптовое движение на scale.
+- Float-кубики: velocity-scale + `_maintainFloatDrift`; gravity/руки/стол/купол — real time.
+- VFX: CSS-виньетка (десктоп/зеркало) + `slowmo-vignette-3d` на камере (VR);
+  `float-motion-trail` — trace 0.4 м, blend, visibility 10–100% от timeScale.
+
+**Причина:** SUPERHOT-механика; руки и башня не должны «замирать» вместе с облаком.
+
+**Не делать:** глобальный physx timestep; замедлять gravity-кубики на столе.
+
+**Открыто (полировка):** VR-виньетка в Quest не видна (на мониторе OK); trail opacity/visibility.
+
+---
+
 ## ДОРОЖНАЯ КАРТА
 
 | Этап | Название | Статус |
@@ -193,7 +212,7 @@ Float снаружи — купол барьер; gravity на столе — м
 | 1 | Стол и хватание | ✅ |
 | 2 | Плавающие кубики | ✅ |
 | 3 | Купол над столом | ✅ |
-| 4 | Замедление времени (SUPERHOT) | план |
+| 4 | Замедление времени (SUPERHOT) | ✅ (VFX — полировка в CURRENT_TASK) |
 | 5 | Цель и победа | план |
 | 6 | Красные шары | план |
 | 7 | Предмет для отбивания | план |
@@ -203,8 +222,9 @@ Float снаружи — купол барьер; gravity на столе — м
 
 ## ГДЕ МЫ СЕЙЧАС
 
-- Этапы 0–3 ✅. Купол, layers, release gravity/float, пол→облако — проверено в Quest (QA, сессия 12).
-- **Следующее:** Этап 4 — замедление времени (SUPERHOT). См. `CURRENT_TASK.md`.
+- Этапы 0–4 ✅ (ядро SUPERHOT работает, Quest QA базовый пройден).
+- **Полировка VFX:** VR-виньетка, trail — см. `CURRENT_TASK.md`.
+- **Следующий крупный этап:** 5 — Цель и победа.
 - Стек стабилен: PhysX 0.3.0 + physx-grab. Тесты — localhost + Quest Link.
 
 ---
@@ -214,6 +234,8 @@ Float снаружи — купол барьер; gravity на столе — м
 - **Руки без VPN** — решено локальными GLB (`assets/models/`).
 - **`extensionPageScript.js` в Network** — расширение браузера, игнорировать.
 - **Гонка spawn float** — ADR-11.
+- **VR-виньетка slo-mo:** на мониторе видна, в Quest — нет (CSS vs immersive WebXR).
+- **Trail float-кубиков:** базовая логика trace 0.4 м OK; нужна полировка opacity/visibility.
 
 ---
 
@@ -223,7 +245,8 @@ Float снаружи — купол барьер; gravity на столе — м
 Tower/
 ├── index.html
 ├── js/config.js, main.js, spawn-floating-cubes.js
-├── js/components/  physx-grab, floating-cube, dome-builder
+├── js/components/  physx-grab, floating-cube, dome-builder, time-scale,
+│                   slowmo-vfx, slowmo-vignette-3d, float-motion-trail
 ├── assets/models/  leftHandLow.glb, rightHandLow.glb
 ├── AGENTS.md, CURRENT_TASK.md, PROJECT_LOG.md, PROJECT_LOG_ARCHIVE.md
 ```
@@ -236,6 +259,8 @@ Tower/
 - **2:** `floating-cube.js`, 11 кубиков, дрейф (ADR-04).
 - **3:** визуал + 89 плиток (ADR-05), layers (ADR-06–07), release/float (ADR-08),
   пол→float (ADR-09), lenient containment, float/gravity материалы. QA ✅ (сессия 12).
+- **4:** `time-scale` + float velocity-scale + `_maintainFloatDrift` (ADR-12);
+  VFX: CSS/VR vignette, `float-motion-trail` trace 0.4 м. QA базовый ✅ (сессия 13).
 
 **QA купола (уточнение теста 1):** float-кубики сталкиваются с куполом **снаружи**
 (слой FLOAT_CUBE × DOME). Внутри на пьедестале кубики в gravity и **не** бьются о

@@ -50,6 +50,55 @@ const CONFIG = {
     eyeHeight: 1.6,                        // высота камеры над полом игрока
   },
 
+  // === Замедление времени (SUPERHOT, Этап 4) ===
+  // «Время мира»: sceneEl.systems['time-scale'].getScale() → 0.05..1.0.
+  // Любой новый объект (шары, враги, частицы) должен умножать своё движение на getScale().
+  // Не замедляется: PhysX рук, стол, купол, rig игрока.
+  timeScale: {
+    min: 0.05,           // «замёрзшее» время (~5% скорости мира)
+    max: 1.0,            // нормальное время
+    stillSpeed: 0.02,    // м/с — ниже считаем «стоим»
+    moveSpeed: 0.12,     // м/с — выше = полный max
+
+    // Асимметричное сглаживание: заморозка быстрая, разморозка медленнее.
+    activityResponseDown: 14,  // activity быстро падает при остановке
+    activityResponseUp: 5,     // activity медленнее растёт при старте движения
+    scaleResponseDown: 10,     // timeScale быстро → min
+    scaleResponseUp: 3,        // timeScale медленно → max (базовая скорость разморозки)
+    // Мелкое движение (поворот головы) размораживает ещё медленнее;
+    // 0.25 = при слабом движении скорость разморозки = 25% от scaleResponseUp.
+    scaleUpIntensityMin: 0.25,
+
+    // Мёртвая зона от дрожания трекинга (м/с вычитается до расчёта activity).
+    // softWidth — мягкий вход: между deadband и deadband+softWidth вклад растёт квадратично.
+    headJitterDeadband: 0.03,
+    headJitterSoftWidth: 0.04,
+    handJitterDeadband: 0.11,
+    handJitterSoftWidth: 0.08,
+
+    debug: false,         // true → раз в ~0.5 с лог activity и scale в консоль
+  },
+
+  // === Визуальный feedback слоумо (Этап 4, шаг 5) ===
+  slowmoFx: {
+    vignette: {
+      maxOpacity: 0.9,
+      planeSize: 1.6,          // м — покрывает FOV на planeDistance
+      planeDistance: 0.18,     // м перед камерой (локальный −Z)
+      gradientInnerPx: 28,     // радиус прозрачного центра на текстуре 512px
+    },
+    trail: {
+      trailLengthM: 0.4,       // длина trace, м (~40 см)
+      segmentCount: 10,        // сегментов blend вдоль пути
+      minSampleStep: 0.022,    // м — мин. шаг записи точки
+      minVisibility: 0.1,      // 10% при full realtime
+      maxOpacity: 0.55,        // пик opacity у «головы» хвоста в slo-mo
+      fadePower: 1.35,         // затухание вдоль пути к хвосту
+      headSkipM: 0.028,        // не рисовать прямо под основным кубом
+      sizeScale: 0.95,
+    },
+  },
+
   // Плавающие кубики (свойство float — невесомость + инерция).
   // Используются компонентом floating-cube. См. CURRENT_TASK.md, задача 2.
   floatingCubes: {
@@ -85,6 +134,12 @@ const CONFIG = {
 
     // Импульс вверх при возврате в float с пола (задача 3, Шаг 5), м/с.
     floorReturnSpeed: 0.25,
+
+    // Минимальная скорость дрейфа (float). Биндинг PhysX теряет энергию в контактах
+    // даже при restitution=0.9 — tick подтягивает velocity до этого порога.
+    // timeScale масштабирует видимую скорость поверх «полной».
+    minDriftSpeed:        0.28,  // м/с, линейная
+    minAngularDriftSpeed: 0.65,  // рад/с
 
     // Палитра «полезных» цветных (5 шт). Красный исключён —
     // конфликт с красными шарами из Этапа 6.

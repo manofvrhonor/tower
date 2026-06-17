@@ -5,51 +5,46 @@ alwaysApply: true
 
 # CURRENT_TASK.md — Текущая задача
 
-## Задача 4 — Замедление времени (SUPERHOT)
+## Задача 4b — Полировка slo-mo VFX (остаток Этапа 4)
 
-**Этап 4** в `PROJECT_LOG.md`. Этап 3 (купол) ✅ закрыт.
+**Этап 4** по геймплею ✅. Этап 5 (победа) — после закрытия VFX.
 
 ---
 
 ## Цель
 
-- Игрок **не двигается** → `timeScale ≈ 0.05` (мир почти замёрз).
-- Игрок **двигается** (голова / руки) → `timeScale` плавно к `1.0`.
-- `timeScale` влияет на **скриптовое** движение: дрейф float-кубиков, будущие шары.
-- **Не замедлять:** PhysX рук, PhysX на столе/куполе, сам rig игрока — реальное время.
-
----
-
-## Критерий завершения (черновик)
-
-- В Quest: замер → кубики почти стоят; резкий поворот головы → снова летают.
-- Нет рывков и «залипания» timeScale на 0 или 1.
-- Консоль без ошибок.
+- VR-виньетка **видна в Quest** при slo-mo (сейчас OK на мониторе, в шлеме — нет).
+- Trail float-кубиков: **стабильная** видимость и прозрачность (10–100% от timeScale).
 
 ---
 
 ## Микро-шаги
 
-- [ ] **1.** Разведка: откуда читать скорость/движение игрока в A-Frame XR (rig, camera, controllers).
-- [ ] **2.** `CONFIG.timeScale` — пороги, min/max, скорость сглаживания.
-- [ ] **3.** Компонент или система: вычисление activity → `timeScale`, экспорт для других компонентов.
-- [ ] **4.** Подключить `timeScale` к `floating-cube.js` (tick / импульсы / wakeUp).
-- [ ] **5.** Виньетка или лёгкий визуальный feedback (опционально, если успеваем).
-- [ ] **6.** Quest QA.
+- [ ] **1.** VR-виньетка: диагностика (quad в кадре? material? near clip?) → рабочий вариант в Quest.
+- [ ] **2.** Trail: подстроить opacity/visibility по результатам Quest (config + логика blend).
 
 ---
 
 ## Working Context
 
-**Пока не трогаем:** collision layers, release/containment, dome-builder (ADR без изменений).
+### ИЗВЕСТНО
 
-**Вероятно тронем:** `js/config.js`, новый `js/components/time-scale.js` (или `js/main.js`),
-`js/components/floating-cube.js`, `index.html`.
+- CSS `#slowmo-vignette` работает на десктопе/зеркале; в immersive WebXR не рендерится.
+- `slowmo-vignette-3d.js` — CanvasTexture quad на `a-camera`, `planeDistance: 0.18`, `depthTest: false`.
+- Trail: trace 0.4 м, `minVisibility: 0.1`, 10 сегментов — логика OK, нужна полировка.
 
-**ADR:** при выборе «что именно замедлять» — зафиксировать ADR-12 в `PROJECT_LOG.md`.
+### НЕИЗВЕСТНО
+
+- Почему quad не виден в Quest (позиция, stereo, layer, material init?).
+
+### Файлы
+
+**Тронем:** `js/components/slowmo-vignette-3d.js`, `js/config.js` (slowmoFx), возможно `float-motion-trail.js`.
+
+**Не трогаем:** time-scale core, floating-cube physics, collision layers, dome.
 
 ---
 
 ## Следующее действие
 
-**Шаг 1:** разведка API движения игрока в текущей сцене (`index.html`, rig `#player`).
+**Шаг 1:** Quest — замер → проверить, виден ли quad; править `slowmo-vignette-3d` (distance, size, gradientInnerPx, renderOrder).

@@ -59,6 +59,8 @@ AFRAME.registerComponent('floating-cube', {
     this.domeCfg = (typeof CONFIG !== 'undefined' && CONFIG.dome) || {};
     this._physicsApplied = false;
     this._worldPos = new THREE.Vector3();
+    // Какой timeScale уже «вшит» в текущую velocity PhysX (см. _applyTimeScaleToVelocity).
+    this._lastAppliedTimeScale = 1.0;
     this._onContactBegin = this._onContactBegin.bind(this);
 
     // Подписка на возможные события готовности тела (план А).
@@ -110,6 +112,9 @@ AFRAME.registerComponent('floating-cube', {
    * Containment-тест по CONFIG.dome → gravity или float.
    */
   onGrabReleased: function () {
+    // После joint velocity в теле «полная» — сброс для корректного масштабирования.
+    this._lastAppliedTimeScale = 1.0;
+
     var pos = this._getWorldPosition();
     var inside = this._isInsideDome(pos, true);
 
@@ -159,6 +164,8 @@ AFRAME.registerComponent('floating-cube', {
     try {
       rb.setLinearVelocity({ x: 0, y: upSpeed, z: 0 }, true);
       if (typeof rb.wakeUp === 'function') rb.wakeUp();
+      this._lastAppliedTimeScale = 1.0;
+      this._applyTimeScaleToVelocity(rb);
     } catch (e) {
       console.warn('[floating-cube] floor return impulse failed:', e.message);
     }
@@ -221,6 +228,138 @@ AFRAME.registerComponent('floating-cube', {
 
     var dy = y - wallTopY;
     return (x * x + dy * dy + z * z) <= innerR * innerR;
+  },
+
+  _getTimeScale: function () {
+    var sys = this.el.sceneEl.systems['time-scale'];
+    if (!sys || typeof sys.getScale !== 'function') return 1;
+    return sys.getScale();
+  },
+
+  /**
+   * Поддерживает минимальную «полную» скорость дрейфа (до timeScale).
+   * Компенсирует потери энергии в контактах @c-frame/physx (см. JSDoc п.5).
+   */
+  _maintainFloatDrift: function (rb) {
+    if (!rb || typeof rb.getLinearVelocity !== 'function') return;
+
+    var cfg = this.cfg;
+    var minLin = cfg.minDriftSpeed !== undefined ? cfg.minDriftSpeed : 0.28;
+    var minAng = cfg.minAngularDriftSpeed !== undefined ? cfg.minAngularDriftSpeed : 0.65;
+
+    var prev = this._lastAppliedTimeScale;
+    if (!prev || prev < 0.001) prev = 1.0;
+    var invPrev = 1 / prev;
+    var changed = false;
+
+    try {
+      var lv = rb.getLinearVelocity();
+      if (lv && typeof lv.x === 'number' && typeof rb.setLinearVelocity === 'function') {
+        var fx = lv.x * invPrev;
+        var fy = lv.y * invPrev;
+        var fz = lv.z * invPrev;
+        var speed = Math.sqrt(fx * fx + fy * fy + fz * fz);
+
+        if (speed < minLin) {
+          if (speed > 1e-4) {
+            var scale = minLin / speed;
+            fx *= scale;
+            fy *= scale;
+            fz *= scale;
+          } else {
+            var dir = this._randomUnitVector();
+            fx = dir.x * minLin;
+            fy = dir.y * minLin;
+            fz = dir.z * minLin;
+          }
+          rb.setLinearVelocity({ x: fx, y: fy, z: fz }, false);
+          changed = true;
+        }
+      }
+
+      if (typeof rb.getAngularVelocity === 'function' && typeof rb.setAngularVelocity === 'function') {
+        var av = rb.getAngularVelocity();
+        if (av && typeof av.x === 'number') {
+          var ax = av.x * invPrev;
+          var ay = av.y * invPrev;
+          var az = av.z * invPrev;
+          var angSpeed = Math.sqrt(ax * ax + ay * ay + az * az);
+
+          if (angSpeed < minAng) {
+            if (angSpeed > 1e-4) {
+              var angScale = minAng / angSpeed;
+              ax *= angScale;
+              ay *= angScale;
+              az *= angScale;
+            } else {
+              var axis = this._randomUnitVector();
+              ax = axis.x * minAng;
+              ay = axis.y * minAng;
+              az = axis.z * minAng;
+            }
+            rb.setAngularVelocity({ x: ax, y: ay, z: az }, false);
+            changed = true;
+          }
+        }
+      }
+
+      if (changed) {
+        this._lastAppliedTimeScale = 1.0;
+      }
+    } catch (e) {
+      if (!this._driftMaintainWarned) {
+        console.warn('[floating-cube] drift maintain failed:', e.message);
+        this._driftMaintainWarned = true;
+      }
+    }
+  },
+
+  /**
+   * Масштабирует linear/angular velocity float-кубика под timeScale.
+   *
+   * Важно: PhysX хранит уже масштабированную velocity. Каждый кадр сначала
+   * восстанавливаем «полную» (÷ lastApplied), затем умножаем на текущий scale.
+   * Иначе v *= ts каждый кадр → экспоненциальное затухание до нуля.
+   */
+  _applyTimeScaleToVelocity: function (rb) {
+    var ts = this._getTimeScale();
+
+    if (ts >= 0.999) {
+      this._lastAppliedTimeScale = 1.0;
+      return;
+    }
+    if (!rb || typeof rb.getLinearVelocity !== 'function') return;
+
+    var prev = this._lastAppliedTimeScale;
+    if (!prev || prev < 0.001) prev = 1.0;
+    var invPrev = 1 / prev;
+
+    try {
+      var lv = rb.getLinearVelocity();
+      if (lv && typeof lv.x === 'number' && typeof rb.setLinearVelocity === 'function') {
+        rb.setLinearVelocity({
+          x: lv.x * invPrev * ts,
+          y: lv.y * invPrev * ts,
+          z: lv.z * invPrev * ts,
+        }, false);
+      }
+      if (typeof rb.getAngularVelocity === 'function' && typeof rb.setAngularVelocity === 'function') {
+        var av = rb.getAngularVelocity();
+        if (av && typeof av.x === 'number') {
+          rb.setAngularVelocity({
+            x: av.x * invPrev * ts,
+            y: av.y * invPrev * ts,
+            z: av.z * invPrev * ts,
+          }, false);
+        }
+      }
+      this._lastAppliedTimeScale = ts;
+    } catch (e) {
+      if (!this._timeScaleWarned) {
+        console.warn('[floating-cube] timeScale velocity scale failed:', e.message);
+        this._timeScaleWarned = true;
+      }
+    }
   },
 
   _getPhysX: function () {
@@ -424,6 +563,9 @@ AFRAME.registerComponent('floating-cube', {
           }
         }
       }
+
+      this._lastAppliedTimeScale = 1.0;
+      this._applyTimeScaleToVelocity(rb);
     }
 
     if (applyImpulse) {
@@ -438,6 +580,7 @@ AFRAME.registerComponent('floating-cube', {
    */
   tick: function () {
     if (this.state !== 'float') return;
+    if (this.el.is && this.el.is('grabbed-dynamic')) return;
     var rb = this._rb;
     if (!rb) return;
 
@@ -446,6 +589,9 @@ AFRAME.registerComponent('floating-cube', {
         rb.wakeUp();
       }
     }
+
+    this._maintainFloatDrift(rb);
+    this._applyTimeScaleToVelocity(rb);
   },
 
   /**

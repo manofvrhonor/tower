@@ -74,3 +74,13 @@ Quest: тест 4. Пауза перед Шагом 6 QA.
 - **Тест 1 уточнён:** «изнутри» в старых чек-листах — неточная формулировка.
   Проверка отскока — float-кубик **снаружи** о купол, либо float после подъёма с пола.
 - Этап 3 закрыт. Следующий — Этап 4 (time scale).
+
+---
+
+## Сессия 13 — SUPERHOT (timeScale) + slo-mo VFX ✅
+
+- Система `time-scale`, float velocity-scale, `_maintainFloatDrift`, jitter-filter рук.
+- VFX: CSS-виньетка, `slowmo-vignette-3d`, `float-motion-trail` (trace 0.4 м).
+- ADR-12 зафиксирован. Этап 4 закрыт по геймплею.
+- **Открыто на полировку:** VR-виньетка в Quest; trail opacity/visibility.
+- AGENTS.md v4: при закрытии сессии агент сам обновляет PROJECT_LOG / ARCHIVE.

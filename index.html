@@ -26,7 +26,11 @@
           (должен быть зарегистрирован до парсинга <a-scene>, т.к. навешен на <a-entity>);
        5) main.js — диагностика, может зависеть от готовой сцены. -->
   <script src="js/config.js"></script>
+  <script src="js/components/time-scale.js"></script>
+  <script src="js/components/slowmo-vfx.js"></script>
+  <script src="js/components/slowmo-vignette-3d.js"></script>
   <script src="js/components/floating-cube.js"></script>
+  <script src="js/components/float-motion-trail.js"></script>
   <script src="js/spawn-floating-cubes.js"></script>
   <script src="js/components/dome-builder.js"></script>
   <script src="js/main.js" defer></script>
@@ -134,7 +138,7 @@
 
     <!-- ====== ИГРОК ====== -->
     <a-entity id="player" position="0 0 1">
-      <a-camera position="0 1.6 0" look-controls wasd-controls></a-camera>
+      <a-camera position="0 1.6 0" look-controls wasd-controls slowmo-vignette-3d></a-camera>
 
       <!-- Левая рука: hand-controls + physx-grab + дочерний коллайдер -->
       <a-entity id="leftHand"
@@ -162,5 +166,8 @@
     </a-entity>
 
   </a-scene>
+
+  <!-- Поверх canvas A-Frame (иначе виньетка не видна) -->
+  <div id="slowmo-vignette" aria-hidden="true"></div>
 </body>
 </html>

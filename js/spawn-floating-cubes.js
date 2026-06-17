@@ -106,6 +106,7 @@
         'collisionLayers: ' + ownLayer + '; ' +
         'collidesWithLayers: ' + collidesWithList);
       el.setAttribute('floating-cube', '');
+      el.setAttribute('float-motion-trail', '');
       el.dataset.isTarget = isTarget ? 'true' : 'false';
 
       root.appendChild(el);
