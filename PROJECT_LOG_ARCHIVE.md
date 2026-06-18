@@ -112,3 +112,21 @@ Quest: тест 4. Пауза перед Шагом 6 QA.
 - **Config:** `loftSectionCount`, `deployLengthM`, `headFadeInM`, `grabFadeOutSec`, taper tail.
 - Quest QA: OK («вроде хорошо»). **Задача 4c закрыта.** Абстракция профиля — отложена.
 - **Этап 4 полностью закрыт.** Следующий: **Этап 5 — Цель и победа**.
+
+---
+
+## Сессия 16 — фикс физики кубов на столе ✅
+
+Пред-шаг перед Этапом 5: жалобы на «странную» физику gravity-кубов под куполом.
+
+- **Замирание/виснет в воздухе/на ребре:** причина — `sleepThreshold: 25` (≈ скорость
+  7 м/с) усыплял тело в движении. Снижен до `0.01`; damping `0.08/0.12 → 0.02/0.04`;
+  `wakeUp()` по контакту gravity-куба. → **ADR-13**.
+- **«Резиновый» отскок (особенно ребром) + скольжение стопок:** дефолт солвера 4/1 +
+  депенетрация. Добавлены `setSolverIterationCounts(16,4)` + speculative CCD (для всех
+  кубов), `gravityMaterial` restitution `0.05` / friction `0.90/0.70`, `contactOffset 0.03`,
+  и клэмп скорости gravity-куба в `tick` (`maxLinearSpeed 1.8`, `maxAngularSpeed 8`).
+  `setMaxDepenetrationVelocity` в биндинге отсутствует. → **ADR-14**.
+- **Захват продавливал стоящий куб:** joint `Fixed → D6 softFixed` (пружинный drive). → **ADR-14**.
+- Quest QA: OK («стало хорошо»). Числа подобраны итеративно в Quest.
+- Файлы: `js/config.js`, `js/components/floating-cube.js`, `js/components/physx-grab.js`.

@@ -211,6 +211,56 @@ Float снаружи — купол барьер; gravity на столе — м
 
 ---
 
+### ADR-13: Порог сна и damping gravity-кубиков
+
+**Решение:** `dome.gravityMode.sleepThreshold` снижен `25 → 0.01`; `linearDamping`
+`0.08 → 0.02`, `angularDamping` `0.12 → 0.04`. В `floating-cube._onContactBegin`
+gravity-кубик при контакте явно вызывает `rb.wakeUp()`.
+
+**Причина:** порог 25 (≈ скорость 7 м/с) усыплял тело **в движении** — кубик виснул,
+игнорируя гравитацию: башня падала и замирала «как о прозрачное препятствие», кубы
+застывали на ребре. Высокий damping добавлял «вязкость». Авто-wake биндинга
+ненадёжен (ADR-02) → уснувшую стопку будит явный wakeUp по контакту.
+
+**Не делать:** высокий sleepThreshold ради «засыпания в стопке»; `wakeUp()` каждый
+кадр для gravity (стопка не уснёт, будет дрожать). Затухание даёт friction+restitution.
+
+---
+
+### ADR-14: Качество контактов кубов + soft-grab
+
+**Решение:**
+- Все кубы при инициализации тела получают `setSolverIterationCounts(16, 4)` и
+  `setRigidBodyFlag(eENABLE_SPECULATIVE_CCD, true)` (метод `_applyContactQuality`,
+  параметры в `CONFIG.floatingCubes`).
+- `gravityMaterial`: restitution `0.15 → 0.05`, staticFriction `0.70 → 0.90`,
+  dynamicFriction `0.60 → 0.70`.
+- Захват: joint `Fixed → D6; softFixed: true` (пружинный drive @c-frame/physx).
+
+**Причина:** дефолт солвера PhysX 4/1 давал скольжение стопок (мало velocity-итераций)
+и «резиновый» выброс на рёберных ударах (глубокое продавливание при малом числе
+position-итераций; speculative CCD не даёт проникнуть на быстром ударе). Жёсткий Fixed
+joint перебарывал контакты — схваченный куб продавливал стоящий насквозь; softFixed
+уступает контакту (куб смещается относительно руки).
+
+**API подтверждён по исходникам `@c-frame/physx@v0.3.0`** (`src/physics.js`):
+`physx-body` использует `setSolverIterationCounts` и `PxRigidBodyFlag`; `physx-joint`
+поддерживает `softFixed` для D6 (drive stiffness 1000 / damping 500 / forceLimit 1000).
+
+**Доп. фикс «резинового» отскока (после QA):** restitution/CCD/итерации не убрали
+сильный отскок на рёберных ударах — причина в депенетрации (шаг `simulate` до 30 мс
+без подшагов, куб проникает в стол, солвер выталкивает с большой скоростью). Метода
+`setMaxDepenetrationVelocity` в биндинге **нет** (проверено: имена методов в WASM,
+не в JS-glue). Решение — два подтверждённых рычага:
+- `contactOffset: 0.03` (CONFIG.floatingCubes) → контакт ловится до проникновения;
+- клэмп скорости gravity-куба в `tick` (`maxLinearSpeed 2.0`, `maxAngularSpeed 8.0`)
+  через `get/setLinearVelocity` — гарантированно обрезает выброс.
+
+**Не делать:** жёсткий Fixed joint для захвата; полагаться на дефолтные 4/1 итерации
+для стопок; искать `setMaxDepenetrationVelocity` (в этом биндинге отсутствует).
+
+---
+
 ## ДОРОЖНАЯ КАРТА
 
 | Этап | Название | Статус |
@@ -231,6 +281,9 @@ Float снаружи — купол барьер; gravity на столе — м
 
 - Этапы 0–4 ✅ (SUPERHOT + loft trail, Quest QA базовый пройден).
 - **VFX trail (4c):** loft mesh, deploy-якорь, grab fade-out, fade 0→1→0 — Quest OK (сессия 15).
+- **Физика стола (сессия 16):** gravity-кубы больше не виснут/не замирают на ребре
+  (ADR-13), нет «резинового» отскока, стопки не сползают, захват не продавливает
+  стоящий куб (ADR-14). Quest QA OK.
 - **VR-виньетка:** отложена на конец разработки (не видна в Quest).
 - **Следующий этап:** 5 — Цель и победа.
 - Стек стабилен: PhysX 0.3.0 + physx-grab. Тесты — localhost + Quest Link.

@@ -99,6 +99,7 @@ AFRAME.registerComponent('floating-cube', {
 
     console.log('[floating-cube] rigidBody detected on', this.el.id || '(no id)');
     this._rb = rb; // сохраняем для tick
+    this._applyContactQuality(rb);
     this._applyFloatPhysics(rb, true);
     this._physicsApplied = true;
 
@@ -146,6 +147,15 @@ AFRAME.registerComponent('floating-cube', {
    */
   _onContactBegin: function (evt) {
     if (this.state !== 'gravity') return;
+
+    // Страховка пробуждения: уснувшую стопку должен будить новый контакт
+    // (упавший сверху кубик/рука). Авто-wake биндинга @c-frame/physx
+    // ненадёжен (ADR-02), поэтому будим себя явно. Это безопасно — wakeUp
+    // только в момент контакта, не каждый кадр, стопка снова уснёт сама.
+    var rb = this._rb;
+    if (rb && typeof rb.wakeUp === 'function') {
+      rb.wakeUp();
+    }
 
     var otherEl = evt.detail.otherComponent && evt.detail.otherComponent.el;
     if (!otherEl || otherEl.id !== 'floor') return;
@@ -400,10 +410,16 @@ AFRAME.registerComponent('floating-cube', {
       GRABBED_CUBE: 4, BALL: 5, HAND: 6,
     };
 
+    // contactOffset — раннее обнаружение контакта (меньше проникновения и
+    // «резинового» выброса депенетрации). См. CONFIG.floatingCubes.contactOffset.
+    var co = (this.cfg.contactOffset !== undefined) ? this.cfg.contactOffset : -1;
+    var coStr = (co >= 0) ? ('; contactOffset: ' + co) : '';
+
     this.el.setAttribute('physx-material',
       'restitution: ' + mat.restitution +
       '; staticFriction: ' + mat.staticFriction +
       '; dynamicFriction: ' + mat.dynamicFriction +
+      coStr +
       '; collisionLayers: ' + L[layerName] +
       '; collidesWithLayers: ' + this._getCollidesWithCsv(layerName));
   },
@@ -450,6 +466,42 @@ AFRAME.registerComponent('floating-cube', {
       if (!s || !s.setSimulationFilterData) continue;
       var fd = new PX.PxFilterData(newWord0, newWord1, 0, 0);
       s.setSimulationFilterData(fd);
+    }
+  },
+
+  /**
+   * Качество контактов для тела кубика (один раз при инициализации, общее для
+   * float и gravity). Борется с продавливанием на рёберных ударах («резиновый»
+   * отскок) и со скольжением стопок. Значения — в CONFIG.floatingCubes.
+   * API подтверждён по исходникам @c-frame/physx@v0.3.0 (см. ADR-14):
+   *   - rb.setSolverIterationCounts(pos, vel);
+   *   - rb.setRigidBodyFlag(PxRigidBodyFlag.eENABLE_SPECULATIVE_CCD, true).
+   */
+  _applyContactQuality: function (rb) {
+    var cfg = this.cfg;
+    var posIters = cfg.solverPositionIterations !== undefined ? cfg.solverPositionIterations : 16;
+    var velIters = cfg.solverVelocityIterations !== undefined ? cfg.solverVelocityIterations : 4;
+
+    if (typeof rb.setSolverIterationCounts === 'function') {
+      try {
+        rb.setSolverIterationCounts(posIters, velIters);
+      } catch (e) {
+        console.warn('[floating-cube] setSolverIterationCounts failed:', e.message);
+      }
+    }
+
+    if (cfg.speculativeCCD === false) return;
+
+    var sysPX = this._getPhysX();
+    var flag = sysPX && sysPX.PxRigidBodyFlag && sysPX.PxRigidBodyFlag.eENABLE_SPECULATIVE_CCD;
+    if (flag && typeof rb.setRigidBodyFlag === 'function') {
+      try {
+        rb.setRigidBodyFlag(flag, true);
+      } catch (e) {
+        console.warn('[floating-cube] speculative CCD failed:', e.message);
+      }
+    } else if (!flag) {
+      console.warn('[floating-cube] PxRigidBodyFlag.eENABLE_SPECULATIVE_CCD недоступен');
     }
   },
 
@@ -584,10 +636,16 @@ AFRAME.registerComponent('floating-cube', {
    * См. JSDoc, п. 4.
    */
   tick: function () {
-    if (this.state !== 'float') return;
-    if (this.el.is && this.el.is('grabbed-dynamic')) return;
     var rb = this._rb;
     if (!rb) return;
+    if (this.el.is && this.el.is('grabbed-dynamic')) return;
+
+    // gravity: только обрезаем «резиновый» выброс депенетрации (см. JSDoc п.5
+    // и ADR-14). Остальное (gravity, контакты, сон) — на стороне PhysX.
+    if (this.state === 'gravity') {
+      this._clampGravityVelocity(rb);
+      return;
+    }
 
     if (typeof rb.isSleeping === 'function' && rb.isSleeping()) {
       if (typeof rb.wakeUp === 'function') {
@@ -597,6 +655,46 @@ AFRAME.registerComponent('floating-cube', {
 
     this._maintainFloatDrift(rb);
     this._applyTimeScaleToVelocity(rb);
+  },
+
+  /**
+   * Обрезает линейную/угловую скорость gravity-куба до потолка из
+   * CONFIG.dome.gravityMode (maxLinearSpeed / maxAngularSpeed). Это страховка
+   * от «резинового» выброса при депенетрации на рёберном ударе: PhysX-биндинг
+   * не даёт setMaxDepenetrationVelocity, поэтому гасим скорость постфактум.
+   */
+  _clampGravityVelocity: function (rb) {
+    var g = this.domeCfg.gravityMode || {};
+    var maxLin = (g.maxLinearSpeed !== undefined) ? g.maxLinearSpeed : 2.0;
+    var maxAng = (g.maxAngularSpeed !== undefined) ? g.maxAngularSpeed : 8.0;
+
+    try {
+      if (typeof rb.getLinearVelocity === 'function' && typeof rb.setLinearVelocity === 'function') {
+        var lv = rb.getLinearVelocity();
+        if (lv && typeof lv.x === 'number') {
+          var sp = Math.sqrt(lv.x * lv.x + lv.y * lv.y + lv.z * lv.z);
+          if (sp > maxLin && sp > 1e-5) {
+            var k = maxLin / sp;
+            rb.setLinearVelocity({ x: lv.x * k, y: lv.y * k, z: lv.z * k }, false);
+          }
+        }
+      }
+      if (typeof rb.getAngularVelocity === 'function' && typeof rb.setAngularVelocity === 'function') {
+        var av = rb.getAngularVelocity();
+        if (av && typeof av.x === 'number') {
+          var asp = Math.sqrt(av.x * av.x + av.y * av.y + av.z * av.z);
+          if (asp > maxAng && asp > 1e-5) {
+            var ka = maxAng / asp;
+            rb.setAngularVelocity({ x: av.x * ka, y: av.y * ka, z: av.z * ka }, false);
+          }
+        }
+      }
+    } catch (e) {
+      if (!this._clampWarned) {
+        console.warn('[floating-cube] gravity velocity clamp failed:', e.message);
+        this._clampWarned = true;
+      }
+    }
   },
 
   /**

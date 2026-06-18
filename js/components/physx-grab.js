@@ -98,7 +98,11 @@ AFRAME.registerComponent('physx-grab', {
     this._setGrabbedLayer(el, true);
 
     this.joint = document.createElement('a-entity');
-    this.joint.setAttribute("physx-joint", `type: Fixed; target: #${target.id}`);
+    // D6 + softFixed: пружинный drive (stiffness/damping/forceLimit в @c-frame/physx),
+    // штатно задуман «для захвата вещей». В отличие от жёсткого Fixed, joint уступает
+    // контакту: при упоре в стоящий куб схваченный куб смещается относительно руки,
+    // а не продавливается сквозь него. См. PROJECT_LOG ADR-14.
+    this.joint.setAttribute("physx-joint", `type: D6; softFixed: true; target: #${target.id}`);
     el.appendChild(this.joint);
   },
 
