@@ -97,4 +97,18 @@ Quest: тест 4. Пауза перед Шагом 6 QA.
 - **CSS-виньетка удалена** (`slowmo-vfx.js`); только 3D-quad на камере.
 - **VR-виньетка:** не видна в Quest → **отложена на конец разработки** (этап 8).
 - Quest QA trail: OK («теперь норм»), но угловатый вид → решено делать **loft** (4c).
-- ADR-12 обновлён. Задача 4b закрыта. Следующая: **4c — profile loft mesh**.
+
+---
+
+## Сессия 15 — trail loft + visibility (4c) ✅
+
+- **Loft mesh:** 20 `a-box` → один `BufferGeometry` на куб (14 сечений, квадратный профиль,
+  Catmull-Rom, path-aligned frame — без «ленты» при spin).
+- **Fade:** 0→1→0 по длине mesh (`headFadeInM` у объекта, `fadePower` к концу); без
+  двойного growFactor на material.
+- **Deploy:** якорь кончика в мире, голова у куба, пробег `deployLengthM` → follow по path
+  (без seed `_driftDir`, без скачков сечений).
+- **Grab:** fade-out `grabFadeOutSec` (замороженный path в мире).
+- **Config:** `loftSectionCount`, `deployLengthM`, `headFadeInM`, `grabFadeOutSec`, taper tail.
+- Quest QA: OK («вроде хорошо»). **Задача 4c закрыта.** Абстракция профиля — отложена.
+- **Этап 4 полностью закрыт.** Следующий: **Этап 5 — Цель и победа**.
