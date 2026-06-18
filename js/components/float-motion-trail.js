@@ -1,11 +1,17 @@
 /* global AFRAME, CONFIG, THREE */
 
 /**
- * float-motion-trail — хвост по trace пути (~40 см), blend голова→хвост.
+ * float-motion-trail — хвост-«змейка» по trace пути куба.
  *
- * Буфер точек обрезается по длине пути (trailLengthM), не по времени.
- * Яркость: trailVisibility = minVis + (1-minVis)*slowFactor (10%..100%).
- * Fade вдоль пути: непрозрачно у куба → прозрачно на конце trace.
+ * Сегментов фиксированное число (segmentCount), каждый сидит на ПОСТОЯННОМ
+ * отставании от головы: dist_i = headSkipM + i*trailSpacingM. Голова — живая
+ * мировая позиция куба каждый кадр, поэтому хвост плавно тянется по траектории
+ * и не «спрыгивает» при обрезке буфера. Буфер trace (trailLengthM) держим
+ * длиннее самого дальнего сегмента, чтобы он всегда интерполировался внутри пути.
+ *
+ * Яркость: trailVisibility = minVis + (maxVis-minVis)*slowFactor (10%..15%).
+ * Размер: линейный blend headSizeScale → tailSizeScale вдоль хвоста.
+ * Fade opacity вдоль хвоста: непрозрачно у куба → прозрачно на конце.
  */
 AFRAME.registerComponent('float-motion-trail', {
   init: function () {
@@ -15,8 +21,12 @@ AFRAME.registerComponent('float-motion-trail', {
     this._worldPos = new THREE.Vector3();
     this._worldQuat = new THREE.Quaternion();
     this._tmpQuat = new THREE.Quaternion();
+    this._prevQuat = new THREE.Quaternion();
+    this._samplePos = new THREE.Vector3();
+    this._sampleQuat = new THREE.Quaternion();
     this._euler = new THREE.Euler();
     this._color = '#888888';
+    this._pathReady = false;
 
     var segCount = this.cfg.segmentCount !== undefined ? this.cfg.segmentCount : 10;
     this._segCount = segCount;
@@ -40,6 +50,7 @@ AFRAME.registerComponent('float-motion-trail', {
     var fc = this.el.components['floating-cube'];
     if (!fc || fc.state !== 'float' || (this.el.is && this.el.is('grabbed-dynamic'))) {
       if (this._path.length > 0) this._path.length = 0;
+      this._pathReady = false;
       this.trailRoot.setAttribute('visible', false);
       return;
     }
@@ -54,6 +65,11 @@ AFRAME.registerComponent('float-motion-trail', {
     }
 
     this._tryRecordPoint();
+
+    if (!this._pathReady) {
+      this._seedInitialPath();
+    }
+
     this._trimPathByLength();
 
     if (this._path.length < 2) {
@@ -66,21 +82,24 @@ AFRAME.registerComponent('float-motion-trail', {
   },
 
   /**
-   * 10% при realtime, 100% при полном slo-mo.
+   * 10% при realtime, 15% при полном slo-mo.
    */
   _getTrailVisibility: function (ts) {
     var tsCfg = (typeof CONFIG !== 'undefined' && CONFIG.timeScale) || {};
     var tsMin = tsCfg.min !== undefined ? tsCfg.min : 0.05;
     var tsMax = tsCfg.max !== undefined ? tsCfg.max : 1.0;
     var range = tsMax - tsMin;
-    if (range < 1e-6) return this.cfg.minVisibility !== undefined ? this.cfg.minVisibility : 0.1;
+    if (range < 1e-6) {
+      return this.cfg.minVisibility !== undefined ? this.cfg.minVisibility : 0.1;
+    }
 
     var slowFactor = (tsMax - ts) / range;
     if (slowFactor < 0) slowFactor = 0;
     if (slowFactor > 1) slowFactor = 1;
 
     var minVis = this.cfg.minVisibility !== undefined ? this.cfg.minVisibility : 0.1;
-    return minVis + (1 - minVis) * slowFactor;
+    var maxVis = this.cfg.maxVisibility !== undefined ? this.cfg.maxVisibility : 0.15;
+    return minVis + (maxVis - minVis) * slowFactor;
   },
 
   _tryRecordPoint: function () {
@@ -114,6 +133,60 @@ AFRAME.registerComponent('float-motion-trail', {
     });
   },
 
+  /**
+   * Заполняет буфер trace «фальшивой» историей вдоль −driftDir,
+   * чтобы хвост был готов сразу (без появления сегментов скачками).
+   * Направление берётся из floating-cube._driftDir (импульс при спавне),
+   * а не из getLinearVelocity — на старте PhysX отдаёт некорректный вектор.
+   */
+  _seedInitialPath: function () {
+    if (this._pathReady) return;
+
+    var fc = this.el.components['floating-cube'];
+    if (!fc || !fc._physicsApplied || !fc._driftDir) return;
+
+    var el = this.el;
+    el.object3D.getWorldPosition(this._worldPos);
+    el.object3D.getWorldQuaternion(this._worldQuat);
+
+    var drift = fc._driftDir;
+    // Хвост — позади куба, против направления дрейфа.
+    var dx = -drift.x;
+    var dy = -drift.y;
+    var dz = -drift.z;
+
+    var cfg = this.cfg;
+    var headSkip = cfg.headSkipM !== undefined ? cfg.headSkipM : 0.028;
+    var spacing = cfg.trailSpacingM !== undefined ? cfg.trailSpacingM : 0.02;
+    var nSeg = this._segCount;
+    var sampleStep = cfg.minSampleStep !== undefined ? cfg.minSampleStep : 0.022;
+    var bufferLen = cfg.trailLengthM !== undefined ? cfg.trailLengthM : 0.5;
+    var neededLen = headSkip + (nSeg - 1) * spacing;
+    var seedLen = Math.min(neededLen, bufferLen);
+
+    var px = this._worldPos.x;
+    var py = this._worldPos.y;
+    var pz = this._worldPos.z;
+    var qx = this._worldQuat.x;
+    var qy = this._worldQuat.y;
+    var qz = this._worldQuat.z;
+    var qw = this._worldQuat.w;
+
+    this._path.length = 0;
+    for (var dist = seedLen; dist >= sampleStep; dist -= sampleStep) {
+      this._path.push({
+        px: px + dx * dist,
+        py: py + dy * dist,
+        pz: pz + dz * dist,
+        qx: qx, qy: qy, qz: qz, qw: qw,
+      });
+    }
+
+    if (this._path.length >= 2) {
+      this._pathReady = true;
+    }
+  },
+
   _pathTotalLength: function () {
     var len = 0;
     for (var i = 1; i < this._path.length; i++) {
@@ -135,49 +208,56 @@ AFRAME.registerComponent('float-motion-trail', {
   },
 
   /**
-   * Точка на пути: distFromHead метров назад от головы (конца path).
+   * Точка на trace: distFromHead метров назад от ЖИВОЙ головы (текущая позиция
+   * куба this._worldPos/_worldQuat), затем по записанным точкам от свежих к старым.
+   * Возвращает false, если distFromHead больше доступной длины пути (сегмент прячем).
    */
   _samplePath: function (distFromHead, outPos, outQuat) {
     var path = this._path;
     var n = path.length;
-    if (n === 0) return false;
 
-    if (distFromHead <= 0 || n === 1) {
-      var last = path[n - 1];
-      outPos.set(last.px, last.py, last.pz);
-      outQuat.set(last.qx, last.qy, last.qz, last.qw);
-      return true;
+    if (distFromHead <= 0 || n === 0) {
+      outPos.copy(this._worldPos);
+      outQuat.copy(this._worldQuat);
+      return n !== 0 || distFromHead <= 0;
     }
 
     var remaining = distFromHead;
-    for (var i = n - 1; i > 0; i--) {
-      var a = path[i];
-      var b = path[i - 1];
-      var dx = a.px - b.px;
-      var dy = a.py - b.py;
-      var dz = a.pz - b.pz;
-      var segLen = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      if (segLen < 1e-6) continue;
+    var prevX = this._worldPos.x;
+    var prevY = this._worldPos.y;
+    var prevZ = this._worldPos.z;
+    this._prevQuat.copy(this._worldQuat);
 
-      if (remaining <= segLen) {
-        var t = remaining / segLen;
-        outPos.set(
-          a.px + (b.px - a.px) * t,
-          a.py + (b.py - a.py) * t,
-          a.pz + (b.pz - a.pz) * t
-        );
-        outQuat.set(a.qx, a.qy, a.qz, a.qw);
-        this._tmpQuat.set(b.qx, b.qy, b.qz, b.qw);
-        outQuat.slerp(this._tmpQuat, t);
-        return true;
+    for (var i = n - 1; i >= 0; i--) {
+      var p = path[i];
+      var dx = prevX - p.px;
+      var dy = prevY - p.py;
+      var dz = prevZ - p.pz;
+      var segLen = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+      if (segLen >= 1e-6) {
+        if (remaining <= segLen) {
+          var t = remaining / segLen;
+          outPos.set(
+            prevX + (p.px - prevX) * t,
+            prevY + (p.py - prevY) * t,
+            prevZ + (p.pz - prevZ) * t
+          );
+          this._tmpQuat.set(p.qx, p.qy, p.qz, p.qw);
+          outQuat.copy(this._prevQuat).slerp(this._tmpQuat, t);
+          return true;
+        }
+        remaining -= segLen;
       }
-      remaining -= segLen;
+
+      prevX = p.px;
+      prevY = p.py;
+      prevZ = p.pz;
+      this._prevQuat.set(p.qx, p.qy, p.qz, p.qw);
     }
 
-    var first = path[0];
-    outPos.set(first.px, first.py, first.pz);
-    outQuat.set(first.qx, first.qy, first.qz, first.qw);
-    return true;
+    // distFromHead за пределами trace — сегмент не показываем (старт дрейфа).
+    return false;
   },
 
   _updateTrailVisuals: function (trailVis) {
@@ -186,25 +266,25 @@ AFRAME.registerComponent('float-motion-trail', {
     var size = cubeCfg.size !== undefined ? cubeCfg.size : 0.1;
     var sizeScale = cfg.sizeScale !== undefined ? cfg.sizeScale : 0.95;
     var trailSize = size * sizeScale;
-    var trailLen = Math.min(
-      this.cfg.trailLengthM !== undefined ? this.cfg.trailLengthM : 0.4,
-      this._pathTotalLength()
-    );
+    var headSizeScale = cfg.headSizeScale !== undefined ? cfg.headSizeScale : 0.95;
+    var tailSizeScale = cfg.tailSizeScale !== undefined ? cfg.tailSizeScale : 0.85;
     var headSkip = cfg.headSkipM !== undefined ? cfg.headSkipM : (size * 0.28);
-    var maxOp = cfg.maxOpacity !== undefined ? cfg.maxOpacity : 0.55;
+    var spacing = cfg.trailSpacingM !== undefined ? cfg.trailSpacingM : 0.02;
+    var maxOp = cfg.maxOpacity !== undefined ? cfg.maxOpacity : 1.0;
     var fadePower = cfg.fadePower !== undefined ? cfg.fadePower : 1.35;
     var nSeg = this._segCount;
 
     var mat = this.el.getAttribute('material') || {};
     this._color = mat.color || '#888888';
 
-    var samplePos = new THREE.Vector3();
-    var sampleQuat = new THREE.Quaternion();
+    var samplePos = this._samplePos;
+    var sampleQuat = this._sampleQuat;
 
     for (var i = 0; i < nSeg; i++) {
       var seg = this._segments[i];
       var t = (nSeg <= 1) ? 0 : i / (nSeg - 1);
-      var dist = headSkip + t * Math.max(0, trailLen - headSkip);
+      // Фиксированное отставание: сегмент i всегда на одном расстоянии за головой.
+      var dist = headSkip + i * spacing;
 
       if (!this._samplePath(dist, samplePos, sampleQuat)) {
         seg.setAttribute('visible', false);
@@ -219,6 +299,10 @@ AFRAME.registerComponent('float-motion-trail', {
         continue;
       }
 
+      // Линейный blend размера: старт −5%, конец −15% от базового trailSize.
+      var segSizeScale = headSizeScale + t * (tailSizeScale - headSizeScale);
+      var segSize = trailSize * segSizeScale;
+
       this._euler.setFromQuaternion(sampleQuat, 'YXZ');
       seg.setAttribute('visible', true);
       seg.setAttribute('position',
@@ -227,9 +311,9 @@ AFRAME.registerComponent('float-motion-trail', {
         THREE.MathUtils.radToDeg(this._euler.x) + ' ' +
         THREE.MathUtils.radToDeg(this._euler.y) + ' ' +
         THREE.MathUtils.radToDeg(this._euler.z));
-      seg.setAttribute('width', trailSize);
-      seg.setAttribute('height', trailSize);
-      seg.setAttribute('depth', trailSize);
+      seg.setAttribute('width', segSize);
+      seg.setAttribute('height', segSize);
+      seg.setAttribute('depth', segSize);
       seg.setAttribute('material',
         'shader: flat; color: ' + this._color +
         '; opacity: ' + opacity +

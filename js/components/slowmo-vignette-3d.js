@@ -21,9 +21,12 @@ AFRAME.registerComponent('slowmo-vignette-3d', {
     var cy = 256;
     var innerR = this.cfg.gradientInnerPx !== undefined ? this.cfg.gradientInnerPx : 28;
     var grad = ctx.createRadialGradient(cx, cy, innerR, cx, cy, cx);
+    // Тёмные стопы подтянуты ближе к центру: при широком FOV Quest затемнение
+    // должно попадать в поле зрения, а не уходить за край (см. задача 4b).
     grad.addColorStop(0, 'rgba(0,0,0,0)');
-    grad.addColorStop(0.38, 'rgba(0,0,0,0.12)');
-    grad.addColorStop(0.68, 'rgba(0,0,0,0.55)');
+    grad.addColorStop(0.30, 'rgba(0,0,0,0.10)');
+    grad.addColorStop(0.55, 'rgba(0,0,0,0.45)');
+    grad.addColorStop(0.80, 'rgba(0,0,0,0.90)');
     grad.addColorStop(1, 'rgba(0,0,0,1)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 512, 512);

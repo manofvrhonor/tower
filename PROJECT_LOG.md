@@ -192,15 +192,19 @@ Float снаружи — купол барьер; gravity на столе — м
   разморозка; jitter-filter рук.
 - «Время мира»: `sceneEl.systems['time-scale'].getScale()` — новые объекты (шары, враги)
   умножают скриптовое движение на scale.
-- Float-кубики: velocity-scale + `_maintainFloatDrift`; gravity/руки/стол/купол — real time.
-- VFX: CSS-виньетка (десктоп/зеркало) + `slowmo-vignette-3d` на камере (VR);
-  `float-motion-trail` — trace 0.4 м, blend, visibility 10–100% от timeScale.
+- Float-кубики: velocity-scale + `_maintainFloatDrift`; `_driftDir` — направление дрейфа
+  (импульс при спавне) для seed trail; gravity/руки/стол/купол — real time.
+- VFX trail: `float-motion-trail` — змейка по trace (фикс. отставание сегментов, живая
+  голова, seed через `_driftDir`); яркость 10% realtime / 15% slo-mo; 20 `a-box` на куб.
+- VFX виньетка: только `slowmo-vignette-3d` (CSS-оверлей удалён). **VR-виньетка
+  отложена** на конец разработки (этап 8) — в Quest не видна, на геймплей не влияет.
 
 **Причина:** SUPERHOT-механика; руки и башня не должны «замирать» вместе с облаком.
 
 **Не делать:** глобальный physx timestep; замедлять gravity-кубики на столе.
 
-**Открыто (полировка):** VR-виньетка в Quest не видна (на мониторе OK); trail opacity/visibility.
+**Следующий шаг VFX (задача 4c):** loft/sweep — один mesh на хвост, профиль сечения =
+форма объекта (куб → квадрат, шар → круг, и т.д.). См. `CURRENT_TASK.md`.
 
 ---
 
@@ -212,7 +216,7 @@ Float снаружи — купол барьер; gravity на столе — м
 | 1 | Стол и хватание | ✅ |
 | 2 | Плавающие кубики | ✅ |
 | 3 | Купол над столом | ✅ |
-| 4 | Замедление времени (SUPERHOT) | ✅ (VFX — полировка в CURRENT_TASK) |
+| 4 | Замедление времени (SUPERHOT) | ✅ геймплей; VFX trail loft — задача 4c |
 | 5 | Цель и победа | план |
 | 6 | Красные шары | план |
 | 7 | Предмет для отбивания | план |
@@ -223,8 +227,10 @@ Float снаружи — купол барьер; gravity на столе — м
 ## ГДЕ МЫ СЕЙЧАС
 
 - Этапы 0–4 ✅ (ядро SUPERHOT работает, Quest QA базовый пройден).
-- **Полировка VFX:** VR-виньетка, trail — см. `CURRENT_TASK.md`.
-- **Следующий крупный этап:** 5 — Цель и победа.
+- **VFX trail (4b):** змейка из 20 box-сегментов, seed `_driftDir`, яркость 10%/15% — Quest OK,
+  но угловатый вид → **следующая задача 4c: loft mesh**.
+- **VR-виньетка:** отложена на конец разработки (не видна в Quest).
+- **Следующий крупный этап после 4c:** 5 — Цель и победа.
 - Стек стабилен: PhysX 0.3.0 + physx-grab. Тесты — localhost + Quest Link.
 
 ---
@@ -234,8 +240,8 @@ Float снаружи — купол барьер; gravity на столе — м
 - **Руки без VPN** — решено локальными GLB (`assets/models/`).
 - **`extensionPageScript.js` в Network** — расширение браузера, игнорировать.
 - **Гонка spawn float** — ADR-11.
-- **VR-виньетка slo-mo:** на мониторе видна, в Quest — нет (CSS vs immersive WebXR).
-- **Trail float-кубиков:** базовая логика trace 0.4 м OK; нужна полировка opacity/visibility.
+- **VR-виньетка slo-mo:** в Quest не видна → отложена на этап 8 (polish), не блокирует.
+- **Trail float-кубиков:** змейка OK в Quest; угловатый вид → loft (задача 4c).
 
 ---
 
@@ -246,7 +252,7 @@ Tower/
 ├── index.html
 ├── js/config.js, main.js, spawn-floating-cubes.js
 ├── js/components/  physx-grab, floating-cube, dome-builder, time-scale,
-│                   slowmo-vfx, slowmo-vignette-3d, float-motion-trail
+│                   slowmo-vignette-3d, float-motion-trail
 ├── assets/models/  leftHandLow.glb, rightHandLow.glb
 ├── AGENTS.md, CURRENT_TASK.md, PROJECT_LOG.md, PROJECT_LOG_ARCHIVE.md
 ```
@@ -259,8 +265,9 @@ Tower/
 - **2:** `floating-cube.js`, 11 кубиков, дрейф (ADR-04).
 - **3:** визуал + 89 плиток (ADR-05), layers (ADR-06–07), release/float (ADR-08),
   пол→float (ADR-09), lenient containment, float/gravity материалы. QA ✅ (сессия 12).
-- **4:** `time-scale` + float velocity-scale + `_maintainFloatDrift` (ADR-12);
-  VFX: CSS/VR vignette, `float-motion-trail` trace 0.4 м. QA базовый ✅ (сессия 13).
+- **4:** `time-scale` + float velocity-scale + `_maintainFloatDrift` + `_driftDir` (ADR-12);
+  VFX trail змейка (20 box, seed, 10%/15%); CSS-виньетка удалена; VR-виньетка отложена.
+  QA trail ✅ (сессия 14). Следующее: loft mesh (4c).
 
 **QA купола (уточнение теста 1):** float-кубики сталкиваются с куполом **снаружи**
 (слой FLOAT_CUBE × DOME). Внутри на пьедестале кубики в gravity и **не** бьются о

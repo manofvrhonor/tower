@@ -61,6 +61,7 @@ AFRAME.registerComponent('floating-cube', {
     this._worldPos = new THREE.Vector3();
     // Какой timeScale уже «вшит» в текущую velocity PhysX (см. _applyTimeScaleToVelocity).
     this._lastAppliedTimeScale = 1.0;
+    this._driftDir = null; // единичный вектор «полной» скорости дрейфа (для trail seed)
     this._onContactBegin = this._onContactBegin.bind(this);
 
     // Подписка на возможные события готовности тела (план А).
@@ -165,6 +166,7 @@ AFRAME.registerComponent('floating-cube', {
       rb.setLinearVelocity({ x: 0, y: upSpeed, z: 0 }, true);
       if (typeof rb.wakeUp === 'function') rb.wakeUp();
       this._lastAppliedTimeScale = 1.0;
+      this._driftDir = { x: 0, y: 1, z: 0 };
       this._applyTimeScaleToVelocity(rb);
     } catch (e) {
       console.warn('[floating-cube] floor return impulse failed:', e.message);
@@ -266,11 +268,13 @@ AFRAME.registerComponent('floating-cube', {
             fx *= scale;
             fy *= scale;
             fz *= scale;
+            this._driftDir = { x: fx / minLin, y: fy / minLin, z: fz / minLin };
           } else {
             var dir = this._randomUnitVector();
             fx = dir.x * minLin;
             fy = dir.y * minLin;
             fz = dir.z * minLin;
+            this._driftDir = { x: dir.x, y: dir.y, z: dir.z };
           }
           rb.setLinearVelocity({ x: fx, y: fy, z: fz }, false);
           changed = true;
@@ -533,6 +537,7 @@ AFRAME.registerComponent('floating-cube', {
       var speed = (cfg.initialImpulseSpeed !== undefined) ? cfg.initialImpulseSpeed : 0.3;
       if (speed > 0) {
         var dir = this._randomUnitVector();
+        this._driftDir = { x: dir.x, y: dir.y, z: dir.z };
         var vel = { x: dir.x * speed, y: dir.y * speed, z: dir.z * speed };
         try {
           rb.setLinearVelocity(vel, true);

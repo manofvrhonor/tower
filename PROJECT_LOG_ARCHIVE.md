@@ -84,3 +84,17 @@ Quest: тест 4. Пауза перед Шагом 6 QA.
 - ADR-12 зафиксирован. Этап 4 закрыт по геймплею.
 - **Открыто на полировку:** VR-виньетка в Quest; trail opacity/visibility.
 - AGENTS.md v4: при закрытии сессии агент сам обновляет PROJECT_LOG / ARCHIVE.
+
+---
+
+## Сессия 14 — slo-mo VFX polish (4b) ✅
+
+- **Trail змейка:** фикс. отставание сегментов (`headSkipM + i*trailSpacingM`), живая голова,
+  буфер trace 0.5 м, 20 сегментов; fade opacity и blend размера head→tail.
+- **Seed хвоста:** `floating-cube._driftDir` (импульс при спавне) — корректное направление
+  у каждого куба (fix: все хвосты вверх при чтении getLinearVelocity).
+- **Яркость trail:** 10% realtime / 15% slo-mo (`minVisibility` / `maxVisibility`).
+- **CSS-виньетка удалена** (`slowmo-vfx.js`); только 3D-quad на камере.
+- **VR-виньетка:** не видна в Quest → **отложена на конец разработки** (этап 8).
+- Quest QA trail: OK («теперь норм»), но угловатый вид → решено делать **loft** (4c).
+- ADR-12 обновлён. Задача 4b закрыта. Следующая: **4c — profile loft mesh**.
