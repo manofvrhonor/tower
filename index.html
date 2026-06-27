@@ -64,30 +64,35 @@
 
     <!-- ====== КОМНАТА (куб 3×3×3 м) ====== -->
 
-    <!-- Пол (id для contactbegin в floating-cube). Материал — main.js из CONFIG. -->
-    <a-plane id="floor" position="0 0 0" rotation="-90 0 0" width="3" height="3" color="#8a8580"
-             physx-body="type: static"
-             physx-material="restitution: 0.15; staticFriction: 0.70; dynamicFriction: 0.60; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-plane>
-    <!-- Потолок -->
-    <a-plane position="0 3 0" rotation="90 0 0" width="3" height="3" color="#f0ede5"
-             physx-body="type: static"
-             physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-plane>
-    <!-- Стена СЕВЕР -->
-    <a-plane position="0 1.5 -1.5" width="3" height="3" color="#d4cfc0"
-             physx-body="type: static"
-             physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-plane>
-    <!-- Стена ЮГ -->
-    <a-plane position="0 1.5 1.5" rotation="0 180 0" width="3" height="3" color="#d4cfc0"
-             physx-body="type: static"
-             physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-plane>
-    <!-- Стена ЗАПАД -->
-    <a-plane position="-1.5 1.5 0" rotation="0 90 0" width="3" height="3" color="#d4cfc0"
-             physx-body="type: static"
-             physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-plane>
-    <!-- Стена ВОСТОК -->
-    <a-plane position="1.5 1.5 0" rotation="0 -90 0" width="3" height="3" color="#d4cfc0"
-             physx-body="type: static"
-             physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-plane>
+    <!-- ВАЖНО: пол/потолок/стены — a-box (точный PxBoxGeometry), НЕ a-plane.
+         physx-body из a-plane строит convex hull плоского quad → коллайдер уезжает
+         внутрь на 15-20 см (отскок не по видимой стене). Box даёт точный коллайдер,
+         внутренняя грань — ровно по границе комнаты 3×3×3, толщина 0.1 наружу.
+
+         id для contactbegin в floating-cube. Материал пола — main.js из CONFIG. -->
+    <a-box id="floor" position="0 -0.05 0" width="3" height="0.1" depth="3" color="#8a8580"
+           physx-body="type: static"
+           physx-material="restitution: 0.15; staticFriction: 0.70; dynamicFriction: 0.60; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-box>
+    <!-- Потолок (внутренняя грань на y=3) -->
+    <a-box position="0 3.05 0" width="3" height="0.1" depth="3" color="#f0ede5"
+           physx-body="type: static"
+           physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-box>
+    <!-- Стена СЕВЕР (внутренняя грань на z=-1.5) -->
+    <a-box position="0 1.5 -1.55" width="3" height="3" depth="0.1" color="#d4cfc0"
+           physx-body="type: static"
+           physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-box>
+    <!-- Стена ЮГ (внутренняя грань на z=1.5) -->
+    <a-box position="0 1.5 1.55" width="3" height="3" depth="0.1" color="#d4cfc0"
+           physx-body="type: static"
+           physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-box>
+    <!-- Стена ЗАПАД (внутренняя грань на x=-1.5) -->
+    <a-box position="-1.55 1.5 0" width="0.1" height="3" depth="3" color="#d4cfc0"
+           physx-body="type: static"
+           physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-box>
+    <!-- Стена ВОСТОК (внутренняя грань на x=1.5) -->
+    <a-box position="1.55 1.5 0" width="0.1" height="3" depth="3" color="#d4cfc0"
+           physx-body="type: static"
+           physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-box>
 
 
     <!-- ====== ПЬЕДЕСТАЛ ====== -->
