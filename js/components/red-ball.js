@@ -25,6 +25,9 @@ AFRAME.registerComponent('red-ball', {
     this._lastCubeHitMs = 0;
     // Мировая скорость шара в предыдущем кадре — для сохранения скорости при ударе битой.
     this._preHitWorldSpeed = this._speeds.minDrift;
+    // Окно удержания скорости после удара битой (см. _deflectOffBat / _clampBatDeflect).
+    this._batClampUntilMs = 0;
+    this._batClampSpeed = this._speeds.minDrift;
 
     this._onContactBegin = this._onContactBegin.bind(this);
     var onReady = this._tryApply.bind(this);
@@ -321,12 +324,54 @@ AFRAME.registerComponent('red-ball', {
         this._lastAppliedTimeScale = 1.0;
       }
       if (typeof rb.wakeUp === 'function') rb.wakeUp();
+
+      // Одного сброса по contactbegin мало: kinematic-бита продавливает шар
+      // ещё несколько кадров, солвер заново разгоняет его, нового contactbegin
+      // нет. Держим скорость на доударной целое окно (tick → _clampBatDeflect).
+      var clampMs = (this.cfg.batDeflect && this.cfg.batDeflect.clampMs) || 250;
+      this._batClampSpeed = target;
+      this._batClampUntilMs = performance.now() + clampMs;
     } catch (e) {
       if (!this._batHitWarned) {
         console.warn('[red-ball] bat deflect failed:', e.message);
         this._batHitWarned = true;
       }
     }
+  },
+
+  /**
+   * Пока активно окно после удара битой — удерживаем «мировую» скорость шара
+   * на доударной (_batClampSpeed), сохраняя направление, которое дал солвер.
+   * Это переживает многокадровый «доразгон» от kinematic-биты.
+   */
+  _clampBatDeflect: function (rb) {
+    if (performance.now() >= this._batClampUntilMs) return false;
+    if (!rb || typeof rb.getLinearVelocity !== 'function') return false;
+    try {
+      var lv = rb.getLinearVelocity();
+      if (!lv) return false;
+      var rawSpeed = Math.sqrt(lv.x * lv.x + lv.y * lv.y + lv.z * lv.z);
+      if (rawSpeed < 1e-5) return true;
+
+      var ts = this._getTimeScale();
+      var targetRaw = this._batClampSpeed * ts;
+      var scale = targetRaw / rawSpeed;
+
+      if (typeof rb.setLinearVelocity === 'function') {
+        rb.setLinearVelocity({
+          x: lv.x * scale,
+          y: lv.y * scale,
+          z: lv.z * scale,
+        }, false);
+        this._lastAppliedTimeScale = ts;
+      }
+    } catch (e) {
+      if (!this._batClampWarned) {
+        console.warn('[red-ball] bat clamp failed:', e.message);
+        this._batClampWarned = true;
+      }
+    }
+    return true;
   },
 
   /** Текущая «мировая» (timeScale-нормированная) скорость шара. */
@@ -518,6 +563,10 @@ AFRAME.registerComponent('red-ball', {
 
     this._maintainFloatDrift(rb);
     this._applyTimeScaleToVelocity(rb);
+
+    // Окно после удара битой: держим скорость на доударной и НЕ обновляем
+    // _preHitWorldSpeed завышенным значением (иначе следующий удар «запомнит» разгон).
+    if (this._clampBatDeflect(rb)) return;
 
     // Запоминаем скорость, с которой шар входит в этот кадр симуляции —
     // если в tock'е он столкнётся с битой, восстановим именно её.
