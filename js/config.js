@@ -199,6 +199,82 @@ const CONFIG = {
     ],
   },
 
+  // Красные шары — опасность (Этап 6). Слой BALL, float-физика как у кубиков,
+  // скорости = floatingCubes × случайный множитель в диапазоне [min, max].
+  balls: {
+    count: 3,
+    radius: 0.07,
+    mass: 2.0,
+    color: '#E04040',
+
+    // Импульс в куб при ударе (× «полной» скорости шара). Масса шара > куба.
+    cubeHitImpulseMultiplier: 2.8,
+    cubeHitCooldownMs: 90,
+    // Доля скорости шара после удара по кубу (меньше = меньше отскок от башни).
+    cubeHitBallRetain: 0.72,
+
+    // Линейные/угловые скорости = floatingCubes × speedMultiplier (на шар).
+    speedMultiplierMin: 2.0,
+    speedMultiplierMax: 3.0,
+
+    linearDamping:  0.03,
+    angularDamping: 0.05,
+
+    material: {
+      restitution:      0.32,
+      staticFriction:   0.12,
+      dynamicFriction:  0.10,
+    },
+
+    // 3 точки в воздухе (зона как у float-кубиков, без пересечения с spawnPositions кубов).
+    spawnPositions: [
+      { x:  0.55, y: 2.20, z: -0.70 },
+      { x: -0.90, y: 1.75, z:  0.55 },
+      { x:  0.15, y: 2.35, z:  0.95 },
+    ],
+
+    // После удара о стену/пол комнаты — разворот к куполу.
+    // steerBounceDelays: сколько отскоков пропустить в текущем цикле (0/1/2), заново после каждого разворота.
+    steerOnWallBounce: 1.0,
+    steerBounceDelays: [0, 1, 2],
+    steerContinuous: 0,
+
+    contactOffset: 0.03,
+    speculativeCCD: true,
+
+    // Хвост в slo-mo: круглый профиль, ширина ≈ диаметр шара.
+    trail: {
+      profileVerts: 10,
+      sizeScale: 0.52,
+      headSizeScale: 0.95,
+      tailSizeScale: 0.5,
+      headSkipM: 0.02,
+    },
+  },
+
+  // Бита-сковородка для отбивания красных шаров (Этап 6/7).
+  bat: {
+    mass: 0.85,
+    panRadius: 0.11,
+    panThickness: 0.018,
+    handleLength: 0.18,
+    handleWidth: 0.04,
+    handleThickness: 0.022,
+    panColor: '#5a5a62',
+    handleColor: '#6b4423',
+    // На столе пьедестала (topY=1.0), чуть к игроку (z>0).
+    spawnPosition: { x: 0.12, y: 1.011, z: 0.14 },
+    spawnRotation: { x: 0, y: -35, z: 0 },
+    linearDamping:  0.1,
+    angularDamping: 0.15,
+    material: {
+      restitution:      0.55,
+      staticFriction:   0.55,
+      dynamicFriction:  0.45,
+    },
+    throwVelocityScale: 1.15,
+  },
+
   // === Купол над пьедесталом (Этап 3) ===
   //
   // Геометрия купола — капсула: цилиндрическая стенка + верхняя полусфера-крышка.
@@ -323,6 +399,41 @@ const CONFIG = {
     GRABBED_CUBE: 4,
     BALL:         5,
     HAND:         6,
+  },
+
+  // === Победа (Этап 5) ===
+  // stackColors и excludedColor заполняет js/init-session.js при каждой загрузке:
+  // shuffle(5 targetColors) → первые 4 = порядок башни снизу вверх, 5-й не нужен.
+  victory: {
+    stackHeight: 4,
+    stackColors: [],       // runtime: init-session.js
+    excludedColor: null,   // runtime: init-session.js
+
+    pedestalTopY: 1.0,
+    pedestalRadiusXZ: 0.25,
+
+    stackMaxHorizontalOffset: 0.07,
+    stackMinVerticalStep:     0.07,
+    stackMaxVerticalStep:     0.13,
+
+    maxLinearSpeed:   0.08,
+    maxAngularSpeed:  0.6,
+    stableDurationMs: 1000,
+    checkIntervalMs:  200,
+
+    // Призрачная подсказка на пьедестале (ghost-tower-hint.js).
+    ghostTower: {
+      opacity: 0.20,
+    },
+
+    // Плашка победы (victory-ui.js) — в мире, лицом к игроку (старт z=1).
+    ui: {
+      worldPosition: { x: 0, y: 1.48, z: 0.28 },
+      handPressRadius: 0.22,
+      titleText:   'ПОБЕДА',
+      hintText:    'Поднеси руку + grip',
+      buttonText:  'Заново',
+    },
   },
 };
 

@@ -86,12 +86,9 @@ AFRAME.registerComponent('dome-builder', {
       WORLD: 0, DOME: 1, FLOAT_CUBE: 2, GRAVITY_CUBE: 3,
       GRABBED_CUBE: 4, BALL: 5, HAND: 6,
     };
-    // DOME сталкивается с FLOAT_CUBE и BALL.
-    // GRAVITY_CUBE намеренно НЕ включён — кубик на столе может выпасть
-    // за край купола. GRABBED_CUBE тоже не включён (рука проносит кубик).
+    // DOME — только FLOAT_CUBE снаружи. BALL проходит сквозь купол (Этап 6).
     const collidesWithList = [
       layers.FLOAT_CUBE,
-      layers.BALL,
     ].join(', ');
     this._layerSuffix =
       '; collisionLayers: ' + layers.DOME +
@@ -101,7 +98,7 @@ AFRAME.registerComponent('dome-builder', {
 
     console.log(
       '[dome-builder] построено плиток: ' + this.tiles.length +
-      ' (layer DOME, collides with FLOAT_CUBE,BALL)'
+      ' (layer DOME, collides with FLOAT_CUBE)'
     );
   },
 

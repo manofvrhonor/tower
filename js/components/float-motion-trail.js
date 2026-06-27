@@ -43,7 +43,7 @@ AFRAME.registerComponent('float-motion-trail', {
 
     var nSec = this.cfg.loftSectionCount !== undefined ? this.cfg.loftSectionCount : 14;
     this._sectionCount = nSec;
-    this._profileVerts = 4;
+    this._resolveProfileSettings();
 
     this._curvePoints = [];
     this._curveQuats = [];
@@ -114,11 +114,49 @@ AFRAME.registerComponent('float-motion-trail', {
     this._mesh.visible = false;
   },
 
+  _resolveProfileSettings: function () {
+    var geo = this.el.getAttribute('geometry') || {};
+    if (geo.primitive === 'sphere') {
+      var bt = (typeof CONFIG !== 'undefined' && CONFIG.balls && CONFIG.balls.trail) || {};
+      this._profileVerts = bt.profileVerts !== undefined ? bt.profileVerts : 10;
+      this._trailSizeScale = bt.sizeScale !== undefined ? bt.sizeScale : 0.52;
+      this._trailHeadSizeScale = bt.headSizeScale !== undefined ? bt.headSizeScale : 0.95;
+      this._trailTailSizeScale = bt.tailSizeScale !== undefined ? bt.tailSizeScale : 0.5;
+      this._trailHeadSkipM = bt.headSkipM;
+      return;
+    }
+    this._profileVerts = 4;
+    this._trailSizeScale = null;
+    this._trailHeadSizeScale = null;
+    this._trailTailSizeScale = null;
+    this._trailHeadSkipM = null;
+  },
+
+  _profileOffset: function (c, pv, half) {
+    if (pv === 4) {
+      var sq = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+      return { x: sq[c][0] * half, y: sq[c][1] * half };
+    }
+    var angle = (c / pv) * Math.PI * 2;
+    return { x: Math.cos(angle) * half, y: Math.sin(angle) * half };
+  },
+
+  _getObjectSize: function () {
+    var geo = this.el.getAttribute('geometry') || {};
+    if (geo.primitive === 'sphere' && geo.radius !== undefined) {
+      return geo.radius * 2;
+    }
+    if (geo.width !== undefined) return geo.width;
+    var cubeCfg = (typeof CONFIG !== 'undefined' && CONFIG.floatingCubes) || {};
+    return cubeCfg.size !== undefined ? cubeCfg.size : 0.1;
+  },
+
   tick: function (time, timeDelta) {
     var dt = Math.min((timeDelta || 16) / 1000, 0.1);
     var fc = this.el.components['floating-cube'];
+    var ballComp = this.el.components['red-ball'];
     var isGrabbed = !!(this.el.is && this.el.is('grabbed-dynamic'));
-    var isFloat = fc && fc.state === 'float';
+    var isFloat = (fc && fc.state === 'float') || !!ballComp;
 
     var tsSys = this.el.sceneEl.systems['time-scale'];
     if (!tsSys) return;
@@ -263,8 +301,7 @@ AFRAME.registerComponent('float-motion-trail', {
 
   _tryRecordPoint: function () {
     var cfg = this.cfg;
-    var cubeCfg = (typeof CONFIG !== 'undefined' && CONFIG.floatingCubes) || {};
-    var size = cubeCfg.size !== undefined ? cubeCfg.size : 0.1;
+    var size = this._getObjectSize();
     var minStep = cfg.minSampleStep !== undefined ? cfg.minSampleStep : (size * 0.22);
 
     var px = this._worldPos.x;
@@ -554,13 +591,20 @@ AFRAME.registerComponent('float-motion-trail', {
     } : null;
 
     var cfg = this.cfg;
-    var cubeCfg = (typeof CONFIG !== 'undefined' && CONFIG.floatingCubes) || {};
-    var size = cubeCfg.size !== undefined ? cubeCfg.size : 0.1;
-    var sizeScale = cfg.sizeScale !== undefined ? cfg.sizeScale : 0.95;
+    var size = this._getObjectSize();
+    var sizeScale = this._trailSizeScale !== null && this._trailSizeScale !== undefined
+      ? this._trailSizeScale
+      : (cfg.sizeScale !== undefined ? cfg.sizeScale : 0.95);
     var trailSize = size * sizeScale;
-    var headSizeScale = cfg.headSizeScale !== undefined ? cfg.headSizeScale : 0.95;
-    var tailSizeScale = cfg.tailSizeScale !== undefined ? cfg.tailSizeScale : 0.475;
-    var headSkip = cfg.headSkipM !== undefined ? cfg.headSkipM : (size * 0.28);
+    var headSizeScale = this._trailHeadSizeScale !== null && this._trailHeadSizeScale !== undefined
+      ? this._trailHeadSizeScale
+      : (cfg.headSizeScale !== undefined ? cfg.headSizeScale : 0.95);
+    var tailSizeScale = this._trailTailSizeScale !== null && this._trailTailSizeScale !== undefined
+      ? this._trailTailSizeScale
+      : (cfg.tailSizeScale !== undefined ? cfg.tailSizeScale : 0.475);
+    var headSkip = this._trailHeadSkipM !== null && this._trailHeadSkipM !== undefined
+      ? this._trailHeadSkipM
+      : (cfg.headSkipM !== undefined ? cfg.headSkipM : (size * 0.28));
     var spacing = cfg.trailSpacingM !== undefined ? cfg.trailSpacingM : 0.02;
     var maxOp = cfg.maxOpacity !== undefined ? cfg.maxOpacity : 1.0;
     var nSec = this._sectionCount;
@@ -600,9 +644,6 @@ AFRAME.registerComponent('float-motion-trail', {
 
     var positions = this._positions;
     var uvs = this._uvs;
-    var localXY = [
-      [-1, -1], [1, -1], [1, 1], [-1, 1],
-    ];
 
     var posIdx = 0;
     var uvIdx = 0;
@@ -618,12 +659,11 @@ AFRAME.registerComponent('float-motion-trail', {
       var v = this._alongTrailAlpha(d, meshSpan);
 
       for (var c = 0; c < pv; c++) {
-        var lx = localXY[c][0] * half;
-        var ly = localXY[c][1] * half;
+        var off = this._profileOffset(c, pv, half);
         this._corner.set(this._curveEvalPos.x, this._curveEvalPos.y, this._curveEvalPos.z);
-        this._corner.x += this._profileRight.x * lx + this._profileUp.x * ly;
-        this._corner.y += this._profileRight.y * lx + this._profileUp.y * ly;
-        this._corner.z += this._profileRight.z * lx + this._profileUp.z * ly;
+        this._corner.x += this._profileRight.x * off.x + this._profileUp.x * off.y;
+        this._corner.y += this._profileRight.y * off.x + this._profileUp.y * off.y;
+        this._corner.z += this._profileRight.z * off.x + this._profileUp.z * off.y;
 
         positions[posIdx++] = this._corner.x;
         positions[posIdx++] = this._corner.y;

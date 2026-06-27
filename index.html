@@ -20,23 +20,33 @@
 
   <!-- Конфиг и логика. Порядок важен:
        1) config.js — глобальный CONFIG;
-       2) floating-cube.js — компонент должен быть зарегистрирован до парсинга <a-scene>;
-       3) spawn-floating-cubes.js — наполняет #floating-cubes-root по DOMContentLoaded;
-       4) dome-builder.js — строит коллайдер купола из тонких боксов-плиток
-          (должен быть зарегистрирован до парсинга <a-scene>, т.к. навешен на <a-entity>);
-       5) main.js — диагностика, может зависеть от готовой сцены. -->
+       2) init-session.js — shuffle stackColors до парсинга сцены;
+       3) floating-cube.js — компонент до парсинга <a-scene>;
+       4) spawn-floating-cubes.js — наполняет #floating-cubes-root по DOMContentLoaded;
+       5) dome-builder.js, ghost-tower-hint.js, victory-check.js — до <a-scene>;
+       6) main.js — диагностика. -->
   <script src="js/config.js"></script>
+  <script src="js/init-session.js"></script>
   <script src="js/components/time-scale.js"></script>
   <script src="js/components/slowmo-vignette-3d.js"></script>
   <script src="js/components/floating-cube.js"></script>
+  <script src="js/components/red-ball.js"></script>
+  <script src="js/components/ball-bat.js"></script>
   <script src="js/components/float-motion-trail.js"></script>
   <script src="js/spawn-floating-cubes.js"></script>
+  <script src="js/spawn-red-balls.js"></script>
+  <script src="js/spawn-ball-bat.js"></script>
   <script src="js/components/dome-builder.js"></script>
+  <script src="js/components/ghost-tower-hint.js"></script>
+  <script src="js/components/victory-check.js"></script>
+  <script src="js/components/victory-ui.js"></script>
   <script src="js/main.js" defer></script>
 </head>
 
 <body>
   <a-scene
+    victory-check
+    victory-ui
     background="color: #1a1a1a"
     physx="
       autoLoad: true;
@@ -57,27 +67,27 @@
     <!-- Пол (id для contactbegin в floating-cube). Материал — main.js из CONFIG. -->
     <a-plane id="floor" position="0 0 0" rotation="-90 0 0" width="3" height="3" color="#8a8580"
              physx-body="type: static"
-             physx-material="restitution: 0.15; staticFriction: 0.70; dynamicFriction: 0.60"></a-plane>
+             physx-material="restitution: 0.15; staticFriction: 0.70; dynamicFriction: 0.60; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-plane>
     <!-- Потолок -->
     <a-plane position="0 3 0" rotation="90 0 0" width="3" height="3" color="#f0ede5"
              physx-body="type: static"
-             physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05"></a-plane>
+             physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-plane>
     <!-- Стена СЕВЕР -->
     <a-plane position="0 1.5 -1.5" width="3" height="3" color="#d4cfc0"
              physx-body="type: static"
-             physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05"></a-plane>
+             physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-plane>
     <!-- Стена ЮГ -->
     <a-plane position="0 1.5 1.5" rotation="0 180 0" width="3" height="3" color="#d4cfc0"
              physx-body="type: static"
-             physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05"></a-plane>
+             physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-plane>
     <!-- Стена ЗАПАД -->
     <a-plane position="-1.5 1.5 0" rotation="0 90 0" width="3" height="3" color="#d4cfc0"
              physx-body="type: static"
-             physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05"></a-plane>
+             physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-plane>
     <!-- Стена ВОСТОК -->
     <a-plane position="1.5 1.5 0" rotation="0 -90 0" width="3" height="3" color="#d4cfc0"
              physx-body="type: static"
-             physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05"></a-plane>
+             physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-plane>
 
 
     <!-- ====== ПЬЕДЕСТАЛ ====== -->
@@ -88,8 +98,21 @@
       height="1"
       color="#3a3a3a"
       physx-body="type: static"
-      physx-material="restitution: 0.15; staticFriction: 0.70; dynamicFriction: 0.60">
+      physx-material="restitution: 0.15; staticFriction: 0.70; dynamicFriction: 0.60; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5">
+      <!-- Плоская крышка: у цилиндра PhysX иногда ненадёжен top-cap для быстрых шаров. -->
+      <a-box
+        position="0 0.5 0"
+        width="0.6"
+        height="0.02"
+        depth="0.6"
+        visible="false"
+        physx-body="type: static"
+        physx-material="restitution: 0.15; staticFriction: 0.70; dynamicFriction: 0.60; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5">
+      </a-box>
     </a-cylinder>
+
+    <!-- Призрачная башня: схема победы (цвета из init-session.js). Без физики. -->
+    <a-entity id="ghost-tower-hint" ghost-tower-hint position="0 0 0"></a-entity>
 
 
     <!-- ====== КУПОЛ (Этап 3, Шаг 2 v2): визуал + тайловый коллайдер ======
@@ -133,6 +156,12 @@
          Контейнер пустой; spawn-floating-cubes.js наполняет его на DOMContentLoaded
          из CONFIG.floatingCubes (targetColors, trashColor, spawnPositions). -->
     <a-entity id="floating-cubes-root"></a-entity>
+
+    <!-- Красные шары (Этап 6). spawn-red-balls.js наполняет контейнер. -->
+    <a-entity id="red-balls-root"></a-entity>
+
+    <!-- Бита-сковородка на пьедестале. spawn-ball-bat.js -->
+    <a-entity id="ball-bat-root"></a-entity>
 
 
     <!-- ====== ИГРОК ====== -->

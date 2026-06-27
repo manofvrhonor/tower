@@ -39,6 +39,9 @@
 AFRAME.registerComponent('physx-grab', {
   init: function () {
     this.GRABBED_STATE = 'grabbed-dynamic';
+    // Бита: physx-body слушает state `grabbed` → kinematic + setKinematicTarget
+    // каждый tock (см. @c-frame/physx physics.js).
+    this.KINEMATIC_GRAB_STATE = 'grabbed';
 
     this.grabbing = false;
     this.hitEl = null;
@@ -86,6 +89,8 @@ AFRAME.registerComponent('physx-grab', {
   onHit: function (evt) {
     var hitEl = evt.detail.otherComponent?.el;
     if (hitEl && hitEl.components['physx-body'].data.type === 'static') return;
+    // Красные шары — не хватаем (Этап 6; отбивание — Этап 7).
+    if (hitEl && hitEl.components['red-ball']) return;
     if (!hitEl || hitEl.is(this.GRABBED_STATE) || !this.grabbing || this.hitEl) { return; }
     hitEl.addState(this.GRABBED_STATE);
     this.hitEl = hitEl;
@@ -94,30 +99,66 @@ AFRAME.registerComponent('physx-grab', {
 
   addJoint(el, target) {
     this.removeJoint();
+    this._grabbedRoot = el;
+
+    var bat = el.components['ball-bat'];
+    if (bat && typeof bat.attachToHand === 'function') {
+      el.addState(this.KINEMATIC_GRAB_STATE);
+      bat.onGrabAcquired();
+      var handEl = this._resolveHandEntity(target);
+      bat.attachToHand(handEl);
+      return;
+    }
 
     this._setGrabbedLayer(el, true);
+    this._jointHost = el;
 
     this.joint = document.createElement('a-entity');
-    // D6 + softFixed: пружинный drive (stiffness/damping/forceLimit в @c-frame/physx),
-    // штатно задуман «для захвата вещей». В отличие от жёсткого Fixed, joint уступает
-    // контакту: при упоре в стоящий куб схваченный куб смещается относительно руки,
-    // а не продавливается сквозь него. См. PROJECT_LOG ADR-14.
     this.joint.setAttribute("physx-joint", `type: D6; softFixed: true; target: #${target.id}`);
-    el.appendChild(this.joint);
+    this._jointHost.appendChild(this.joint);
+  },
+
+  /** Коллайдер руки → entity с physx-grab (leftHand / rightHand). */
+  _resolveHandEntity: function (target) {
+    var node = target;
+    while (node) {
+      if (node.components && node.components['physx-grab']) return node;
+      node = node.parentElement;
+    }
+    return target;
   },
 
   removeJoint() {
+    if (this._grabbedRoot && this._grabbedRoot.components['ball-bat']) {
+      var batEl = this._grabbedRoot;
+      var bat = batEl.components['ball-bat'];
+      if (typeof bat.detachFromHand === 'function') bat.detachFromHand();
+      if (typeof bat.onGrabReleased === 'function') bat.onGrabReleased();
+      batEl.removeState(this.KINEMATIC_GRAB_STATE);
+      this._grabbedRoot = null;
+      return;
+    }
+
     if (!this.joint) return;
 
-    var grabbedEl = this.joint.parentElement;
-    var fc = grabbedEl.components['floating-cube'];
+    var grabbedEl = this._grabbedRoot;
+    var fc = grabbedEl && grabbedEl.components['floating-cube'];
     if (fc && typeof fc.onGrabReleased === 'function') {
       fc.onGrabReleased();
-    } else {
+    } else if (grabbedEl) {
       this._setGrabbedLayer(grabbedEl, false);
     }
 
-    this.joint.parentElement.removeChild(this.joint);
+    if (this._jointAnchor && this._jointAnchor.parentNode) {
+      this._jointAnchor.parentNode.removeChild(this._jointAnchor);
+    }
+    this._jointAnchor = null;
+    this._jointHost = null;
+    this._grabbedRoot = null;
+
+    if (this.joint && this.joint.parentElement) {
+      this.joint.parentElement.removeChild(this.joint);
+    }
     this.joint = null;
   },
 

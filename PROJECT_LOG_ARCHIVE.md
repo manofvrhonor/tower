@@ -38,95 +38,115 @@
 ## Сессия 8 — купол: визуал + плитки + временная фантомизация
 
 - Визуал купола (`CONFIG.dome`), 89 плиток → ADR-05.
-- Временно: `eSIMULATION_SHAPE` на схваченном кубике — проход сквозь купол OK,
-  но ломает отбивание других кубиков → привело к ADR-06.
-- Открытия: shapes в `el.components['physx-body'].shapes`, `shape.setFlag()`.
+- Collision layers → ADR-06, ADR-07.
+- Release containment, float/gravity → ADR-08, ADR-09.
+- Задача 3 закрыта (сессия 12).
 
 ---
 
-## Сессия 9 — collision layers ✅
+## Сессии 9–12 — купол QA, layers refactor
 
-Разведка API: layers через `physx-material`, не `physx-body`.
-Ошибка с битовыми масками → краш `-2147483648` → рефакторинг на индексы → ADR-07.
-Фантомизация удалена. Тест 1.5 пройден.
-
----
-
-## Сессия 10 — release → gravity/float ✅
-
-`onGrabReleased()`, containment, `_enterGravityMode` / `_enterFloatMode`.
-Quest: тесты 2, 3, 1.5.
+- Шаг 3.5.C: индексы слоёв в physx-material (не битовые маски).
+- Lenient containment, пол→float.
+- Quest QA купола ✅ (сессия 12).
 
 ---
 
-## Сессия 11 — пол, материалы, lenient ✅
+## Сессии 13–15 — SUPERHOT + trail (Этап 4) ✅
 
-`#floor`, contactbegin → float. `releaseContainment: 'lenient'`.
-`GRAVITY_CUBE × DOME` отключена. `floatMaterial` / `gravityMaterial` → ADR-08.
-Quest: тест 4. Пауза перед Шагом 6 QA.
-
----
-
-## Сессия 12 — оптимизация инструкций + QA купола ✅
-
-- Сжаты AGENTS.md, CURRENT_TASK.md, PROJECT_LOG.md; ADR; PROJECT_LOG_ARCHIVE.md.
-- QA Этапа 3 в Quest: тесты 1.5–4 и консоль — OK.
-- **Тест 1 уточнён:** «изнутри» в старых чек-листах — неточная формулировка.
-  Проверка отскока — float-кубик **снаружи** о купол, либо float после подъёма с пола.
-- Этап 3 закрыт. Следующий — Этап 4 (time scale).
-
----
-
-## Сессия 13 — SUPERHOT (timeScale) + slo-mo VFX ✅
-
-- Система `time-scale`, float velocity-scale, `_maintainFloatDrift`, jitter-filter рук.
-- VFX: CSS-виньетка, `slowmo-vignette-3d`, `float-motion-trail` (trace 0.4 м).
-- ADR-12 зафиксирован. Этап 4 закрыт по геймплею.
-- **Открыто на полировку:** VR-виньетка в Quest; trail opacity/visibility.
-- AGENTS.md v4: при закрытии сессии агент сам обновляет PROJECT_LOG / ARCHIVE.
-
----
-
-## Сессия 14 — slo-mo VFX polish (4b) ✅
-
-- **Trail змейка:** фикс. отставание сегментов (`headSkipM + i*trailSpacingM`), живая голова,
-  буфер trace 0.5 м, 20 сегментов; fade opacity и blend размера head→tail.
-- **Seed хвоста:** `floating-cube._driftDir` (импульс при спавне) — корректное направление
-  у каждого куба (fix: все хвосты вверх при чтении getLinearVelocity).
-- **Яркость trail:** 10% realtime / 15% slo-mo (`minVisibility` / `maxVisibility`).
-- **CSS-виньетка удалена** (`slowmo-vfx.js`); только 3D-quad на камере.
-- **VR-виньетка:** не видна в Quest → **отложена на конец разработки** (этап 8).
-- Quest QA trail: OK («теперь норм»), но угловатый вид → решено делать **loft** (4c).
-
----
-
-## Сессия 15 — trail loft + visibility (4c) ✅
-
-- **Loft mesh:** 20 `a-box` → один `BufferGeometry` на куб (14 сечений, квадратный профиль,
-  Catmull-Rom, path-aligned frame — без «ленты» при spin).
-- **Fade:** 0→1→0 по длине mesh (`headFadeInM` у объекта, `fadePower` к концу); без
-  двойного growFactor на material.
-- **Deploy:** якорь кончика в мире, голова у куба, пробег `deployLengthM` → follow по path
-  (без seed `_driftDir`, без скачков сечений).
-- **Grab:** fade-out `grabFadeOutSec` (замороженный path в мире).
-- **Config:** `loftSectionCount`, `deployLengthM`, `headFadeInM`, `grabFadeOutSec`, taper tail.
-- Quest QA: OK («вроде хорошо»). **Задача 4c закрыта.** Абстракция профиля — отложена.
-- **Этап 4 полностью закрыт.** Следующий: **Этап 5 — Цель и победа**.
+- `time-scale.js`, velocity-scale на float-кубах → ADR-12.
+- Loft trail (4c), deploy-якорь, grab fade-out. Quest OK.
+- **Этап 4 закрыт.**
 
 ---
 
 ## Сессия 16 — фикс физики кубов на столе ✅
 
-Пред-шаг перед Этапом 5: жалобы на «странную» физику gravity-кубов под куполом.
+- sleepThreshold, damping, wakeUp → ADR-13.
+- Solver/CCD, материалы, soft-grab, velocity clamp → ADR-14.
+- Git: `a90695b` «Physix fix».
 
-- **Замирание/виснет в воздухе/на ребре:** причина — `sleepThreshold: 25` (≈ скорость
-  7 м/с) усыплял тело в движении. Снижен до `0.01`; damping `0.08/0.12 → 0.02/0.04`;
-  `wakeUp()` по контакту gravity-куба. → **ADR-13**.
-- **«Резиновый» отскок (особенно ребром) + скольжение стопок:** дефолт солвера 4/1 +
-  депенетрация. Добавлены `setSolverIterationCounts(16,4)` + speculative CCD (для всех
-  кубов), `gravityMaterial` restitution `0.05` / friction `0.90/0.70`, `contactOffset 0.03`,
-  и клэмп скорости gravity-куба в `tick` (`maxLinearSpeed 1.8`, `maxAngularSpeed 8`).
-  `setMaxDepenetrationVelocity` в биндинге отсутствует. → **ADR-14**.
-- **Захват продавливал стоящий куб:** joint `Fixed → D6 softFixed` (пружинный drive). → **ADR-14**.
-- Quest QA: OK («стало хорошо»). Числа подобраны итеративно в Quest.
-- Файлы: `js/config.js`, `js/components/floating-cube.js`, `js/components/physx-grab.js`.
+---
+
+## Сессии 17–18 — Этап 5 + начало Этапа 6
+
+### Этап 5 — Цель и победа ✅
+
+- Критерий: 4 цветных башней, порядок цветов.
+- `victory-check.js`, рандом-схема (`init-session.js`, 4 из 5 цветов).
+- Призрачная башня (`ghost-tower-hint.js`).
+- `victory-ui.js`: canvas-кириллица, панель в мире, grip+proximity,
+  рестарт без `reload` (VR сохраняется). Quest QA ✅.
+
+### Этап 6 — красные шары (начат)
+
+- `CONFIG.balls`, `spawn-red-balls.js`, `red-ball.js`.
+- 3 шара, speed×2 от кубов, `float-motion-trail`, timeScale.
+- BALL×DOME off (проход сквозь стенку купola), homing к центру.
+- `physx-grab` не хватает шары.
+
+### Quest QA — баги (сессия 18 → частично закрыты в 19)
+
+1. ~~Застревание в центре~~ — закрыто (десктоп).
+2. ~~Вылет за стены~~ — закрыто (`collidesWithLayers` BALL на статиках).
+3. Пьедестал / сбивание башни — правки внесены, **Quest QA не пройден**.
+4. **Бита** — захват сломан (сессия 19).
+
+**Следующая сессия:** шаг **7a** — починить захват биты; затем Quest QA этапа 6.
+
+---
+
+## Сессия 19 — Этап 6 (продолжение) + начало Этапа 7
+
+### Шары
+
+- Скорость ×2–×3 per-ball; homing-циклы (0/1/2 отскока, переброс после разворота).
+- Убран `steerContinuous`; разворот только от стен комнаты.
+- Trail: круглый профиль для сфер (`CONFIG.balls.trail`).
+- `collidesWithLayers` BALL на пол/стены/пьедестал; шары не вылетают из комнаты.
+- Импульс по кубам: mass 2.0, restitution 0.32, `cubeHitImpulseMultiplier`.
+- QA десктоп: центр OK, стены OK.
+
+### Бита-сковородка (Этап 7)
+
+- `ball-bat.js`, `spawn-ball-bat.js`, `CONFIG.bat`, рестарт в `victory-ui`.
+- Попытки захвата: joint на ручке → отлёт при движении; kinematic+parenting → **не берётся**, дёргается на пьедестале.
+
+**Открыто:** 7a — починить захват (см. `CURRENT_TASK.md`, ADR-16).
+
+---
+
+## Сессия 20 — Этап 7: захват биты починен
+
+### Захват биты (7a — закрыт по коду, ждёт Quest QA)
+
+- **Причина бага найдена в исходнике `@c-frame/physx`:** бита ставила kinematic-флаг
+  вручную, но `physx-body` этого не отслеживал и каждый кадр возвращал dynamic-тело
+  на пьедестал → «прилипает / дёргается».
+- **Фикс:** захват биты через встроенный state `grabbed` → `physx-body` сам делает
+  `setKinematicTarget` (читает мировой pose через `getWorldPosition/Quaternion`),
+  бита следует за рукой (parenting к руке для transform). На release — `removeState`
+  + импульс от скорости руки.
+- **Регрессия и откат:** временная логика `_touchEl` / early-grab в `physx-grab`
+  ломала захват кубиков (особенно под куполом) → убрана, путь кубиков возвращён
+  к исходному (D6 softFixed joint).
+
+### Захват по всей бите
+
+- Баг: `physx-body.createShapes` строит **один** шейп из `geometry` корня и
+  игнорирует дочерние меши. Блин был на корне → коллайдер только на блине,
+  за ручку не взять.
+- **Фикс:** `geometry` убрана с корня; блин (`a-cylinder`) и ручка (`a-box`) —
+  дочерние → коллайдер на каждом, захват по всей бите включая кончик ручки.
+
+### Удар битой по шару
+
+- `red-ball._deflectOffBat`: при контакте с битой отскок сохраняет
+  пост-столкновительное направление, но величину возвращает к скорости до удара
+  (`_preHitWorldSpeed`, фиксируется в `tick`). Цель — взмах не разгоняет шар.
+- **Замечание пользователя:** скорость **не поправилась** как ожидалось →
+  занесено в бэклог (`CURRENT_TASK.md`).
+
+**Файлы:** `physx-grab.js`, `ball-bat.js`, `spawn-ball-bat.js`, `red-ball.js`.
+
+**Итог:** захват биты работает (десктоп). Бэклог на следующие сессии — в `CURRENT_TASK.md`.
