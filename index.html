@@ -35,6 +35,8 @@
   <script src="js/components/red-ball.js"></script>
   <script src="js/components/ball-bat.js"></script>
   <script src="js/components/float-motion-trail.js"></script>
+  <script src="js/room-spawn-utils.js"></script>
+  <script src="js/room-containment.js"></script>
   <script src="js/spawn-floating-cubes.js"></script>
   <script src="js/spawn-red-balls.js"></script>
   <script src="js/spawn-ball-bat.js"></script>
@@ -45,6 +47,9 @@
   <script src="js/components/victory-check.js"></script>
   <script src="js/components/victory-ui.js"></script>
   <script src="js/components/game-menu.js"></script>
+  <script src="js/components/world-hdri-sky.js"></script>
+  <script src="js/components/room-fog-dome.js"></script>
+  <script src="js/components/room-dome-collider.js"></script>
   <script src="js/main.js" defer></script>
 </head>
 
@@ -54,7 +59,6 @@
     victory-ui
     game-menu
     collider-debug-viz
-    background="color: #1a1a1a"
     physx="
       autoLoad: true;
       delay: 1000;
@@ -69,37 +73,19 @@
       <a-asset-item id="rightHandModel" src="assets/models/rightHandLow.glb"></a-asset-item>
     </a-assets>
 
-    <!-- ====== КОМНАТА (куб 3×3×3 м) ====== -->
+    <!-- Мировое небо (корень сцены). HDR: положить в assets/hdri/ — random при reload -->
+    <a-entity id="world-sky" world-hdri-sky></a-entity>
 
-    <!-- ВАЖНО: пол/потолок/стены — a-box (точный PxBoxGeometry), НЕ a-plane.
-         physx-body из a-plane строит convex hull плоского quad → коллайдер уезжает
-         внутрь на 15-20 см (отскок не по видимой стене). Box даёт точный коллайдер,
-         внутренняя грань — ровно по границе комнаты 3×3×3, толщина 0.1 наружу.
+    <!-- Туманный купол комнаты (визуал) + room-dome-collider (PhysX). -->
+    <a-entity id="room-fog-dome" room-fog-dome></a-entity>
+    <a-entity id="room-collider" room-dome-collider></a-entity>
 
-         id для contactbegin в floating-cube. Материал пола — main.js из CONFIG. -->
-    <a-box id="floor" position="0 -0.05 0" width="3" height="0.1" depth="3" color="#8a8580"
+    <!-- ====== КОМНАТА — пол (PhysX). Стены/потолок = room-dome-collider ====== -->
+
+    <!-- Пол: a-box, id=#floor для contactbegin (floating-cube). Ø ≈ 2× fogDome.radius -->
+    <a-box id="floor" position="0 -0.05 0" width="5" height="0.1" depth="5" visible="false"
            physx-body="type: static"
            physx-material="restitution: 0.15; staticFriction: 0.70; dynamicFriction: 0.60; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5, 7"></a-box>
-    <!-- Потолок (внутренняя грань на y=3) -->
-    <a-box position="0 3.05 0" width="3" height="0.1" depth="3" color="#f0ede5"
-           physx-body="type: static"
-           physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5, 7"></a-box>
-    <!-- Стена СЕВЕР (внутренняя грань на z=-1.5) -->
-    <a-box position="0 1.5 -1.55" width="3" height="3" depth="0.1" color="#d4cfc0"
-           physx-body="type: static"
-           physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5, 7"></a-box>
-    <!-- Стена ЮГ (внутренняя грань на z=1.5) -->
-    <a-box position="0 1.5 1.55" width="3" height="3" depth="0.1" color="#d4cfc0"
-           physx-body="type: static"
-           physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5, 7"></a-box>
-    <!-- Стена ЗАПАД (внутренняя грань на x=-1.5) -->
-    <a-box position="-1.55 1.5 0" width="0.1" height="3" depth="3" color="#d4cfc0"
-           physx-body="type: static"
-           physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5, 7"></a-box>
-    <!-- Стена ВОСТОК (внутренняя грань на x=1.5) -->
-    <a-box position="1.55 1.5 0" width="0.1" height="3" depth="3" color="#d4cfc0"
-           physx-body="type: static"
-           physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5, 7"></a-box>
 
 
     <!-- ====== ПАРЯЩИЙ СТОЛ ======

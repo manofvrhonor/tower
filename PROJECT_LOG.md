@@ -346,10 +346,23 @@ inline: A-Frame-атрибуты не читают `window.CONFIG` (как и у
 
 ---
 
+### ADR-20: Комната — туманный купол + плиточный collider (сессия 30)
+
+**Решение:** визуал — `room-fog-dome` (shader, CONFIG.room.fogDome). Небо — `world-hdri-sky`
+(сфера в корне сцены, не на камере; HDR random из `assets/hdri/`). Физика стен/потолка —
+`room-dome-collider`: ~281 тонких `a-box` по внутренней полусфере (слой WORLD), R =
+`fogDome.radius`. Пол — один `a-box` `#floor` (5×5 m, ADR-09). Spawn/clamp/containment
+(`room-spawn-utils`, `room-containment`) — float-тела внутри купола.
+
+**Причина:** куб 3×3×3 не совпадал с визуалом; `physx-body` на сфере = convex hull (ADR-05).
+
+**Не делать:** один `physx-body` на полусферу комнаты; спавн без проверки R купола.
+
+---
+
 ### ADR-18: Удары кубом/битой в захвате (сессия 28)
 
 **Решение:**
-- Slo-mo-сессия: `time-scale.isWorldSlowMo()` — min `scale` за окно `recentMinWindowMs`
   (~600 мс) < `worldSlowMoThreshold` (0.5). **Не** мгновенный `getScale()`: при взмахе
   в slo-mo scale кратко → 1.0 (SUPERHOT), но recentMin ≈ 0.05.
 - **Жертва-куб/бита (slo-mo):** `_deflectOffGrabbedStriker` + `_clampStrikerDeflect`
@@ -402,7 +415,7 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 | 5 | Цель и победа | ✅ |
 | 6 | Красные шары | ✅ (Quest QA с.28) |
 | 7 | Предмет для отбивания (бита) | ✅ in-hand удары с.28 |
-| 8 | Полировка (меню, skybox, …) | меню ✅ (с.29); skybox — с.30 |
+| 8 | Полировка (меню, skybox, …) | меню ✅ (с.29); комната-купол + HDR ✅ (с.30, ПК QA) |
 
 ---
 
@@ -432,7 +445,8 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 - **Полировка (сессия 28):** **in-hand удары** (ADR-18): `isWorldSlowMo()`, deflect+clamp
   кубов/биты в slo-mo; realtime boost шара; Quest QA ✅. **Сессия закрыта.**
 - **Следующая (с.29):** **меню входа + сложность** + wireframe DOME — ✅ Quest QA (ADR-19).
-- **Следующая (с.30):** **комната-купол + skybox** — см. `CURRENT_TASK.md`.
+- **Следующая (с.30):** **комната-купол + HDR skybox** — ✅ ПК QA (пользователь). Quest + HDR — по желанию.
+- **Следующая:** подогнать меню в VR (`CONFIG.game.menu.worldPosition`).
 - **Не делаем:** VR-виньетка slo-mo (снято с бэклога). **Пропускаем:** захват VR отлёт.
 - **Закрыто:** пьедestal «запинание» (парящий диск, с.27).
 - Стек стабилен: PhysX 0.3.0 + physx-grab. **Тесты — Quest Link + localhost**; ПК не для геймплея.
@@ -462,8 +476,10 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 Tower/
 ├── index.html
 ├── js/config.js, main.js, init-session.js, game-lifecycle.js, desktop-ui-cursor.js
+├── js/room-spawn-utils.js, room-containment.js
 ├── js/spawn-floating-cubes.js, spawn-red-balls.js, spawn-ball-bat.js
 ├── js/components/  physx-grab, floating-cube, red-ball, ball-bat, dome-builder,
+│                   room-fog-dome, room-dome-collider, world-hdri-sky,
 │                   pedestal-builder, collider-debug-viz, time-scale, slowmo-vignette-3d,
 │                   float-motion-trail, ghost-tower-hint, victory-check, victory-ui,
 │                   game-menu
@@ -490,7 +506,8 @@ Tower/
 - **7 (сессия 19–21, 26, 28):** `ball-bat`; in-hand удары ADR-18. Quest QA ✅.
 - **8 (с.29):** меню, 3 сложности, lifecycle, ghost wireframe, UI-прицел Quest,
   shuffle fix, DOME layer opacity, float-куб homing к куполу. Quest QA ✅ (ADR-19).
-- **8 (с.30+, план):** комната-купол + skybox.
+- **8 (с.30):** `world-hdri-sky`, `room-fog-dome`, `room-dome-collider`, spawn/containment
+  внутри купола R=2.5. ПК QA ✅.
 
 **QA купола (уточнение теста 1):** float-кубики сталкиваются с куполом **снаружи**
 (слой FLOAT_CUBE × DOME). Внутри на пьедестале кубики в gravity и **не** бьются о

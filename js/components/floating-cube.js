@@ -915,6 +915,11 @@ AFRAME.registerComponent('floating-cube', {
       }
     }
 
+    var half = (this.cfg.size !== undefined ? this.cfg.size : 0.1) / 2;
+    if (typeof enforceRoomDomeContainment === 'function') {
+      enforceRoomDomeContainment(this.el, rb, half);
+    }
+
     this._maintainFloatDrift(rb);
     this._applyTimeScaleToVelocity(rb);
     if (this._clampStrikerDeflect(rb)) return;

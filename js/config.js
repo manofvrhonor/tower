@@ -41,6 +41,44 @@ const CONFIG = {
     floorColor:   '#8a8580',
     wallColor:    '#d4cfc0',
     ceilingColor: '#f0ede5',
+    // null + hdriAuto → случайный файл из assets/hdri/ при каждой перезагрузке
+    // строка → только этот файл (отладка)
+    hdri: null,
+    hdriAuto: true,
+    hdriDir: 'assets/hdri/',
+    sky: {
+      radius: 50,
+      position: { x: 0, y: 1.5, z: 0 },
+      exposure: 1.0,
+      fallback: {
+        topColor:    '#0d1525',
+        horizonColor: '#5a7088',
+        bottomColor: '#1a2230',
+      },
+    },
+    fogDome: {
+      radius: 2.5,   // м, верхняя полусфера от пола (визуал = collider)
+      position: { x: 0, y: 0, z: 0 },
+      color: '#e8e4dc',
+      baseOpacity: 0.32,
+      fogMin: 0.2,
+      fogMax: 0.92,
+      noiseScale: 2.5,
+      scrollSpeed: 0.035,
+      fresnelPower: 2.5,
+      fresnelStrength: 0.35,
+      widthSegments: 64,
+      heightSegments: 32,
+      renderOrder: 5,
+      spawnMargin: 0.12,
+      collider: {
+        latitudeRings: 10,
+        longitudeSegments: 28,
+        shellThickness: 0.02,
+        tileOverlap: 1.08,
+        debugVisible: false,
+      },
+    },
   },
 
   // === Парящий стол (центр комнаты) ===
@@ -230,25 +268,19 @@ const CONFIG = {
     // Цвет «мусорных» серых (6 шт).
     trashColor: '#888888',
 
-    // 11 фиксированных позиций спавна.
-    // Первые 5 — для цветных (targetColors[0..4] по индексу).
-    // Следующие 6 — для серых.
-    // Сгенерированы один раз случайно в зоне X[-1.2,1.2] Y[1.5,2.5] Z[-1.2,1.2],
-    // мин. дистанция между точками 0.25 м.
+  // 11 позиций внутри room.fogDome (R=2.5, margin 0.12 + half куба 0.05).
     spawnPositions: [
-      // --- 5 цветных ---
-      { x: -0.83, y: 2.31, z:  0.42 },
+      { x: -0.83, y: 2.00, z:  0.42 },
       { x:  0.71, y: 1.62, z: -0.95 },
-      { x: -0.18, y: 2.07, z:  1.04 },
-      { x:  1.05, y: 2.42, z:  0.58 },
-      { x: -1.12, y: 1.83, z: -0.61 },
-      // --- 6 серых ---
-      { x:  0.34, y: 2.18, z:  0.07 },
+      { x: -0.18, y: 2.00, z:  0.85 },
+      { x:  0.85, y: 2.00, z:  0.45 },
+      { x: -1.00, y: 1.83, z: -0.61 },
+      { x:  0.34, y: 2.05, z:  0.07 },
       { x: -0.47, y: 1.55, z: -1.08 },
       { x:  0.92, y: 1.94, z: -0.24 },
-      { x: -0.95, y: 2.45, z:  1.12 },
+      { x: -0.75, y: 2.05, z:  0.65 },
       { x:  0.12, y: 1.71, z:  0.88 },
-      { x:  1.13, y: 2.05, z: -1.05 },
+      { x:  0.95, y: 1.95, z: -0.85 },
     ],
   },
 
@@ -298,11 +330,10 @@ const CONFIG = {
       dynamicFriction:  0.10,
     },
 
-    // 5 точек в воздухе (зона как у float-кубиков, без пересечения с spawnPositions кубов).
     spawnPositions: [
-      { x:  0.55, y: 2.20, z: -0.70 },
+      { x:  0.55, y: 2.10, z: -0.70 },
       { x: -0.90, y: 1.75, z:  0.55 },
-      { x:  0.15, y: 2.35, z:  0.95 },
+      { x:  0.15, y: 2.05, z:  0.75 },
       { x: -0.28, y: 2.08, z: -0.82 },
       { x:  0.78, y: 1.90, z:  0.30 },
     ],

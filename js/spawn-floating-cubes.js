@@ -52,6 +52,9 @@
     var created = 0;
     for (var i = 0; i < nTotal; i++) {
       var p = positions[i];
+      if (typeof clampPositionToRoomDome === 'function') {
+        p = clampPositionToRoomDome(p, size / 2);
+      }
       var isTarget = i < nTargets;
       var color = isTarget ? targets[i] : trashColor;
       var idSuffix = isTarget ? ('color-' + (i + 1)) : ('trash-' + (i - nTargets + 1));

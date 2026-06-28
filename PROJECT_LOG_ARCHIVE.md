@@ -308,6 +308,26 @@
 
 ---
 
+## Сессия 30 — комната-купол, HDR-небо, collider полусферы ✅
+
+### Сделано
+
+- **`world-hdri-sky`:** мировая сфера (не на `#player`); fallback-градиент; random HDR/JPG
+  из `assets/hdri/` (`hdriAuto`); парсер `.hdr`; `scripts/refresh-hdri-manifest.ps1`.
+- **`room-fog-dome`:** туманная полусфера, procedural shader (движущийся туман).
+- **`room-dome-collider`:** ~281 static box-плиток (WORLD), R=`fogDome.radius` (2.5 m).
+- Пол `#floor` 5×5 m; кубические стены/потолок удалены.
+- **Spawn/containment:** `room-spawn-utils`, `room-containment` — кубы/шары внутри купола.
+- ПК QA ✅ (пользователь).
+
+**Файлы:** `world-hdri-sky.js`, `room-fog-dome.js`, `room-dome-collider.js`,
+`room-spawn-utils.js`, `room-containment.js`, `config.js`, `index.html`, `spawn-*.js`,
+`floating-cube.js`, `red-ball.js`, `assets/hdri/`.
+
+**ADR-20.** **Следующая:** меню в VR / Quest HDR по желанию.
+
+---
+
 ## Сессия 24 — pedestal-builder, red-ball, collider-debug (QA частично)
 
 - **pedestal-builder** вместо convex hull; квадратная крышка 0.6×0.6 на круге r=0.3 —

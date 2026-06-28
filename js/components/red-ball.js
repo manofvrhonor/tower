@@ -781,6 +781,11 @@ AFRAME.registerComponent('red-ball', {
       if (typeof rb.wakeUp === 'function') rb.wakeUp();
     }
 
+    var r = this.cfg.radius !== undefined ? this.cfg.radius : 0.04;
+    if (typeof enforceRoomDomeContainment === 'function') {
+      enforceRoomDomeContainment(this.el, rb, r);
+    }
+
     this._maintainFloatDrift(rb);
 
     // Hold/boost задают «мировую» скорость (prev=1.0) — timeScale применяем следом.

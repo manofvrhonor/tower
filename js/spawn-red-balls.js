@@ -56,6 +56,9 @@
 
     for (var i = 0; i < n; i++) {
       var p = positions[i];
+      if (typeof clampPositionToRoomDome === 'function') {
+        p = clampPositionToRoomDome(p, radius);
+      }
       var el = document.createElement('a-entity');
       el.setAttribute('id', 'red-ball-' + (i + 1));
       el.setAttribute('geometry', 'primitive: sphere; radius: ' + radius);
