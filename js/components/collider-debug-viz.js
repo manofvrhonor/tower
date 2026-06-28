@@ -88,18 +88,25 @@
     return palette[type] || palette.KINEMATIC || '#ffffff';
   }
 
-  function lineMaterial(color) {
+  function opacityForType(type) {
+    var cfg = debugCfg();
+    var layerOp = cfg.layerOpacity || {};
+    if (type && layerOp[type] !== undefined) return layerOp[type];
+    return cfg.colliderOpacity !== undefined ? cfg.colliderOpacity : 0.95;
+  }
+
+  function lineMaterial(color, type) {
     return new THREE.LineBasicMaterial({
       color: new THREE.Color(color),
       depthTest: false,
       transparent: true,
-      opacity: debugCfg().colliderOpacity !== undefined ? debugCfg().colliderOpacity : 0.95,
+      opacity: opacityForType(type),
     });
   }
 
-  function makeEdgeLines(bufferGeom, color) {
+  function makeEdgeLines(bufferGeom, color, type) {
     var edges = new THREE.EdgesGeometry(bufferGeom);
-    var lines = new THREE.LineSegments(edges, lineMaterial(color));
+    var lines = new THREE.LineSegments(edges, lineMaterial(color, type));
     lines.renderOrder = 1000;
     edges.dispose();
     return lines;
@@ -179,7 +186,7 @@
     return sphereRadiusFromEntity(el);
   }
 
-  function buildLinesFromPxShape(PX, shape, color, convexSourceMesh, rootObj3D, el) {
+  function buildLinesFromPxShape(PX, shape, color, type, convexSourceMesh, rootObj3D, el) {
     var boxGeom = new PX.PxBoxGeometry(0, 0, 0);
     if (shape.getBoxGeometry(boxGeom)) {
       var he = boxGeom.halfExtents;
@@ -187,7 +194,7 @@
       var hy = he.y || he.y === 0 ? he.y : 0.01;
       var hz = he.z || he.z === 0 ? he.z : 0.01;
       var box = new THREE.BoxGeometry(hx * 2, hy * 2, hz * 2);
-      var lines = makeEdgeLines(box, color);
+      var lines = makeEdgeLines(box, color, type);
       box.dispose();
       return lines;
     }
@@ -197,7 +204,7 @@
       var radius = readSphereRadius(sphGeom, el);
       if (radius && radius > 0) {
         var sphere = new THREE.SphereGeometry(radius, 14, 10);
-        var sLines = makeEdgeLines(sphere, color);
+        var sLines = makeEdgeLines(sphere, color, type);
         sphere.dispose();
         return sLines;
       }
@@ -206,7 +213,7 @@
     if (convexSourceMesh) {
       var fallbackGeom = geometryInBodyLocalSpace(convexSourceMesh, rootObj3D);
       if (fallbackGeom) {
-        var fLines = makeEdgeLines(fallbackGeom, color);
+        var fLines = makeEdgeLines(fallbackGeom, color, type);
         fallbackGeom.dispose();
         return fLines;
       }
@@ -245,7 +252,8 @@
 
     var collisionMeshes = collectCollisionMeshes(el);
     var convexMeshIdx = 0;
-    var color = colorForType(resolveColliderType(el));
+    var type = resolveColliderType(el);
+    var color = colorForType(type);
     var shapeGroups = [];
 
     for (var s = 0; s < shapes.length; s++) {
@@ -262,7 +270,7 @@
       }
 
       var lines = buildLinesFromPxShape(
-        PX, shape, color, sourceMesh, el.object3D, el
+        PX, shape, color, type, sourceMesh, el.object3D, el
       );
       if (!lines) continue;
 
@@ -278,7 +286,7 @@
       el: el,
       bodyComp: bodyComp,
       shapeGroups: shapeGroups,
-      type: resolveColliderType(el),
+      type: type,
     };
   }
 

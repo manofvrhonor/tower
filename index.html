@@ -22,11 +22,13 @@
        1) config.js — глобальный CONFIG;
        2) init-session.js — shuffle stackColors до парсинга сцены;
        3) floating-cube.js — компонент до парсинга <a-scene>;
-       4) spawn-floating-cubes.js — наполняет #floating-cubes-root по DOMContentLoaded;
+       4) spawn-*.js — спавн по startGame() из game-lifecycle.js;
        5) dome-builder.js, ghost-tower-hint.js, victory-check.js — до <a-scene>;
        6) main.js — диагностика. -->
   <script src="js/config.js"></script>
   <script src="js/init-session.js"></script>
+  <script src="js/game-lifecycle.js"></script>
+  <script src="js/desktop-ui-cursor.js"></script>
   <script src="js/components/time-scale.js"></script>
   <script src="js/components/slowmo-vignette-3d.js"></script>
   <script src="js/components/floating-cube.js"></script>
@@ -42,6 +44,7 @@
   <script src="js/components/ghost-tower-hint.js"></script>
   <script src="js/components/victory-check.js"></script>
   <script src="js/components/victory-ui.js"></script>
+  <script src="js/components/game-menu.js"></script>
   <script src="js/main.js" defer></script>
 </head>
 
@@ -49,6 +52,7 @@
   <a-scene
     victory-check
     victory-ui
+    game-menu
     collider-debug-viz
     background="color: #1a1a1a"
     physx="
@@ -111,7 +115,7 @@
     </a-entity>
 
     <!-- Призрачная башня: схема победы (цвета из init-session.js). Без физики. -->
-    <a-entity id="ghost-tower-hint" ghost-tower-hint position="0 0 0"></a-entity>
+    <a-entity id="ghost-tower-hint" ghost-tower-hint position="0 0 0" visible="false"></a-entity>
 
 
     <!-- ====== КУПОЛ (Этап 3, Шаг 2 v2): визуал + тайловый коллайдер ======
@@ -152,8 +156,7 @@
 
 
     <!-- ====== ПЛАВАЮЩИЕ КУБИКИ (5 цветных + 6 серых) ======
-         Контейнер пустой; spawn-floating-cubes.js наполняет его на DOMContentLoaded
-         из CONFIG.floatingCubes (targetColors, trashColor, spawnPositions). -->
+         Контейнер пустой до «Старт»; spawn-floating-cubes.js по startGame(). -->
     <a-entity id="floating-cubes-root"></a-entity>
 
     <!-- Красные шары (Этап 6). spawn-red-balls.js наполняет контейнер. -->

@@ -104,6 +104,14 @@ AFRAME.registerComponent('red-ball', {
     return sys.getScale();
   },
 
+  _isWorldSlowMo: function () {
+    var sys = this.el.sceneEl.systems['time-scale'];
+    if (!sys || typeof sys.isWorldSlowMo !== 'function') {
+      return this._getTimeScale() < 0.999;
+    }
+    return sys.isWorldSlowMo();
+  },
+
   _getDomeTarget: function () {
     var dome = (typeof CONFIG !== 'undefined' && CONFIG.dome) || {};
     return {
@@ -212,9 +220,11 @@ AFRAME.registerComponent('red-ball', {
       return;
     }
 
-    // Удар битой-ракеткой: отскок с сохранением скорости (не разгоняем от взмаха).
+    // Удар битой в руке: отскок (slo-mo — только направление; realtime — с бустом).
     if (other.el && other.el.components['ball-bat']) {
-      if (this._rb) this._deflectOffBat(this._rb);
+      if (other.el.is && other.el.is('grabbed-dynamic') && this._rb) {
+        this._deflectOffBat(this._rb);
+      }
       return;
     }
 
@@ -489,8 +499,9 @@ AFRAME.registerComponent('red-ball', {
   },
 
   /**
-   * Отскок от биты или куба в руке: направление — пост-удар солвера,
-   * величина — скорость шара до удара (взмах не разгоняет).
+   * Отскок от биты или куба в руке.
+   * Slo-mo: направление солвера, скорость = до удара (без разгона от взмаха).
+   * Realtime: доударная × boost и/или доля скорости солвера (энергия взмаха).
    */
   _deflectOffBat: function (rb) {
     if (!rb || typeof rb.getLinearVelocity !== 'function') return;
@@ -498,17 +509,38 @@ AFRAME.registerComponent('red-ball', {
       var lv = rb.getLinearVelocity();
       if (!lv) return;
 
-      var speed = Math.sqrt(lv.x * lv.x + lv.y * lv.y + lv.z * lv.z);
+      var prev = this._lastAppliedTimeScale;
+      if (!prev || prev < 0.001) prev = 1.0;
+      var invPrev = 1 / prev;
+
+      var wx = lv.x * invPrev;
+      var wy = lv.y * invPrev;
+      var wz = lv.z * invPrev;
+      var solverWorld = Math.sqrt(wx * wx + wy * wy + wz * wz);
+
       var nx; var ny; var nz;
-      if (speed > 1e-5) {
-        nx = lv.x / speed; ny = lv.y / speed; nz = lv.z / speed;
+      if (solverWorld > 1e-5) {
+        nx = wx / solverWorld; ny = wy / solverWorld; nz = wz / solverWorld;
       } else {
         var d = this._directionTowardDome();
         nx = d.x; ny = d.y; nz = d.z;
       }
 
-      var target = this._preHitWorldSpeed;
-      if (!target || target < this._speeds.minDrift) target = this._speeds.minDrift;
+      var preHit = this._preHitWorldSpeed;
+      if (!preHit || preHit < this._speeds.minDrift) preHit = this._speeds.minDrift;
+
+      var bd = this.cfg.batDeflect || {};
+      var target;
+
+      if (this._isWorldSlowMo()) {
+        target = preHit;
+      } else {
+        var boost = bd.realtimeSpeedBoost !== undefined ? bd.realtimeSpeedBoost : 1.60;
+        var swing = bd.realtimeSwingRetain !== undefined ? bd.realtimeSwingRetain : 0.45;
+        target = Math.max(preHit * boost, solverWorld * swing);
+        var maxSp = bd.realtimeSpeedMax !== undefined ? bd.realtimeSpeedMax : 2.8;
+        if (target > maxSp) target = maxSp;
+      }
 
       if (typeof rb.setLinearVelocity === 'function') {
         rb.setLinearVelocity({ x: nx * target, y: ny * target, z: nz * target }, false);
@@ -516,10 +548,7 @@ AFRAME.registerComponent('red-ball', {
       }
       if (typeof rb.wakeUp === 'function') rb.wakeUp();
 
-      // Одного сброса по contactbegin мало: kinematic-бита продавливает шар
-      // ещё несколько кадров, солвер заново разгоняет его, нового contactbegin
-      // нет. Держим скорость на доударной целое окно (tick → _clampBatDeflect).
-      var clampMs = (this.cfg.batDeflect && this.cfg.batDeflect.clampMs) || 250;
+      var clampMs = bd.clampMs !== undefined ? bd.clampMs : 250;
       this._batClampSpeed = target;
       this._batClampUntilMs = performance.now() + clampMs;
     } catch (e) {

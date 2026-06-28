@@ -42,7 +42,7 @@
       restitution: 0.9, staticFriction: 0.05, dynamicFriction: 0.05,
     };
 
-    var nTargets = targets.length;
+    var nTargets = cfg.coloredCubeCount !== undefined ? cfg.coloredCubeCount : targets.length;
     var nTotal = positions.length;
     if (nTotal < nTargets) {
       console.error('[spawn-floating-cubes] позиций меньше, чем цветных кубиков');
@@ -93,11 +93,7 @@
     spawn();
   }
 
+  window.spawnFloatingCubes = spawn;
+  window.clearFloatingCubes = clearCubes;
   window.respawnFloatingCubes = respawnFloatingCubes;
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', spawn);
-  } else {
-    spawn();
-  }
 })();

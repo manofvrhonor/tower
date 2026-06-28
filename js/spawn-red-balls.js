@@ -90,11 +90,7 @@
     spawn();
   }
 
+  window.spawnRedBalls = spawn;
+  window.clearRedBalls = clearBalls;
   window.respawnRedBalls = respawnRedBalls;
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', spawn);
-  } else {
-    spawn();
-  }
 })();

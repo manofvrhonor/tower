@@ -14,6 +14,7 @@
  * Контракт: любое «мировое» движение × getScale(). Руки и rig — реальное время.
  *
  * API: sceneEl.systems['time-scale'].getScale() → number 0.05..1.0
+ * isWorldSlowMo() — slo-mo-сессия по recentMinScale (не мгновенный scale при взмахе).
  */
 AFRAME.registerSystem('time-scale', {
   init: function () {
@@ -28,6 +29,8 @@ AFRAME.registerSystem('time-scale', {
       rightHand: new THREE.Vector3(),
     };
     this._debugLastLog = 0;
+    this._recentMinScale = 1.0;
+    this._recentMinSince = 0;
 
     var player = document.getElementById('player');
     this.tracked = {
@@ -43,6 +46,19 @@ AFRAME.registerSystem('time-scale', {
    */
   getScale: function () {
     return this.scale;
+  },
+
+  getRecentMinScale: function () {
+    return this._recentMinScale;
+  },
+
+  /** true, если игрок недавно был в slo-mo (min scale за окно < порога). */
+  isWorldSlowMo: function () {
+    var strikeCfg = (typeof CONFIG !== 'undefined' && CONFIG.inHandStrike) || {};
+    var th = strikeCfg.worldSlowMoThreshold !== undefined
+      ? strikeCfg.worldSlowMoThreshold
+      : (this.cfg.worldSlowMoThreshold !== undefined ? this.cfg.worldSlowMoThreshold : 0.5);
+    return this._recentMinScale < th;
   },
 
   tick: function (time, dt) {
@@ -65,8 +81,26 @@ AFRAME.registerSystem('time-scale', {
       this.scale += scaleAlpha * (target - this.scale);
     }
 
+    this._trackRecentMin();
     this._hasPrev = true;
     this._debugLog(time);
+  },
+
+  _trackRecentMin: function () {
+    var now = performance.now();
+    var strikeCfg = (typeof CONFIG !== 'undefined' && CONFIG.inHandStrike) || {};
+    var windowMs = strikeCfg.recentMinWindowMs !== undefined
+      ? strikeCfg.recentMinWindowMs
+      : (this.cfg.recentMinWindowMs !== undefined ? this.cfg.recentMinWindowMs : 600);
+
+    if (!this._recentMinSince || (now - this._recentMinSince) > windowMs) {
+      this._recentMinScale = this.scale;
+      this._recentMinSince = now;
+      return;
+    }
+    if (this.scale < this._recentMinScale) {
+      this._recentMinScale = this.scale;
+    }
   },
 
   /**

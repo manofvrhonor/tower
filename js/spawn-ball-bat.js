@@ -103,11 +103,15 @@
     if (el) root.appendChild(el);
   }
 
-  window.respawnBallBat = respawnBallBat;
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', spawn);
-  } else {
-    spawn();
+  function clearBat() {
+    var existing = document.getElementById('ball-bat');
+    if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+    var root = document.getElementById('ball-bat-root');
+    if (!root) return;
+    while (root.firstChild) root.removeChild(root.firstChild);
   }
+
+  window.spawnBallBat = spawn;
+  window.clearBallBat = clearBat;
+  window.respawnBallBat = respawnBallBat;
 })();

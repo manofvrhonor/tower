@@ -3,9 +3,8 @@
 /**
  * victory-check — проверка условия победы (Этап 5).
  *
- * Победа: 4 цветных куба (data-is-target) в gravity, не в руке, стоят башней
- * на пьедестале; цвета снизу вверх = CONFIG.victory.stackColors (рандом при загрузке).
- * 5-й цветной и серые не учитываются.
+ * Победа: N цветных кубов (data-is-target) в gravity, не в руке, стоят башней
+ * на пьедестале; N = CONFIG.victory.stackHeight; цвета = stackColors (shuffle при старте).
  *
  * При успехе и удержании stableDurationMs → событие 'victory' на сцене
  * (feedback — отдельный шаг 3).
@@ -63,7 +62,7 @@ AFRAME.registerComponent('victory-check', {
   },
 
   _evaluate: function () {
-    var cfg = this.cfg;
+    var cfg = (typeof CONFIG !== 'undefined' && CONFIG.victory) || this.cfg;
     var need = cfg.stackHeight || 4;
     var expected = cfg.stackColors || [];
     if (expected.length < need) {

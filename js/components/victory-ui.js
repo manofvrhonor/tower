@@ -258,62 +258,25 @@ AFRAME.registerComponent('victory-ui', {
     if (this._restarting) return;
     this._restarting = true;
 
-    console.log('[victory-ui] новая игра (без reload, VR сохранён)');
+    console.log('[victory-ui] возврат в меню');
 
     this._shown = false;
     this._handNear = false;
     this._nearHintLogged = false;
     this._root.setAttribute('visible', false);
-    this._btnData.el.setAttribute('scale', '1 1 1');
+    if (this._btnData) this._btnData.el.setAttribute('scale', '1 1 1');
 
-    this._releaseAllGrabs();
-
-    if (typeof window.shuffleVictoryScheme === 'function') {
-      window.shuffleVictoryScheme();
-    }
-
-    var ghost = document.getElementById('ghost-tower-hint');
-    var ghostComp = ghost && ghost.components['ghost-tower-hint'];
-    if (ghostComp && typeof ghostComp.rebuild === 'function') {
-      ghostComp.rebuild();
-    }
-
-    if (typeof window.respawnFloatingCubes === 'function') {
-      window.respawnFloatingCubes();
-    }
-
-    if (typeof window.respawnRedBalls === 'function') {
-      window.respawnRedBalls();
-    }
-
-    if (typeof window.respawnBallBat === 'function') {
-      window.respawnBallBat();
-    }
-
-    var vc = this.el.components['victory-check'];
-    if (vc && typeof vc.reset === 'function') {
-      vc.reset();
+    if (typeof window.returnToMenu === 'function') {
+      window.returnToMenu();
     }
 
     this._restarting = false;
   },
 
   _enableDesktopCursor: function () {
-    if (this._desktopReady) return;
-    var cam = document.querySelector('#player a-camera');
-    if (!cam) return;
-
-    cam.setAttribute('raycaster', 'objects: .victory-ui-clickable; far: 8');
-
-    this._mouseCursor = document.createElement('a-cursor');
-    this._mouseCursor.setAttribute('raycaster', 'objects: .victory-ui-clickable; far: 8');
-    this._mouseCursor.setAttribute('fuse', false);
-    this._mouseCursor.setAttribute('visible', true);
-    this._mouseCursor.setAttribute('position', '0 0 -0.6');
-    this._mouseCursor.setAttribute('material', 'color: #ffffff; shader: flat');
-    this._mouseCursor.setAttribute('geometry', 'primitive: ring; radiusInner: 0.006; radiusOuter: 0.011');
-    cam.appendChild(this._mouseCursor);
-    this._desktopReady = true;
+    if (typeof window.enableDesktopUiCursor === 'function') {
+      window.enableDesktopUiCursor();
+    }
   },
 
   _onVictory: function () {
@@ -322,10 +285,7 @@ AFRAME.registerComponent('victory-ui', {
     this._nearHintLogged = false;
     this._root.setAttribute('visible', true);
     this._facePlayer();
-
-    if (!this.el.sceneEl.is('vr-mode')) {
-      this._enableDesktopCursor();
-    }
+    this._enableDesktopCursor();
 
     console.log('[victory-ui] ПОБЕДА — поднеси руку к «Заново», кнопка засветится, нажми grip');
   },

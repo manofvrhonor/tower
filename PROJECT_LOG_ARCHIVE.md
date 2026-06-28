@@ -265,7 +265,46 @@
 **Git:** ранний коммит сессии `7e774e1` (стол + pedestal); правки timeScale/bat — **не закоммичены**
 (по запросу пользователя).
 
-**Следующая сессия:** фикс ударов по кубам, шарам и бите в руке.
+**Следующая сессия:** in-hand удары (с.28).
+
+---
+
+## Сессия 28 — in-hand удары (куб/бита × шар/куб) ✅
+
+### Закрыто
+
+- **ADR-18:** `time-scale.isWorldSlowMo()` — recentMinScale за 600 мс; fix ложного
+  realtime при взмахе в slo-mo (мгновенный scale → 1.0).
+- **Slo-mo:** куб/бита-жертва — deflect+clamp (striker + victim side); шар — только
+  перенаправление, без boost.
+- **Realtime:** шар — `max(preHit×1.6, solver×0.45)`, cap 2.8 м/с; куб×куб — PhysX.
+- **Quest QA ✅** (пользователь).
+
+**Файлы:** `time-scale.js`, `red-ball.js`, `floating-cube.js`, `ball-bat.js`, `config.js`.
+
+**Следующая сессия:** меню входа + сложность (с.29).
+
+---
+
+## Сессия 29 — меню входа, сложность, wireframe DOME ✅
+
+### Сделано
+
+- **Меню:** `game-menu.js` — 3 сложности, «Старт», toggle wireframe коллайдеров.
+- **Lifecycle:** `game-lifecycle.js` — `startGame()` / `returnToMenu()`; spawn только после «Старт».
+- **Сложность:** шары 1/3/5, башня 3/4/5; 6-й цвет палитры; fix shuffle (только spawned-цвета).
+- **Ghost-схема:** декоративный wireframe по цветам (не debug colliders).
+- **UI-прицел:** `desktop-ui-cursor.js` — Quest + desktop; скрыт в игре, возврат на победе/меню.
+- **Debug DOME:** `layerOpacity.DOME` 0.12; `showColliders` default false.
+- **Кубы → купол:** float-куб после 2–5 отскоков от стен — homing к куполу (как red-ball).
+- **QA:** только Quest 3; ПК — localhost/отладка.
+- **Quest QA ✅** (пользователь, incl. меню/победа/прицел/режимы).
+
+**Файлы:** `config.js`, `init-session.js`, `game-lifecycle.js`, `desktop-ui-cursor.js`,
+`game-menu.js`, `ghost-tower-hint.js`, `victory-ui.js`, `victory-check.js`, `floating-cube.js`,
+`spawn-*.js`, `collider-debug-viz.js`, `index.html`.
+
+**ADR-19.** **Следующая сессия:** комната-купол + skybox (с.30).
 
 ---
 

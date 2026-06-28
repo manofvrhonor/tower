@@ -18,6 +18,7 @@
  * containment-тестом купола: внутри → gravity, снаружи → float.
  *
  * Контакт gravity-кубика с #floor → возврат в float (задача 3, Шаг 5).
+ * Float: после 2–5 отскоков от стен комнаты — разворот к куполу (как red-ball).
  *
  * ТЕХНИЧЕСКИЕ ЗАМЕТКИ ПО БИНДИНГУ @c-frame/physx@v0.3.0
  * (проверено в Сессиях 6–7, см. CURRENT_TASK.md):
@@ -66,6 +67,12 @@ AFRAME.registerComponent('floating-cube', {
     this._gravityScaleDiagDone = false;
     this._physxGravityOffForSloMo = false;
     this._onContactBegin = this._onContactBegin.bind(this);
+    // Slo-mo: удар grabbed-кубом/битой — перенаправление без разгона (как шар).
+    this._preHitWorldSpeed = 0;
+    this._strikerClampUntilMs = 0;
+    this._strikerClampSpeed = 0;
+    this._strikeCfg = (typeof CONFIG !== 'undefined' && CONFIG.inHandStrike) || {};
+    this._beginSteerCycle();
 
     // Подписка на возможные события готовности тела (план А).
     var onReady = this._tryApply.bind(this);
@@ -153,18 +160,32 @@ AFRAME.registerComponent('floating-cube', {
    * Контакт со столом (пьедестал) не обрабатывается — у него другой id.
    */
   _onContactBegin: function (evt) {
+    var otherComp = evt.detail.otherComponent;
+    var otherEl = otherComp && otherComp.el;
+
+    // Striker в руке — обрабатываем жертву здесь (надёжнее victim-side).
+    if (this.el.is && this.el.is('grabbed-dynamic')) {
+      this._applyGrabbedStrikeToVictim(otherComp, otherEl);
+    }
+
+    // Victim-side (backup): slo-mo — только перенаправление от grabbed-удара.
+    if (otherEl && this._isGrabbedStriker(otherEl) && this._rb && this._isWorldSlowMo()) {
+      this.receiveGrabbedStrikerHit();
+    }
+
+    if (this.state === 'float') {
+      this._handleFloatWallSteer(otherComp);
+      return;
+    }
+
     if (this.state !== 'gravity') return;
 
     // Страховка пробуждения: уснувшую стопку должен будить новый контакт
-    // (упавший сверху кубик/рука). Авто-wake биндинга @c-frame/physx
-    // ненадёжен (ADR-02), поэтому будим себя явно. Это безопасно — wakeUp
-    // только в момент контакта, не каждый кадр, стопка снова уснёт сама.
     var rb = this._rb;
     if (rb && typeof rb.wakeUp === 'function') {
       rb.wakeUp();
     }
 
-    var otherEl = evt.detail.otherComponent && evt.detail.otherComponent.el;
     if (!otherEl || otherEl.id !== 'floor') return;
 
     this._returnToFloatFromFloor();
@@ -194,6 +215,7 @@ AFRAME.registerComponent('floating-cube', {
 
   _enterFloatMode: function (applyImpulse) {
     this.state = 'float';
+    this._beginSteerCycle();
     var rb = this._rb;
     if (!rb) return;
     this._applyFloatPhysics(rb, applyImpulse);
@@ -253,6 +275,227 @@ AFRAME.registerComponent('floating-cube', {
     var sys = this.el.sceneEl.systems['time-scale'];
     if (!sys || typeof sys.getScale !== 'function') return 1;
     return sys.getScale();
+  },
+
+  _isWorldSlowMo: function () {
+    var sys = this.el.sceneEl.systems['time-scale'];
+    if (!sys || typeof sys.isWorldSlowMo !== 'function') {
+      return this._getTimeScale() < 0.999;
+    }
+    return sys.isWorldSlowMo();
+  },
+
+  /** Новый цикл homing: случайно 2–5 пропусков отскока до разворота к куполу. */
+  _beginSteerCycle: function () {
+    var steer = this.cfg.steerTowardDome || {};
+    var min = steer.bounceDelayMin !== undefined ? steer.bounceDelayMin : 2;
+    var max = steer.bounceDelayMax !== undefined ? steer.bounceDelayMax : 5;
+    if (max < min) { var tmp = min; min = max; max = tmp; }
+    this._steerBounceDelay = min + Math.floor(Math.random() * (max - min + 1));
+    this._wallBounceCount = 0;
+  },
+
+  _getDomeTarget: function () {
+    var dome = this.domeCfg || {};
+    return {
+      x: 0,
+      y: dome.centerY !== undefined ? dome.centerY : 1.15,
+      z: 0,
+    };
+  },
+
+  _directionTowardDome: function () {
+    this.el.object3D.getWorldPosition(this._worldPos);
+    var t = this._getDomeTarget();
+    var dx = t.x - this._worldPos.x;
+    var dy = t.y - this._worldPos.y;
+    var dz = t.z - this._worldPos.z;
+    var len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (len < 1e-4) {
+      return { x: 0, y: -0.3, z: 0.96 };
+    }
+    return { x: dx / len, y: dy / len, z: dz / len };
+  },
+
+  /** Отскок от стен/пола/потолка комнаты — да; пьедestal и купол — нет (как red-ball). */
+  _isRoomWallContact: function (otherEl) {
+    if (!otherEl) return false;
+    var node = otherEl;
+    while (node) {
+      if (node.id === 'pedestal') return false;
+      if (node.id === 'dome-collider') return false;
+      node = node.parentElement;
+    }
+    return true;
+  },
+
+  _setVelocityDirectionTowardDome: function (rb) {
+    if (!rb || typeof rb.getLinearVelocity !== 'function') return;
+
+    var toward = this._directionTowardDome();
+    var prev = this._lastAppliedTimeScale;
+    if (!prev || prev < 0.001) prev = 1.0;
+    var invPrev = 1 / prev;
+    var minSp = this.cfg.minDriftSpeed !== undefined ? this.cfg.minDriftSpeed : 0.28;
+
+    try {
+      var lv = rb.getLinearVelocity();
+      if (!lv) return;
+
+      var fx = lv.x * invPrev;
+      var fy = lv.y * invPrev;
+      var fz = lv.z * invPrev;
+      var speed = Math.sqrt(fx * fx + fy * fy + fz * fz);
+      if (speed < minSp) speed = minSp;
+
+      fx = toward.x * speed;
+      fy = toward.y * speed;
+      fz = toward.z * speed;
+      rb.setLinearVelocity({ x: fx, y: fy, z: fz }, false);
+      this._lastAppliedTimeScale = 1.0;
+      this._driftDir = { x: toward.x, y: toward.y, z: toward.z };
+    } catch (e) {
+      if (!this._steerWarned) {
+        console.warn('[floating-cube] steer toward dome failed:', e.message);
+        this._steerWarned = true;
+      }
+    }
+  },
+
+  _handleFloatWallSteer: function (otherComp) {
+    if (!otherComp || otherComp.data.type !== 'static') return;
+    if (!this._isRoomWallContact(otherComp.el)) return;
+
+    var rb = this._rb;
+    if (!rb) return;
+
+    this._wallBounceCount++;
+    if (this._wallBounceCount <= this._steerBounceDelay) {
+      if (typeof rb.wakeUp === 'function') rb.wakeUp();
+      return;
+    }
+
+    this._setVelocityDirectionTowardDome(rb);
+    this._beginSteerCycle();
+    if (typeof rb.wakeUp === 'function') rb.wakeUp();
+  },
+
+  /** Куб или бита в захвате — «ударная» рука. */
+  _isGrabbedStriker: function (el) {
+    if (!el || !el.is || !el.is('grabbed-dynamic')) return false;
+    return !!(el.components['floating-cube'] || el.components['ball-bat']);
+  },
+
+  /** «Мировая» скорость до timeScale-масштабирования. */
+  _currentWorldSpeed: function (rb) {
+    if (!rb || typeof rb.getLinearVelocity !== 'function') return 0;
+    var prev = this._lastAppliedTimeScale;
+    if (!prev || prev < 0.001) prev = 1.0;
+    var invPrev = 1 / prev;
+    try {
+      var lv = rb.getLinearVelocity();
+      if (!lv) return 0;
+      var fx = lv.x * invPrev;
+      var fy = lv.y * invPrev;
+      var fz = lv.z * invPrev;
+      return Math.sqrt(fx * fx + fy * fy + fz * fz);
+    } catch (e) {
+      return 0;
+    }
+  },
+
+  /**
+   * Slo-mo: отскок от grabbed-куба/биты — направление солвера, величина до удара.
+   * Kinematic-рука разгоняет жертву несколько кадров — держим clamp в tick.
+   */
+  _deflectOffGrabbedStriker: function (rb) {
+    if (!rb || typeof rb.getLinearVelocity !== 'function') return;
+    try {
+      var lv = rb.getLinearVelocity();
+      if (!lv) return;
+
+      var rawSpeed = Math.sqrt(lv.x * lv.x + lv.y * lv.y + lv.z * lv.z);
+      var nx; var ny; var nz;
+      if (rawSpeed > 1e-5) {
+        nx = lv.x / rawSpeed; ny = lv.y / rawSpeed; nz = lv.z / rawSpeed;
+      } else {
+        nx = 0; ny = 1; nz = 0;
+      }
+
+      var target = this._preHitWorldSpeed;
+      if (target < 0) target = 0;
+
+      if (typeof rb.setLinearVelocity === 'function') {
+        rb.setLinearVelocity({ x: nx * target, y: ny * target, z: nz * target }, false);
+        this._lastAppliedTimeScale = 1.0;
+      }
+      if (typeof rb.wakeUp === 'function') rb.wakeUp();
+
+      var clampMs = this._strikeCfg.sloMoDeflectClampMs !== undefined
+        ? this._strikeCfg.sloMoDeflectClampMs : 250;
+      this._strikerClampSpeed = target;
+      this._strikerClampUntilMs = performance.now() + clampMs;
+    } catch (e) {
+      if (!this._strikerDeflectWarned) {
+        console.warn('[floating-cube] striker deflect failed:', e.message);
+        this._strikerDeflectWarned = true;
+      }
+    }
+  },
+
+  /** Окно после slo-mo удара: удерживаем доударную скорость, направление — от солвера. */
+  _clampStrikerDeflect: function (rb) {
+    if (performance.now() >= this._strikerClampUntilMs) return false;
+    if (!rb || typeof rb.getLinearVelocity !== 'function') return false;
+    try {
+      var lv = rb.getLinearVelocity();
+      if (!lv) return false;
+      var rawSpeed = Math.sqrt(lv.x * lv.x + lv.y * lv.y + lv.z * lv.z);
+      if (rawSpeed < 1e-5) return true;
+
+      var ts = this._getTimeScale();
+      var targetRaw = this._strikerClampSpeed * ts;
+      var scale = targetRaw / rawSpeed;
+
+      if (typeof rb.setLinearVelocity === 'function') {
+        rb.setLinearVelocity({
+          x: lv.x * scale,
+          y: lv.y * scale,
+          z: lv.z * scale,
+        }, false);
+        this._lastAppliedTimeScale = ts;
+      }
+    } catch (e) {
+      if (!this._strikerClampWarned) {
+        console.warn('[floating-cube] striker clamp failed:', e.message);
+        this._strikerClampWarned = true;
+      }
+    }
+    return true;
+  },
+
+  /** Вызывается striker-side или victim-side; не дублирует активный clamp. */
+  receiveGrabbedStrikerHit: function () {
+    if (performance.now() < this._strikerClampUntilMs) return;
+    if (this._rb) this._deflectOffGrabbedStriker(this._rb);
+  },
+
+  /** Grabbed-куб/бита в руке ударила dynamic-жертву в slo-mo. */
+  _applyGrabbedStrikeToVictim: function (otherComp, otherEl) {
+    if (!otherEl || !otherComp || otherComp.data.type === 'static') return;
+    if (!this._isWorldSlowMo()) return;
+    if (otherEl.components['red-ball']) return;
+
+    var fc = otherEl.components['floating-cube'];
+    if (fc && typeof fc.receiveGrabbedStrikerHit === 'function') {
+      fc.receiveGrabbedStrikerHit();
+      return;
+    }
+
+    var bat = otherEl.components['ball-bat'];
+    if (bat && !bat._grabbed && typeof bat.receiveGrabbedStrikerHit === 'function') {
+      bat.receiveGrabbedStrikerHit();
+    }
   },
 
   /**
@@ -659,6 +902,10 @@ AFRAME.registerComponent('floating-cube', {
       } else {
         this._clampGravityVelocity(rb);
       }
+      if (this._clampStrikerDeflect(rb)) return;
+      if (performance.now() >= this._strikerClampUntilMs) {
+        this._preHitWorldSpeed = this._currentWorldSpeed(rb);
+      }
       return;
     }
 
@@ -670,6 +917,10 @@ AFRAME.registerComponent('floating-cube', {
 
     this._maintainFloatDrift(rb);
     this._applyTimeScaleToVelocity(rb);
+    if (this._clampStrikerDeflect(rb)) return;
+    if (performance.now() >= this._strikerClampUntilMs) {
+      this._preHitWorldSpeed = this._currentWorldSpeed(rb);
+    }
   },
 
   _useGravityTimeScale: function () {

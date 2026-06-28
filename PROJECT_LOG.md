@@ -11,9 +11,9 @@
 VR **Tower of Time** для Quest 3 (WebXR). Белая комната 3×3×3 м, стол с куполом.
 Плавающие кубики (цветные + серые) → сборка башни. Красные шары — опасность.
 Замедление времени (SUPERHOT): `timeScale` 0.05↔1.0 для скриптового движения;
-физика рук и стола — реальное время. MVP: друг проходит за 2–5 мин без инструкций.
+физика рук и стола — реальное время. MVP: друг проходит за 2–5 мин без инструкций. **Меню входа + режимы сложности** — в scope (с.29).
 
-**Не-цели:** уровни, меню, сохранения, AAA-графика, мультиплеер.
+**Не-цели:** уровни/кампания, сохранения прогресса, AAA-графика, мультиплеер.
 
 ---
 
@@ -214,6 +214,9 @@ static box-плиток (`dome-builder.js`), плотно без щелей.
 **Устарело (сессия 27):** «gravity-кубики на столе — real time» — башня и удары шара
 в slo-mo выглядели как realtime; исправлено velocity-scale + manual g×ts.
 
+**In-hand strikes (с.28, ADR-18):** API `isWorldSlowMo()` / `getRecentMinScale()` —
+для ударов в руке не использовать мгновенный `getScale()` (при взмахе → 1.0).
+
 **Отложено (не блокирует MVP):** абстракция профиля trail (`square | circle | …`) — когда
 появятся шары/другие формы (Этап 6+).
 
@@ -314,12 +317,10 @@ joint перебарывал контакты — схваченный куб п
 - Править захват «вслепую»: offset сферы руки и anchor joint по `contactbegin` без
   калибровки в VR (сессия 26 — регрессия). Ghost-contact + неверные оси hand-controls.
 
-**Удар по шару (починено, сессия 21):** `red-ball._deflectOffBat` — отскок берёт
-пост-столкновительное направление, но величину возвращает к доударной. Одного сброса
-по `contactbegin` не хватало: kinematic-бита продавливает шар несколько кадров, солвер
-заново его разгоняет, нового `contactbegin` нет. Фикс — **clamp-окно** (`_clampBatDeflect`
-в `tick`): пока активно `CONFIG.balls.batDeflect.clampMs` (250 мс), скорость каждый кадр
-удерживается на доударной (направление от солвера сохраняется). Quest QA ✅.
+**Удар по шару (сессии 21, 28):** `red-ball._deflectOffBat` + `_clampBatDeflect`.
+Slo-mo: только перенаправление (доударная скорость). Realtime: `max(preHit×boost,
+solver×swingRetain)`, cap. Критерий slo-mo — `time-scale.isWorldSlowMo()` (ADR-18),
+не мгновенный `getScale()` при взмахе. Quest QA ✅ (с.21, с.28).
 
 ---
 
@@ -345,6 +346,50 @@ inline: A-Frame-атрибуты не читают `window.CONFIG` (как и у
 
 ---
 
+### ADR-18: Удары кубом/битой в захвате (сессия 28)
+
+**Решение:**
+- Slo-mo-сессия: `time-scale.isWorldSlowMo()` — min `scale` за окно `recentMinWindowMs`
+  (~600 мс) < `worldSlowMoThreshold` (0.5). **Не** мгновенный `getScale()`: при взмахе
+  в slo-mo scale кратко → 1.0 (SUPERHOT), но recentMin ≈ 0.05.
+- **Жертва-куб/бита (slo-mo):** `_deflectOffGrabbedStriker` + `_clampStrikerDeflect`
+  (`CONFIG.inHandStrike.sloMoDeflectClampMs`); striker-side (`_applyGrabbedStrikeToVictim`)
+  + victim-side (`receiveGrabbedStrikerHit`).
+- **Шар от grabbed-куба/биты:** `_deflectOffBat` + `_clampBatDeflect`. Slo-mo — только
+  перенаправление (доударная). Realtime — `max(preHit×realtimeSpeedBoost, solver×swingRetain)`,
+  cap `realtimeSpeedMax`. Deflect только если striker `grabbed-dynamic`.
+- Realtime куб×куб / бита×куб — PhysX без deflect (ускорение сохраняется).
+
+**Причина:** kinematic-рука + joint разгоняет жертву несколько кадров; clamp-окно как
+ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
+
+**Не делать:** `if (getScale() < 0.999)` для in-hand ударов; boost шара в slo-mo.
+
+**Quest QA ✅** (с.28).
+
+---
+
+### ADR-19: Меню входа, сложность, game-lifecycle (сессия 29)
+
+**Решение:**
+- `game-menu.js` — UI в мире (canvas plane, VR proximity + grip, Quest прицел через `desktop-ui-cursor.js`).
+- `game-lifecycle.js` — `startGame()` / `returnToMenu()`; спавн только после «Старт»; без autoshuffle на load.
+- Сложность: `CONFIG.game.difficulties` — шары 1/3/5, башня 3/4/5; `shuffleVictoryScheme()` только из spawned-цветов (`coloredCubeCount`); 6-й цвет палитры — excluded в hard.
+- Ghost-схема: декоративный wireframe (`ghost-tower-hint`), не `debug.showColliders`.
+- «Заново» → меню, не instant-restart. `debug.showColliders` по умолчанию `false`; toggle в меню.
+- DOME debug wireframe: `debug.layerOpacity.DOME` (~0.12).
+- Float-куб: после 2–5 отскоков от стен — разворот скорости к куполу (`steerTowardDome`, как red-ball).
+- UI-прицел: `desktop-ui-cursor.js` — пересоздание a-cursor; Quest vr-mode OK.
+- **QA:** только Quest 3 (Quest Link + localhost); ПК — serve/консоль.
+
+**Причина:** MVP требует выбор сложности; shuffle из 6 цветов при 5 кубах ломал победу в easy/normal.
+
+**Не делать:** HTML-оверлей поверх WebXR; autospawn на load.
+
+**Quest QA ✅** (с.29).
+
+---
+
 ## ДОРОЖНАЯ КАРТА
 
 | Этап | Название | Статус |
@@ -355,9 +400,9 @@ inline: A-Frame-атрибуты не читают `window.CONFIG` (как и у
 | 3 | Купол над столом | ✅ |
 | 4 | Замедление времени (SUPERHOT) | ✅ |
 | 5 | Цель и победа | ✅ |
-| 6 | Красные шары | в работе |
-| 7 | Предмет для отбивания (бита) | захват ✅, отбивание ✅, пьедestal в руке ✅ |
-| 8 | Полировка | план |
+| 6 | Красные шары | ✅ (Quest QA с.28) |
+| 7 | Предмет для отбивания (бита) | ✅ in-hand удары с.28 |
+| 8 | Полировка (меню, skybox, …) | меню ✅ (с.29); skybox — с.30 |
 
 ---
 
@@ -384,9 +429,13 @@ inline: A-Frame-атрибуты не читают `window.CONFIG` (как и у
   `wallSegments: 0`). **Gravity-кубы × timeScale** (ADR-12 v2): velocity-scale + manual g×ts;
   шар→куб world-space; куб в руке отбивает шар (`_deflectOffBat`). **Бита:** float вне купола /
   gravity внутри (как кубы), старт y=0.55. Десктоп QA timeScale ✅ (пользователь).
-- **Следующая (с.28):** удары кубом/битой **в руке** по шарам и кубам башни.
-- **VR-виньетка:** отложена на этап 8.
-- Стек стабилен: PhysX 0.3.0 + physx-grab. Тесты — localhost + Quest Link.
+- **Полировка (сессия 28):** **in-hand удары** (ADR-18): `isWorldSlowMo()`, deflect+clamp
+  кубов/биты в slo-mo; realtime boost шара; Quest QA ✅. **Сессия закрыта.**
+- **Следующая (с.29):** **меню входа + сложность** + wireframe DOME — ✅ Quest QA (ADR-19).
+- **Следующая (с.30):** **комната-купол + skybox** — см. `CURRENT_TASK.md`.
+- **Не делаем:** VR-виньетка slo-mo (снято с бэклога). **Пропускаем:** захват VR отлёт.
+- **Закрыто:** пьедestal «запинание» (парящий диск, с.27).
+- Стек стабилен: PhysX 0.3.0 + physx-grab. **Тесты — Quest Link + localhost**; ПК не для геймплея.
 
 ---
 
@@ -395,11 +444,10 @@ inline: A-Frame-атрибуты не читают `window.CONFIG` (как и у
 - **Руки без VPN** — решено локальными GLB (`assets/models/`).
 - **`extensionPageScript.js` в Network** — расширение браузера, игнорировать.
 - **Гонка spawn float** — ADR-11.
-- **VR-виньетка slo-mo:** в Quest не видна → отложена на этап 8 (polish), не блокирует.
-- **Шары (Этап 6):** Quest QA не закрыт. Slo-mo × timeScale ✅ (с.27).
-- **Бита (Этап 7):** захват ✅, отбивание ✅, float/gravity по куполу (с.27).
-- **Контакты в руке (с.28, приоритет):** удары кубом/битой по шарам и кубам — доработка.
-- **Захват (общий):** softFixed — отлёт при тряске; сфера HAND — VR-калибровка.
+- **In-hand удары (с.28):** ✅ Quest QA. ADR-18.
+- **Захват VR (отлёт при тряске):** пропущено по решению пользователя (с.29).
+- **VR-виньетка slo-mo:** не делаем (снято с бэклога, с.29).
+- **Пьедestal «запинание» (с.24):** закрыто — парящий диск (с.27).
 - **Шар→куб (башня):** pending + visual hit; ghost-boost убран (с.27).
 - **Парящий стол ✅** (с.27).
 - **Бэклог** — см. `CURRENT_TASK.md`.
@@ -413,11 +461,12 @@ inline: A-Frame-атрибуты не читают `window.CONFIG` (как и у
 ```
 Tower/
 ├── index.html
-├── js/config.js, main.js, init-session.js
+├── js/config.js, main.js, init-session.js, game-lifecycle.js, desktop-ui-cursor.js
 ├── js/spawn-floating-cubes.js, spawn-red-balls.js, spawn-ball-bat.js
 ├── js/components/  physx-grab, floating-cube, red-ball, ball-bat, dome-builder,
 │                   pedestal-builder, collider-debug-viz, time-scale, slowmo-vignette-3d,
-│                   float-motion-trail, ghost-tower-hint, victory-check, victory-ui
+│                   float-motion-trail, ghost-tower-hint, victory-check, victory-ui,
+│                   game-menu
 ├── assets/models/  leftHandLow.glb, rightHandLow.glb
 ├── AGENTS.md, CURRENT_TASK.md, PROJECT_LOG.md, PROJECT_LOG_ARCHIVE.md
 ```
@@ -438,8 +487,10 @@ Tower/
   `victory-ui` + рестарт без reload. Quest QA ✅.
 - **6 (сессии 18–19):** шары (скорость ×2–×3, homing-циклы, trail круглый, импульс кубам,
   слои стен/пьедестала). Десктоп: не в центре, не за стены.
-- **7 (сессия 19–21):** `ball-bat`; отбивание clamp-окно. **Сессия 26:** бита × пьедestal
-  в руке (D6 вместо kinematic grab).
+- **7 (сессия 19–21, 26, 28):** `ball-bat`; in-hand удары ADR-18. Quest QA ✅.
+- **8 (с.29):** меню, 3 сложности, lifecycle, ghost wireframe, UI-прицел Quest,
+  shuffle fix, DOME layer opacity, float-куб homing к куполу. Quest QA ✅ (ADR-19).
+- **8 (с.30+, план):** комната-купол + skybox.
 
 **QA купола (уточнение теста 1):** float-кубики сталкиваются с куполом **снаружи**
 (слой FLOAT_CUBE × DOME). Внутри на пьедестале кубики в gravity и **не** бьются о

@@ -25,6 +25,10 @@ AFRAME.registerComponent('ball-bat', {
     this._tickDeltaSec = 1 / 60;
     this._physxGravityOffForSloMo = false;
     this._driftDir = null;
+    this._preHitWorldSpeed = 0;
+    this._strikerClampUntilMs = 0;
+    this._strikerClampSpeed = 0;
+    this._strikeCfg = (typeof CONFIG !== 'undefined' && CONFIG.inHandStrike) || {};
 
     this._onContactBegin = this._onContactBegin.bind(this);
     var onReady = this._tryApply.bind(this);
@@ -58,6 +62,117 @@ AFRAME.registerComponent('ball-bat', {
     var sys = this.el.sceneEl.systems['time-scale'];
     if (!sys || typeof sys.getScale !== 'function') return 1;
     return sys.getScale();
+  },
+
+  _isWorldSlowMo: function () {
+    var sys = this.el.sceneEl.systems['time-scale'];
+    if (!sys || typeof sys.isWorldSlowMo !== 'function') {
+      return this._getTimeScale() < 0.999;
+    }
+    return sys.isWorldSlowMo();
+  },
+
+  _isGrabbedStriker: function (el) {
+    if (!el || !el.is || !el.is('grabbed-dynamic')) return false;
+    return !!(el.components['floating-cube'] || el.components['ball-bat']);
+  },
+
+  _currentWorldSpeed: function (rb) {
+    if (!rb || typeof rb.getLinearVelocity !== 'function') return 0;
+    var prev = this._lastAppliedTimeScale;
+    if (!prev || prev < 0.001) prev = 1.0;
+    var invPrev = 1 / prev;
+    try {
+      var lv = rb.getLinearVelocity();
+      if (!lv) return 0;
+      var fx = lv.x * invPrev;
+      var fy = lv.y * invPrev;
+      var fz = lv.z * invPrev;
+      return Math.sqrt(fx * fx + fy * fy + fz * fz);
+    } catch (e) {
+      return 0;
+    }
+  },
+
+  _deflectOffGrabbedStriker: function (rb) {
+    if (!rb || typeof rb.getLinearVelocity !== 'function') return;
+    try {
+      var lv = rb.getLinearVelocity();
+      if (!lv) return;
+
+      var rawSpeed = Math.sqrt(lv.x * lv.x + lv.y * lv.y + lv.z * lv.z);
+      var nx; var ny; var nz;
+      if (rawSpeed > 1e-5) {
+        nx = lv.x / rawSpeed; ny = lv.y / rawSpeed; nz = lv.z / rawSpeed;
+      } else {
+        nx = 0; ny = 1; nz = 0;
+      }
+
+      var target = this._preHitWorldSpeed;
+      if (target < 0) target = 0;
+
+      if (typeof rb.setLinearVelocity === 'function') {
+        rb.setLinearVelocity({ x: nx * target, y: ny * target, z: nz * target }, false);
+        this._lastAppliedTimeScale = 1.0;
+      }
+      if (typeof rb.wakeUp === 'function') rb.wakeUp();
+
+      var clampMs = this._strikeCfg.sloMoDeflectClampMs !== undefined
+        ? this._strikeCfg.sloMoDeflectClampMs : 250;
+      this._strikerClampSpeed = target;
+      this._strikerClampUntilMs = performance.now() + clampMs;
+    } catch (e) {
+      if (!this._strikerDeflectWarned) {
+        console.warn('[ball-bat] striker deflect failed:', e.message);
+        this._strikerDeflectWarned = true;
+      }
+    }
+  },
+
+  _clampStrikerDeflect: function (rb) {
+    if (performance.now() >= this._strikerClampUntilMs) return false;
+    if (!rb || typeof rb.getLinearVelocity !== 'function') return false;
+    try {
+      var lv = rb.getLinearVelocity();
+      if (!lv) return false;
+      var rawSpeed = Math.sqrt(lv.x * lv.x + lv.y * lv.y + lv.z * lv.z);
+      if (rawSpeed < 1e-5) return true;
+
+      var ts = this._getTimeScale();
+      var targetRaw = this._strikerClampSpeed * ts;
+      var scale = targetRaw / rawSpeed;
+
+      if (typeof rb.setLinearVelocity === 'function') {
+        rb.setLinearVelocity({
+          x: lv.x * scale,
+          y: lv.y * scale,
+          z: lv.z * scale,
+        }, false);
+        this._lastAppliedTimeScale = ts;
+      }
+    } catch (e) {
+      if (!this._strikerClampWarned) {
+        console.warn('[ball-bat] striker clamp failed:', e.message);
+        this._strikerClampWarned = true;
+      }
+    }
+    return true;
+  },
+
+  receiveGrabbedStrikerHit: function () {
+    if (performance.now() < this._strikerClampUntilMs) return;
+    if (this._rb) this._deflectOffGrabbedStriker(this._rb);
+  },
+
+  _applyGrabbedStrikeToVictim: function (otherComp, otherEl) {
+    if (!otherEl || !otherComp || otherComp.data.type === 'static') return;
+    if (!this._isWorldSlowMo()) return;
+    if (otherEl.components['red-ball']) return;
+
+    var fc = otherEl.components['floating-cube'];
+    if (fc && typeof fc.receiveGrabbedStrikerHit === 'function') {
+      fc.receiveGrabbedStrikerHit();
+    }
   },
 
   _useTimeScale: function () {
@@ -122,7 +237,20 @@ AFRAME.registerComponent('ball-bat', {
   },
 
   _onContactBegin: function (evt) {
-    if (this.state !== 'gravity' || this._grabbed) return;
+    var otherComp = evt.detail.otherComponent;
+    var otherEl = otherComp && otherComp.el;
+
+    if (this._grabbed) {
+      this._applyGrabbedStrikeToVictim(otherComp, otherEl);
+      return;
+    }
+
+    // Victim-side: slo-mo — перенаправление от grabbed-удара.
+    if (otherEl && this._isGrabbedStriker(otherEl) && this._rb && this._isWorldSlowMo()) {
+      this.receiveGrabbedStrikerHit();
+    }
+
+    if (this.state !== 'gravity') return;
 
     var otherEl = evt.detail.otherComponent && evt.detail.otherComponent.el;
     if (!otherEl || otherEl.id !== 'floor') return;
@@ -469,6 +597,10 @@ AFRAME.registerComponent('ball-bat', {
       if (this._useTimeScale()) {
         this._tickGravityWithTimeScale(rb);
       }
+      if (this._clampStrikerDeflect(rb)) return;
+      if (performance.now() >= this._strikerClampUntilMs) {
+        this._preHitWorldSpeed = this._currentWorldSpeed(rb);
+      }
       return;
     }
 
@@ -477,6 +609,10 @@ AFRAME.registerComponent('ball-bat', {
     }
     this._maintainFloatDrift(rb);
     this._applyTimeScaleToVelocity(rb);
+    if (this._clampStrikerDeflect(rb)) return;
+    if (performance.now() >= this._strikerClampUntilMs) {
+      this._preHitWorldSpeed = this._currentWorldSpeed(rb);
+    }
   },
 
   resetToSpawn: function () {

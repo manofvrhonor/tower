@@ -9,8 +9,13 @@ const CONFIG = {
   // === Отладка (диагностика коллайдеров) ===
   debug: {
     // true → контуры реальных PhysX PxShape (getBoxGeometry/getSphereGeometry + pose из rigidBody).
-    showColliders: true,
+    showColliders: false,
     colliderOpacity: 0.85,
+    // Покадровая прозрачность wireframe по слою (fallback — colliderOpacity).
+    // DOME: 89 плиток — при общей opacity wireframe закрывает стол/башню.
+    layerOpacity: {
+      DOME: 0.12,
+    },
     showBBoxHelper: false,
     // Зарезервировано; контуры рисуются на всех physx-body через EdgesGeometry.
     showAllPhysxBodies: false,
@@ -108,6 +113,10 @@ const CONFIG = {
     handJitterDeadband: 0.11,
     handJitterSoftWidth: 0.08,
 
+    // Порог slo-mo-сессии для ударов в руке (см. time-scale.isWorldSlowMo).
+    worldSlowMoThreshold: 0.5,
+    recentMinWindowMs: 600,
+
     debug: false,         // true → раз в ~0.5 с лог activity и scale в консоль
   },
 
@@ -199,14 +208,23 @@ const CONFIG = {
     minDriftSpeed:        0.28,  // м/с, линейная
     minAngularDriftSpeed: 0.65,  // рад/с
 
-    // Палитра «полезных» цветных (5 шт). Красный исключён —
-    // конфликт с красными шарами из Этапа 6.
+    // Float: после N отскоков от стен комнаты — разворот скорости к куполу (как red-ball).
+    // Новый цикл с новым N после каждого разворота.
+    steerTowardDome: {
+      bounceDelayMin: 2,
+      bounceDelayMax: 5,
+    },
+
+    // Палитра цветных (6 шт — для башни 5 + 1 excluded при shuffle).
+    // В мире спавнятся только coloredCubeCount штук. Красный исключён.
+    coloredCubeCount: 5,
     targetColors: [
       '#4A90E2',  // синий
       '#E28A4A',  // оранжевый
       '#4AE26A',  // зелёный
       '#E2D24A',  // жёлтый
       '#B14AE2',  // фиолетовый
+      '#2EC4B6',  // бирюзовый (6-й — для сложного режима, башня 5)
     ],
 
     // Цвет «мусорных» серых (6 шт).
@@ -258,7 +276,14 @@ const CONFIG = {
     // отбивания удерживается на доударной. Kinematic-бита (взмах) разгоняет
     // шар несколько кадров подряд, одноразового сброса по contactbegin не
     // хватает — солвер перетирает его на следующих шагах. См. red-ball._deflectOffBat.
-    batDeflect: { clampMs: 250 },
+    // realtimeSpeedBoost — множитель доударной скорости при отбивании в полном
+    // времени (slo-mo: только перенаправление, без разгона).
+    batDeflect: {
+      clampMs: 250,
+      realtimeSpeedBoost: 1.60,
+      realtimeSwingRetain: 0.45,
+      realtimeSpeedMax: 2.8,
+    },
 
     // Линейные/угловые скорости = floatingCubes × speedMultiplier (на шар).
     speedMultiplierMin: 2.0,
@@ -273,11 +298,13 @@ const CONFIG = {
       dynamicFriction:  0.10,
     },
 
-    // 3 точки в воздухе (зона как у float-кубиков, без пересечения с spawnPositions кубов).
+    // 5 точек в воздухе (зона как у float-кубиков, без пересечения с spawnPositions кубов).
     spawnPositions: [
       { x:  0.55, y: 2.20, z: -0.70 },
       { x: -0.90, y: 1.75, z:  0.55 },
       { x:  0.15, y: 2.35, z:  0.95 },
+      { x: -0.28, y: 2.08, z: -0.82 },
+      { x:  0.78, y: 1.90, z:  0.30 },
     ],
 
     // После удара о стену/пол комнаты — разворот к куполу.
@@ -304,6 +331,14 @@ const CONFIG = {
       trailSpacingM: 0.045,
       trailLengthM: 0.75,
     },
+  },
+
+  // Удары кубом/битой в захвате (сессия 28).
+  // Slo-mo: dynamic-жертва (куб/бита) — только перенаправление, как шар.
+  inHandStrike: {
+    sloMoDeflectClampMs: 250,
+    worldSlowMoThreshold: 0.5,
+    recentMinWindowMs: 600,
   },
 
   // Бита-сковородка (Этап 7). Float вне купола, gravity внутри — как кубы.
@@ -470,6 +505,25 @@ const CONFIG = {
     BAT:          7,
   },
 
+  // === Меню и режимы сложности (сессия 29) ===
+  game: {
+    defaultDifficulty: 'normal',
+    difficulties: {
+      easy:   { label: 'Лёгкий',    ballCount: 1, stackHeight: 3 },
+      normal: { label: 'Нормальный', ballCount: 3, stackHeight: 4 },
+      hard:   { label: 'Сложный',   ballCount: 5, stackHeight: 5 },
+    },
+    menu: {
+      worldPosition: { x: 0, y: 1.55, z: 0.35 },
+      handPressRadius: 0.18,
+      titleText: 'TOWER OF TIME',
+      hintText: 'Поднеси руку + grip',
+      startText: 'Старт',
+      wireframeOnText: 'Wireframe: ВКЛ',
+      wireframeOffText: 'Wireframe: ВЫКЛ',
+    },
+  },
+
   // === Победа (Этап 5) ===
   // stackColors и excludedColor заполняет js/init-session.js при каждой загрузке:
   // shuffle(5 targetColors) → первые 4 = порядок башни снизу вверх, 5-й не нужен.
@@ -491,8 +545,9 @@ const CONFIG = {
     checkIntervalMs:  200,
 
     // Призрачная подсказка на пьедестале (ghost-tower-hint.js).
+    // Декоративный wireframe — не связан с debug.showColliders.
     ghostTower: {
-      opacity: 0.20,
+      lineOpacity: 1.0,
     },
 
     // Плашка победы (victory-ui.js) — в мире, лицом к игроку (старт z=1).
