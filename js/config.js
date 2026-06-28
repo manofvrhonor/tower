@@ -57,16 +57,19 @@ const CONFIG = {
       },
     },
     fogDome: {
-      radius: 2.5,   // м, верхняя полусфера от пола (визуал = collider)
+      radius: 2.0,   // м, верхняя полусфера от пола (Ø 4 м; визуал = collider)
       position: { x: 0, y: 0, z: 0 },
       color: '#e8e4dc',
-      baseOpacity: 0.32,
-      fogMin: 0.2,
-      fogMax: 0.92,
-      noiseScale: 2.5,
-      scrollSpeed: 0.035,
-      fresnelPower: 2.5,
-      fresnelStrength: 0.35,
+      // alpha: лёгкая дымка ↔ плотные облака (не «почти ноль»).
+      baseOpacity: 1.0,
+      fogMin: 0.34,
+      fogMax: 0.94,
+      fogContrast: 1.45,
+      fogLift: 0.18,      // сдвиг шума вверх — базовый туман всегда заметен
+      noiseScale: 1.2,
+      scrollSpeed: 0.14,
+      fresnelPower: 3.0,
+      fresnelStrength: 0.06,
       widthSegments: 64,
       heightSegments: 32,
       renderOrder: 5,
@@ -268,7 +271,7 @@ const CONFIG = {
     // Цвет «мусорных» серых (6 шт).
     trashColor: '#888888',
 
-  // 11 позиций внутри room.fogDome (R=2.5, margin 0.12 + half куба 0.05).
+  // 11 позиций внутри room.fogDome (R=2.0, margin 0.12 + half куба 0.05; clamp при спавне).
     spawnPositions: [
       { x: -0.83, y: 2.00, z:  0.42 },
       { x:  0.71, y: 1.62, z: -0.95 },
@@ -545,7 +548,7 @@ const CONFIG = {
       hard:   { label: 'Сложный',   ballCount: 5, stackHeight: 5 },
     },
     menu: {
-      worldPosition: { x: 0, y: 1.55, z: 0.35 },
+      worldPosition: { x: 0, y: 1.55, z: -0.65 },
       handPressRadius: 0.18,
       titleText: 'TOWER OF TIME',
       hintText: 'Поднеси руку + grip',

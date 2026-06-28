@@ -29,6 +29,7 @@ AFRAME.registerComponent('game-menu', {
     this._btnStartHover = '#4ecf7a';
     this._btnStartNear = '#6dff9a';
     this._pressRadius = this.cfg.handPressRadius !== undefined ? this.cfg.handPressRadius : 0.18;
+    this._menuRenderOrder = 50;
 
     this._buildUI();
     this._bindHands();
@@ -78,6 +79,19 @@ AFRAME.registerComponent('game-menu', {
     }
   },
 
+  _applyMenuDrawOrder: function (el) {
+    var order = this._menuRenderOrder;
+    var apply = function () {
+      var mesh = el.getObject3D('mesh');
+      if (!mesh || !mesh.material) return;
+      mesh.material.depthTest = false;
+      mesh.material.depthWrite = false;
+      mesh.renderOrder = order;
+    };
+    el.addEventListener('loaded', apply);
+    if (el.hasLoaded) apply();
+  },
+
   _makeTextPlane: function (text, planeW, planeH, options) {
     var opts = options || {};
     var canvasW = opts.canvasW || 512;
@@ -123,7 +137,10 @@ AFRAME.registerComponent('game-menu', {
       map: tex,
       transparent: true,
       side: THREE.FrontSide,
+      depthTest: false,
+      depthWrite: false,
     });
+    mesh.renderOrder = this._menuRenderOrder;
   },
 
   _redrawButton: function (btnData, bgColor, label) {
@@ -195,7 +212,7 @@ AFRAME.registerComponent('game-menu', {
     panel.setAttribute('width', 0.62);
     panel.setAttribute('height', 0.88);
     panel.setAttribute('color', '#1e1e28');
-    panel.setAttribute('material', 'shader: flat; opacity: 0.96; transparent: true; side: front');
+    panel.setAttribute('material', 'shader: flat; opacity: 0.96; transparent: true; side: front; depthTest: false; depthWrite: false; renderOrder: 50');
 
     var titleData = this._makeTextPlane(title, 0.52, 0.11, {
       canvasW: 512, canvasH: 96, fontSize: 52, color: '#ffffff', bg: null,
@@ -268,6 +285,15 @@ AFRAME.registerComponent('game-menu', {
     this._root.appendChild(startData.el);
     this._root.appendChild(this._wireframeData.el);
     this.el.sceneEl.appendChild(this._root);
+
+    this._applyMenuDrawOrder(panel);
+    this._applyMenuDrawOrder(titleData.el);
+    this._applyMenuDrawOrder(hintData.el);
+    for (var ti = 0; ti < this._difficultyEntries.length; ti++) {
+      this._applyMenuDrawOrder(this._difficultyEntries[ti].data.el);
+    }
+    this._applyMenuDrawOrder(startData.el);
+    this._applyMenuDrawOrder(this._wireframeData.el);
 
     this._btnPos = new THREE.Vector3();
     this._handPos = new THREE.Vector3();

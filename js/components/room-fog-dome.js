@@ -11,18 +11,25 @@ AFRAME.registerComponent('room-fog-dome', {
 
   init: function () {
     this._mesh = null;
+    this._floorMesh = null;
     this._uniforms = null;
     this._cfg = this._readCfg();
     this._buildDome();
+    this._buildFloor();
   },
 
   remove: function () {
-    if (this._mesh) {
-      this.el.object3D.remove(this._mesh);
-      if (this._mesh.geometry) this._mesh.geometry.dispose();
-      if (this._mesh.material) this._mesh.material.dispose();
-      this._mesh = null;
-    }
+    this._disposeMesh(this._mesh);
+    this._disposeMesh(this._floorMesh);
+    this._mesh = null;
+    this._floorMesh = null;
+  },
+
+  _disposeMesh: function (mesh) {
+    if (!mesh) return;
+    this.el.object3D.remove(mesh);
+    if (mesh.geometry) mesh.geometry.dispose();
+    if (mesh.material) mesh.material.dispose();
   },
 
   tick: function (time) {
@@ -37,19 +44,22 @@ AFRAME.registerComponent('room-fog-dome', {
     var pos = fd.position || {};
     return {
       radius: fd.radius !== undefined ? fd.radius : room.height || 3,
+      floorColor: room.floorColor || '#8a8580',
       position: {
         x: pos.x !== undefined ? pos.x : 0,
         y: pos.y !== undefined ? pos.y : 0,
         z: pos.z !== undefined ? pos.z : 0,
       },
       color: new THREE.Color(fd.color || '#e8e4dc'),
-      baseOpacity: fd.baseOpacity !== undefined ? fd.baseOpacity : 0.32,
-      fogMin: fd.fogMin !== undefined ? fd.fogMin : 0.2,
-      fogMax: fd.fogMax !== undefined ? fd.fogMax : 0.92,
-      noiseScale: fd.noiseScale !== undefined ? fd.noiseScale : 2.5,
-      scrollSpeed: fd.scrollSpeed !== undefined ? fd.scrollSpeed : 0.035,
-      fresnelPower: fd.fresnelPower !== undefined ? fd.fresnelPower : 2.5,
-      fresnelStrength: fd.fresnelStrength !== undefined ? fd.fresnelStrength : 0.35,
+      baseOpacity: fd.baseOpacity !== undefined ? fd.baseOpacity : 1.0,
+      fogMin: fd.fogMin !== undefined ? fd.fogMin : 0.34,
+      fogMax: fd.fogMax !== undefined ? fd.fogMax : 0.94,
+      fogContrast: fd.fogContrast !== undefined ? fd.fogContrast : 1.45,
+      fogLift: fd.fogLift !== undefined ? fd.fogLift : 0.18,
+      noiseScale: fd.noiseScale !== undefined ? fd.noiseScale : 1.2,
+      scrollSpeed: fd.scrollSpeed !== undefined ? fd.scrollSpeed : 0.14,
+      fresnelPower: fd.fresnelPower !== undefined ? fd.fresnelPower : 3.0,
+      fresnelStrength: fd.fresnelStrength !== undefined ? fd.fresnelStrength : 0.06,
       widthSegments: fd.widthSegments !== undefined ? fd.widthSegments : 64,
       heightSegments: fd.heightSegments !== undefined ? fd.heightSegments : 32,
       renderOrder: fd.renderOrder !== undefined ? fd.renderOrder : 5,
@@ -65,6 +75,8 @@ AFRAME.registerComponent('room-fog-dome', {
       uBaseOpacity: { value: c.baseOpacity },
       uFogMin: { value: c.fogMin },
       uFogMax: { value: c.fogMax },
+      uFogContrast: { value: c.fogContrast },
+      uFogLift: { value: c.fogLift },
       uNoiseScale: { value: c.noiseScale },
       uScrollSpeed: { value: c.scrollSpeed },
       uFresnelPower: { value: c.fresnelPower },
@@ -88,6 +100,8 @@ AFRAME.registerComponent('room-fog-dome', {
       'uniform float uBaseOpacity;',
       'uniform float uFogMin;',
       'uniform float uFogMax;',
+      'uniform float uFogContrast;',
+      'uniform float uFogLift;',
       'uniform float uNoiseScale;',
       'uniform float uScrollSpeed;',
       'uniform float uFresnelPower;',
@@ -130,14 +144,17 @@ AFRAME.registerComponent('room-fog-dome', {
       '  return v;',
       '}',
       'void main() {',
-      '  vec3 scroll = vec3(uTime * uScrollSpeed, uTime * uScrollSpeed * 0.35, -uTime * uScrollSpeed * 0.55);',
-      '  float n1 = fbm(vWorldPos * uNoiseScale + scroll);',
-      '  float n2 = fbm(vWorldPos * uNoiseScale * 1.7 - scroll * 1.3 + vec3(4.2, 1.1, 2.8));',
-      '  float fog = mix(n1, n2, 0.45);',
+      '  vec3 scroll1 = vec3(uTime * uScrollSpeed, uTime * uScrollSpeed * 0.62, -uTime * uScrollSpeed * 0.48);',
+      '  vec3 scroll2 = vec3(-uTime * uScrollSpeed * 0.78, uTime * uScrollSpeed * 0.28, uTime * uScrollSpeed * 0.55);',
+      '  float n1 = fbm(vWorldPos * uNoiseScale + scroll1);',
+      '  float n2 = fbm(vWorldPos * uNoiseScale * 2.1 + scroll2 + vec3(4.2, 1.1, 2.8));',
+      '  float fog = mix(n1, n2, 0.5);',
+      '  fog = clamp(fog + uFogLift, 0.0, 1.0);',
+      '  fog = smoothstep(0.22, 0.78, pow(fog, uFogContrast));',
       '  vec3 viewDir = normalize(cameraPosition - vWorldPos);',
       '  float fresnel = pow(1.0 - max(dot(normalize(vNormalW), viewDir), 0.0), uFresnelPower);',
       '  float alpha = uBaseOpacity * mix(uFogMin, uFogMax, fog) + fresnel * uFresnelStrength;',
-      '  alpha = clamp(alpha, 0.02, 0.95);',
+      '  alpha = clamp(alpha, uFogMin, min(uFogMax + uFresnelStrength, 1.0));',
       '  gl_FragColor = vec4(uColor, alpha);',
       '}',
     ].join('\n');
@@ -169,5 +186,26 @@ AFRAME.registerComponent('room-fog-dome', {
 
     this.el.object3D.position.set(c.position.x, c.position.y, c.position.z);
     this.el.object3D.add(this._mesh);
+  },
+
+  /** Непрозрачный круглый пол по диаметру купола (y=0). */
+  _buildFloor: function () {
+    var c = this._cfg;
+    var thickness = 0.02;
+    var geo = new THREE.CylinderGeometry(c.radius, c.radius, thickness, 64);
+    var mat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(c.floorColor),
+      roughness: 0.88,
+      metalness: 0.05,
+      transparent: false,
+      opacity: 1,
+    });
+
+    this._floorMesh = new THREE.Mesh(geo, mat);
+    this._floorMesh.name = 'room-fog-dome-floor';
+    this._floorMesh.position.y = thickness * 0.5;
+    this._floorMesh.receiveShadow = true;
+    this._floorMesh.renderOrder = 0;
+    this.el.object3D.add(this._floorMesh);
   },
 });

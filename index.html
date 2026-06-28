@@ -82,8 +82,8 @@
 
     <!-- ====== КОМНАТА — пол (PhysX). Стены/потолок = room-dome-collider ====== -->
 
-    <!-- Пол: a-box, id=#floor для contactbegin (floating-cube). Ø ≈ 2× fogDome.radius -->
-    <a-box id="floor" position="0 -0.05 0" width="5" height="0.1" depth="5" visible="false"
+    <!-- Пол: a-box, id=#floor для contactbegin (floating-cube). Ø = 2× fogDome.radius; визуал — room-fog-dome -->
+    <a-box id="floor" position="0 -0.05 0" width="4" height="0.1" depth="4" visible="false"
            physx-body="type: static"
            physx-material="restitution: 0.15; staticFriction: 0.70; dynamicFriction: 0.60; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5, 7"></a-box>
 

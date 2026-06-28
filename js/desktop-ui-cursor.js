@@ -9,6 +9,7 @@
 (function () {
   var RAY_TARGETS = '.game-menu-clickable, .victory-ui-clickable';
   var CURSOR_ID = 'game-menu-cursor';
+  var CURSOR_RENDER_ORDER = 100;
 
   function getCamera() {
     return document.querySelector('#player a-camera');
@@ -38,9 +39,19 @@
     cur.setAttribute('cursor', 'fuse: false; rayOrigin: entity');
     cur.setAttribute('visible', true);
     cur.setAttribute('position', '0 0 -0.6');
-    cur.setAttribute('material', 'color: #ffffff; shader: flat');
+    cur.setAttribute('material', 'color: #ffffff; shader: flat; depthTest: false; depthWrite: false; renderOrder: ' + CURSOR_RENDER_ORDER);
     cur.setAttribute('geometry', 'primitive: ring; radiusInner: 0.006; radiusOuter: 0.011');
     cam.appendChild(cur);
+
+    var applyDrawOrder = function () {
+      var mesh = cur.getObject3D('mesh');
+      if (!mesh || !mesh.material) return;
+      mesh.material.depthTest = false;
+      mesh.material.depthWrite = false;
+      mesh.renderOrder = CURSOR_RENDER_ORDER;
+    };
+    cur.addEventListener('loaded', applyDrawOrder);
+    if (cur.hasLoaded) applyDrawOrder();
   }
 
   function disableDesktopUiCursor() {
