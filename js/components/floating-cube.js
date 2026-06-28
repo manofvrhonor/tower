@@ -62,6 +62,9 @@ AFRAME.registerComponent('floating-cube', {
     // Какой timeScale уже «вшит» в текущую velocity PhysX (см. _applyTimeScaleToVelocity).
     this._lastAppliedTimeScale = 1.0;
     this._driftDir = null; // единичный вектор «полной» скорости дрейфа (для trail seed)
+    this._tickDeltaSec = 1 / 60;
+    this._gravityScaleDiagDone = false;
+    this._physxGravityOffForSloMo = false;
     this._onContactBegin = this._onContactBegin.bind(this);
 
     // Подписка на возможные события готовности тела (план А).
@@ -136,9 +139,13 @@ AFRAME.registerComponent('floating-cube', {
     this.state = 'gravity';
     var rb = this._rb;
     if (!rb) return;
+    this._lastAppliedTimeScale = 1.0;
     this._applyGravityPhysics(rb);
     this._applyCubeMaterial('gravity');
     this._setCollisionLayer('GRAVITY_CUBE');
+    if (this._useGravityTimeScale()) {
+      this._logGravityScaleDiag(rb);
+    }
   },
 
   /**
@@ -636,19 +643,22 @@ AFRAME.registerComponent('floating-cube', {
   },
 
   /**
-   * Tick-страховка: даже если setSleepThreshold(0) проигнорирован
-   * биндингом, вручную будим тело в состоянии float.
-   * См. JSDoc, п. 4.
+   * Tick-страховка: float — wakeUp + drift + timeScale.
+   * gravity — timeScale (ADR-12 v2) + clamp; grabbed — realtime (early return).
    */
-  tick: function () {
+  tick: function (time, timeDelta) {
+    this._tickDeltaSec = Math.min((timeDelta || 16) / 1000, 0.1);
+
     var rb = this._rb;
     if (!rb) return;
     if (this.el.is && this.el.is('grabbed-dynamic')) return;
 
-    // gravity: только обрезаем «резиновый» выброс депенетрации (см. JSDoc п.5
-    // и ADR-14). Остальное (gravity, контакты, сон) — на стороне PhysX.
     if (this.state === 'gravity') {
-      this._clampGravityVelocity(rb);
+      if (this._useGravityTimeScale()) {
+        this._tickGravityWithTimeScale(rb);
+      } else {
+        this._clampGravityVelocity(rb);
+      }
       return;
     }
 
@@ -662,35 +672,151 @@ AFRAME.registerComponent('floating-cube', {
     this._applyTimeScaleToVelocity(rb);
   },
 
+  _useGravityTimeScale: function () {
+    var g = this.domeCfg.gravityMode || {};
+    return g.useTimeScale !== false;
+  },
+
+  /** Диагностика @c-frame/physx@0.3.0 — один раз на сессию. */
+  _logGravityScaleDiag: function (rb) {
+    if (this._gravityScaleDiagDone) return;
+    this._gravityScaleDiagDone = true;
+    if (typeof rb.setGravityScale === 'function') {
+      console.log('[floating-cube] setGravityScale доступен на rigidBody');
+    } else {
+      console.log('[floating-cube] setGravityScale нет — manual gravity × timeScale');
+    }
+  },
+
   /**
-   * Обрезает линейную/угловую скорость gravity-куба до потолка из
-   * CONFIG.dome.gravityMode (maxLinearSpeed / maxAngularSpeed). Это страховка
-   * от «резинового» выброса при депенетрации на рёберном ударе: PhysX-биндинг
-   * не даёт setMaxDepenetrationVelocity, поэтому гасим скорость постфактум.
+   * gravity + timeScale: slo-mo отключает PhysX-gravity, интегрируем g×ts;
+   * velocity × timeScale; clamp в world-space.
+   */
+  _tickGravityWithTimeScale: function (rb) {
+    if (!this._gravityScaleDiagDone) {
+      this._logGravityScaleDiag(rb);
+    }
+
+    var ts = this._getTimeScale();
+
+    if (typeof rb.setGravityScale === 'function') {
+      try {
+        rb.setGravityScale(ts);
+        this._syncPhysXGravityFlag(rb, true);
+      } catch (e) {
+        if (!this._gravityScaleWarned) {
+          console.warn('[floating-cube] setGravityScale failed:', e.message);
+          this._gravityScaleWarned = true;
+        }
+        this._syncPhysXGravityFlag(rb, ts >= 0.999);
+        if (ts < 0.999) {
+          this._integrateScaledGravity(rb, ts);
+        }
+      }
+    } else {
+      this._syncPhysXGravityFlag(rb, ts >= 0.999);
+      if (ts < 0.999) {
+        this._integrateScaledGravity(rb, ts);
+      }
+    }
+
+    this._applyTimeScaleToVelocity(rb);
+    this._clampGravityVelocity(rb);
+  },
+
+  /** true = PhysX scene gravity ON; false = OFF (ручная g×ts в slo-mo). */
+  _syncPhysXGravityFlag: function (rb, physxGravityOn) {
+    var sysPX = this._getPhysX();
+    var flag = sysPX && sysPX.PxActorFlag && sysPX.PxActorFlag.eDISABLE_GRAVITY;
+    if (!flag || typeof rb.setActorFlag !== 'function') return;
+
+    var disable = !physxGravityOn;
+    if (this._physxGravityOffForSloMo === disable) return;
+
+    try {
+      rb.setActorFlag(flag, disable);
+      this._physxGravityOffForSloMo = disable;
+      if (typeof rb.wakeUp === 'function') rb.wakeUp();
+    } catch (e) {
+      if (!this._syncGravWarned) {
+        console.warn('[floating-cube] sync gravity flag failed:', e.message);
+        this._syncGravWarned = true;
+      }
+    }
+  },
+
+  /** Ручная g×ts по Y (fallback без setGravityScale). */
+  _integrateScaledGravity: function (rb, ts) {
+    if (!rb || typeof rb.getLinearVelocity !== 'function') return;
+
+    var gCfg = this.domeCfg.gravityMode || {};
+    var gY = gCfg.sceneGravityY !== undefined ? gCfg.sceneGravityY : -9.8;
+    var dt = this._tickDeltaSec;
+    var prev = this._lastAppliedTimeScale;
+    if (!prev || prev < 0.001) prev = 1.0;
+    var invPrev = 1 / prev;
+
+    try {
+      var lv = rb.getLinearVelocity();
+      if (!lv || typeof rb.setLinearVelocity !== 'function') return;
+
+      var worldVy = lv.y * invPrev + gY * ts * dt;
+      rb.setLinearVelocity({
+        x: lv.x,
+        y: worldVy * prev,
+        z: lv.z,
+      }, false);
+    } catch (e) {
+      if (!this._scaledGravWarned) {
+        console.warn('[floating-cube] scaled gravity failed:', e.message);
+        this._scaledGravWarned = true;
+      }
+    }
+  },
+
+  /**
+   * Обрезает скорость gravity-куба до потолка (world-space → scaled PhysX).
    */
   _clampGravityVelocity: function (rb) {
     var g = this.domeCfg.gravityMode || {};
     var maxLin = (g.maxLinearSpeed !== undefined) ? g.maxLinearSpeed : 2.0;
     var maxAng = (g.maxAngularSpeed !== undefined) ? g.maxAngularSpeed : 8.0;
+    var prev = this._lastAppliedTimeScale;
+    if (!prev || prev < 0.001) prev = 1.0;
+    var invPrev = 1 / prev;
 
     try {
       if (typeof rb.getLinearVelocity === 'function' && typeof rb.setLinearVelocity === 'function') {
         var lv = rb.getLinearVelocity();
         if (lv && typeof lv.x === 'number') {
-          var sp = Math.sqrt(lv.x * lv.x + lv.y * lv.y + lv.z * lv.z);
-          if (sp > maxLin && sp > 1e-5) {
-            var k = maxLin / sp;
-            rb.setLinearVelocity({ x: lv.x * k, y: lv.y * k, z: lv.z * k }, false);
+          var wx = lv.x * invPrev;
+          var wy = lv.y * invPrev;
+          var wz = lv.z * invPrev;
+          var wsp = Math.sqrt(wx * wx + wy * wy + wz * wz);
+          if (wsp > maxLin && wsp > 1e-5) {
+            var k = maxLin / wsp;
+            rb.setLinearVelocity({
+              x: wx * k * prev,
+              y: wy * k * prev,
+              z: wz * k * prev,
+            }, false);
           }
         }
       }
       if (typeof rb.getAngularVelocity === 'function' && typeof rb.setAngularVelocity === 'function') {
         var av = rb.getAngularVelocity();
         if (av && typeof av.x === 'number') {
-          var asp = Math.sqrt(av.x * av.x + av.y * av.y + av.z * av.z);
-          if (asp > maxAng && asp > 1e-5) {
-            var ka = maxAng / asp;
-            rb.setAngularVelocity({ x: av.x * ka, y: av.y * ka, z: av.z * ka }, false);
+          var ax = av.x * invPrev;
+          var ay = av.y * invPrev;
+          var az = av.z * invPrev;
+          var wasp = Math.sqrt(ax * ax + ay * ay + az * az);
+          if (wasp > maxAng && wasp > 1e-5) {
+            var ka = maxAng / wasp;
+            rb.setAngularVelocity({
+              x: ax * ka * prev,
+              y: ay * ka * prev,
+              z: az * ka * prev,
+            }, false);
           }
         }
       }

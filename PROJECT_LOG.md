@@ -193,10 +193,13 @@ static box-плиток (`dome-builder.js`), плотно без щелей.
 **Решение:**
 - Система `time-scale`: activity головы/рук → `timeScale` 0.05↔1.0; асимметричная
   разморозка; jitter-filter рук.
-- «Время мира»: `sceneEl.systems['time-scale'].getScale()` — новые объекты (шары, враги)
-  умножают скриптовое движение на scale.
-- Float-кубики: velocity-scale + `_maintainFloatDrift`; `_driftDir` — направление дрейфа
-  (импульс при спавне) для seed trail; gravity/руки/стол/купол — real time.
+- «Время мира»: `sceneEl.systems['time-scale'].getScale()` — шары, float-кубики и
+  **gravity-кубики на столе** умножают velocity на scale (`floating-cube._tickGravityWithTimeScale`).
+- Gravity-кубики (сессия 27+): `dome.gravityMode.useTimeScale: true` — slo-mo отключает
+  PhysX-gravity на теле, интегрирует `sceneGravityY × ts` (fallback без `setGravityScale`);
+  clamp в world-space. **Режим gravity** (материалы, friction, release) без изменений.
+- **Realtime:** руки, rig, захват (`grabbed-dynamic` → early return в tick), стол/купол/комната.
+- Float-кубики: velocity-scale + `_maintainFloatDrift`; `_driftDir` — seed trail.
 - VFX trail: `float-motion-trail` — **loft mesh** (14 сечений, квадратный профиль,
   Catmull-Rom, UV-fade 0→1→0 по длине mesh). Яркость 10% realtime / 15% slo-mo.
   **Deploy:** якорь кончика в мире, голова у куба, `deployLengthM` → follow по path.
@@ -204,10 +207,12 @@ static box-плиток (`dome-builder.js`), плотно без щелей.
 - VFX виньетка: только `slowmo-vignette-3d` (CSS-оверлей удалён). **VR-виньетка
   отложена** на конец разработки (этап 8) — в Quest не видна, на геймплей не влияет.
 
-**Причина:** SUPERHOT-механика; руки и башня не должны «замирать» вместе с облаком.
+**Причина:** SUPERHOT-механика; руки в realtime, мир (включая башню) — slo-mo.
 
-**Не делать:** глобальный physx timestep; замедлять gravity-кубики на столе; seed trail
-через `_driftDir` (удалён — deploy по якорю + path).
+**Не делать:** глобальный physx timestep; seed trail через `_driftDir` (удалён — deploy по якорю + path).
+
+**Устарело (сессия 27):** «gravity-кубики на столе — real time» — башня и удары шара
+в slo-mo выглядели как realtime; исправлено velocity-scale + manual g×ts.
 
 **Отложено (не блокирует MVP):** абстракция профиля trail (`square | circle | …`) — когда
 появятся шары/другие формы (Этап 6+).
@@ -373,10 +378,13 @@ inline: A-Frame-атрибуты не читают `window.CONFIG` (как и у
 - **Полировка (сессия 24):** физика контактов — частичные фиксы; редизайн пространства.
 - **Полировка (сессия 25):** `collider-debug-viz` — контуры **PhysX PxShape**; слой **BAT**;
   крышка пьедestala — один диск; плитки купola скрыты.
-- **Полировка (сессия 26):** бита × пьедestal **в руке ✅** — захват биты переведён с
-  kinematic `grabbed` на **dynamic + D6 softFixed** (слой BAT). Неудачные эксперименты
-  с joint/damping/anchor **откачены**; базовый захват стабилен. **Бэклог:** отлёт при
-  тряске; «естественный хват» (сфера на запястье vs модель ладони) — только с VR-калибровкой.
+- **Полировка (сессия 26):** бита × пьедestal **в руке ✅** — dynamic + D6 softFixed (слой BAT).
+  Бэклог захвата: отлёт при тряске; естественный хват — VR-калибровка.
+- **Полировка (сессия 27):** **парящий стол** — визуал-диск + PhysX-диск (r=0.3, h=0.03,
+  `wallSegments: 0`). **Gravity-кубы × timeScale** (ADR-12 v2): velocity-scale + manual g×ts;
+  шар→куб world-space; куб в руке отбивает шар (`_deflectOffBat`). **Бита:** float вне купола /
+  gravity внутри (как кубы), старт y=0.55. Десктоп QA timeScale ✅ (пользователь).
+- **Следующая (с.28):** удары кубом/битой **в руке** по шарам и кубам башни.
 - **VR-виньетка:** отложена на этап 8.
 - Стек стабилен: PhysX 0.3.0 + physx-grab. Тесты — localhost + Quest Link.
 
@@ -388,17 +396,12 @@ inline: A-Frame-атрибуты не читают `window.CONFIG` (как и у
 - **`extensionPageScript.js` в Network** — расширение браузера, игнорировать.
 - **Гонка spawn float** — ADR-11.
 - **VR-виньетка slo-mo:** в Quest не видна → отложена на этап 8 (polish), не блокирует.
-- **Шары (Этап 6):** Quest QA пьедестала и сбивания башни — не закрыт.
-- **Бита (Этап 7):** захват ✅, отбивание ✅. Слой **BAT** ✅. **В руке × пьедestal ✅**
-  (с.26, D6 joint). **Захват (общий):** softFixed — при тряске отлёт ~20–30 см; сфера HAND
-  в origin руки (модель glTF декоративна) — «прилипание», не «сжатие ладонью». Правки
-  захвата — только с VR-калибровкой, одна гипотеза за раз (с.26).
-- **Ранний контакт шар→куб (сессия 24, частично):** `_isNearVisualCubeHit`, pending/hold,
-  slo-mo ghost-boost. Realtime — лучше; slo-mo — башня слабо валится. Quest QA не закрыт.
-- **Пьедестал — «невидимые препятствия» (сессия 23, открыто):** при переносе кубов вокруг
-  стола запинание в отдельных местах. Гипотеза: `#pedestal` — `a-cylinder` + `physx-body` →
-  convex hull (аналог проблемы купола до ADR-05); дочерний top-cap `a-box`; `contactOffset`
-  куба; soft-grab (куб отстаёт от руки). Купол (GRABBED × DOME off) — маловероятная причина.
+- **Шары (Этап 6):** Quest QA не закрыт. Slo-mo × timeScale ✅ (с.27).
+- **Бита (Этап 7):** захват ✅, отбивание ✅, float/gravity по куполу (с.27).
+- **Контакты в руке (с.28, приоритет):** удары кубом/битой по шарам и кубам — доработка.
+- **Захват (общий):** softFixed — отлёт при тряске; сфера HAND — VR-калибровка.
+- **Шар→куб (башня):** pending + visual hit; ghost-boost убран (с.27).
+- **Парящий стол ✅** (с.27).
 - **Бэклог** — см. `CURRENT_TASK.md`.
 
 ---

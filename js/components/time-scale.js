@@ -9,7 +9,8 @@
  * скорости вычисляется целевой timeScale (min..max), затем плавно
  * интерполируется к нему.
  *
- * Потребители: floating-cube.js (float-дрейф), будущие шары/враги/объекты мира.
+ * Потребители: floating-cube.js (float + gravity), будущие шары/враги/объекты мира.
+ * Gravity-кубики на столе — тоже × getScale() (см. floating-cube._tickGravityWithTimeScale).
  * Контракт: любое «мировое» движение × getScale(). Руки и rig — реальное время.
  *
  * API: sceneEl.systems['time-scale'].getScale() → number 0.05..1.0

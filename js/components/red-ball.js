@@ -240,12 +240,17 @@ AFRAME.registerComponent('red-ball', {
    * Раньше — pending: шар не отскакивает от «ghost»-контакта, в tick дожимаем до касания.
    */
   _onCubeContactBegin: function (otherComp) {
+    // Куб в руке отбивает шар — без разгона от взмаха (как бита).
+    if (otherComp.el && otherComp.el.is && otherComp.el.is('grabbed-dynamic')) {
+      if (this._rb) this._deflectOffBat(this._rb);
+      return;
+    }
+
     if (this._isNearVisualCubeHit(otherComp.el)) {
       this._boostHitCube(otherComp, true, this._getInboundDir(otherComp.el));
       return;
     }
-    var holdMs = this.cfg.cubeHitPendingMs !== undefined
-      ? this.cfg.cubeHitPendingMs : 600;
+    var holdMs = this._cubeHitPendingDurationMs();
     this._pendingCubeHit = {
       el: otherComp.el,
       comp: otherComp,
@@ -276,17 +281,20 @@ AFRAME.registerComponent('red-ball', {
       return false;
     }
 
-    // Slo-mo: до визуального касания не доходит — ghost-contact + inbound hold.
+    this._holdBallTowardCube(pending.el, pending.dir);
+    return true;
+  },
+
+  /** Длительность pending после ghost-contactbegin; в slo-mo — дольше. */
+  _cubeHitPendingDurationMs: function () {
+    var base = this.cfg.cubeHitPendingMs !== undefined ? this.cfg.cubeHitPendingMs : 600;
     var ts = this._getTimeScale();
     var sloMoMax = this.cfg.cubeHitSloMoTimeScale !== undefined
       ? this.cfg.cubeHitSloMoTimeScale : 0.85;
-    if (ts < sloMoMax && this._isGhostCubeContact(pending.el)) {
-      this._boostHitCube(pending.comp, true, pending.dir);
-      return false;
-    }
-
-    this._holdBallTowardCube(pending.el, pending.dir);
-    return true;
+    if (ts >= sloMoMax) return base;
+    var maxHold = this.cfg.cubeHitPendingSloMoMsMax !== undefined
+      ? this.cfg.cubeHitPendingSloMoMsMax : 2400;
+    return Math.min(maxHold, base / Math.max(ts, 0.05));
   },
 
   /** Направление полёта шара (мировое), не к центру куба — без «магнита». */
@@ -417,13 +425,25 @@ AFRAME.registerComponent('red-ball', {
       var retain = this.cfg.cubeHitBallRetain !== undefined
         ? this.cfg.cubeHitBallRetain : 0.72;
 
+      var fc = otherComp.el && otherComp.el.components['floating-cube'];
+      var fcPrev = 1.0;
+      if (fc && fc._lastAppliedTimeScale) {
+        fcPrev = fc._lastAppliedTimeScale;
+        if (fcPrev < 0.001) fcPrev = 1.0;
+      }
+      var invFc = 1 / fcPrev;
+
       var clv = cubeRb.getLinearVelocity();
       if (clv && typeof cubeRb.setLinearVelocity === 'function') {
+        var worldCx = clv.x * invFc + nx * boost;
+        var worldCy = clv.y * invFc + ny * boost;
+        var worldCz = clv.z * invFc + nz * boost;
         cubeRb.setLinearVelocity({
-          x: clv.x + nx * boost,
-          y: clv.y + ny * boost,
-          z: clv.z + nz * boost,
+          x: worldCx,
+          y: worldCy,
+          z: worldCz,
         }, false);
+        if (fc) fc._lastAppliedTimeScale = 1.0;
         if (typeof cubeRb.wakeUp === 'function') cubeRb.wakeUp();
       }
 
@@ -457,14 +477,6 @@ AFRAME.registerComponent('red-ball', {
     return Math.sqrt(dx * dx + dy * dy + dz * dz);
   },
 
-  _getCubeContactOffset: function (cubeEl) {
-    var fc = cubeEl && cubeEl.components['floating-cube'];
-    if (fc && fc.state === 'float' && this._cubeCfg.floatContactOffset !== undefined) {
-      return this._cubeCfg.floatContactOffset;
-    }
-    return this._cubeCfg.contactOffset !== undefined ? this._cubeCfg.contactOffset : 0.03;
-  },
-
   _isNearVisualCubeHit: function (cubeEl) {
     if (!cubeEl || !cubeEl.object3D) return false;
 
@@ -476,22 +488,9 @@ AFRAME.registerComponent('red-ball', {
     return this._centerDistToCube(cubeEl) <= ballR + cubeHalf + slack;
   },
 
-  /** Расстояние contactbegin из-за суммы contactOffset (ghost-контакт). */
-  _isGhostCubeContact: function (cubeEl) {
-    var ballR = this.cfg.radius !== undefined ? this.cfg.radius : 0.04;
-    var cubeHalf = (this._cubeCfg.size !== undefined ? this._cubeCfg.size : 0.1) * 0.5;
-    var ballCo = this.cfg.contactOffset !== undefined ? this.cfg.contactOffset : 0.017;
-    var cubeCo = this._getCubeContactOffset(cubeEl);
-    var slack = this.cfg.cubeHitGhostSlack !== undefined
-      ? this.cfg.cubeHitGhostSlack : 0.008;
-    return this._centerDistToCube(cubeEl) <= ballR + cubeHalf + ballCo + cubeCo + slack;
-  },
-
   /**
-   * Отскок от биты: направление берём пост-столкновительное (как отбила бита),
-   * но величину возвращаем к скорости шара до удара — взмах не разгоняет шар.
-   * Скорость задаём «мировую» (полную), помечая prev=1.0, чтобы следующий tick
-   * сам домножил на timeScale (как в _boostHitCube / steering).
+   * Отскок от биты или куба в руке: направление — пост-удар солвера,
+   * величина — скорость шара до удара (взмах не разгоняет).
    */
   _deflectOffBat: function (rb) {
     if (!rb || typeof rb.getLinearVelocity !== 'function') return;

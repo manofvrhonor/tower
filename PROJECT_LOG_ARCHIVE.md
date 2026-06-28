@@ -238,7 +238,34 @@
 
 **Файлы (итог):** `physx-grab.js`, `ball-bat.js`.
 
-**Следующая сессия:** парящий стол + купол.
+**Следующая сессия:** парящий стол + gravity × timeScale.
+
+---
+
+## Сессия 27 — парящий стол, gravity × timeScale, бита float/gravity ✅
+
+### Закрыто
+
+- **Парящий стол:** визуал — тонкий диск (r=0.3, h=0.03); PhysX — один диск
+  (`pedestal-builder`, `wallSegments: 0`). Убраны 12 стенок и «невидимые препятствия».
+- **Gravity-кубы × timeScale (ADR-12 v2):** `setGravityScale` нет в биндинге → manual
+  `g×ts`, velocity-scale, clamp world-space (`floating-cube.js`, `config.js`).
+- **Шар→куб:** импульс world-space; убран slo-mo ghost-boost; pending + visual hit сохранены.
+- **Куб в руке → шар:** `_deflectOffBat` — без разгона от руки.
+- **Бита:** float вне купола / gravity внутри (как кубы); старт y=0.55 между полом и столом.
+- Десктоп QA timeScale + bat float — **OK** (пользователь).
+
+### Открыто → с.28
+
+- Удары **кубом/битой в руке** по кубам башни и между собой — доработка clamp/impulse.
+
+**Файлы:** `index.html`, `pedestal-builder.js`, `floating-cube.js`, `red-ball.js`,
+`ball-bat.js`, `config.js`, `time-scale.js`, `PROJECT_LOG.md`.
+
+**Git:** ранний коммит сессии `7e774e1` (стол + pedestal); правки timeScale/bat — **не закоммичены**
+(по запросу пользователя).
+
+**Следующая сессия:** фикс ударов по кубам, шарам и бите в руке.
 
 ---
 

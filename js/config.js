@@ -247,11 +247,10 @@ const CONFIG = {
     cubeHitCooldownMs: 90,
     // Допуск (м) к визуальному касанию для _boostHitCube (ранний contactOffset).
     cubeHitVisualSlack: 0.012,
-    cubeHitGhostSlack: 0.008,
-    // Ниже этого timeScale — импульс разрешён в ghost-зоне (slo-mo).
+    // Порог slo-mo для удлинённого pending (шар медленнее доезжает до меша).
     cubeHitSloMoTimeScale: 0.85,
-    // Мс — держать курс на куб после ghost-contactbegin (slo-mo дожимает до касания).
     cubeHitPendingMs: 600,
+    cubeHitPendingSloMoMsMax: 2400,
     // Доля скорости шара после удара по кубу (меньше = меньше отскок от башни).
     cubeHitBallRetain: 0.72,
 
@@ -307,7 +306,7 @@ const CONFIG = {
     },
   },
 
-  // Бита-сковородка для отбивания красных шаров (Этап 6/7).
+  // Бита-сковородка (Этап 7). Float вне купола, gravity внутри — как кубы.
   bat: {
     mass: 0.85,
     panRadius: 0.11,
@@ -317,9 +316,10 @@ const CONFIG = {
     handleThickness: 0.022,
     panColor: '#5a5a62',
     handleColor: '#6b4423',
-    // На столе (topY=1.0), ближе к центру — ручка не упирается в боковину r=0.3.
-    spawnPosition: { x: 0.04, y: 1.015, z: 0.05 },
-    spawnRotation: { x: 0, y: -35, z: 0 },
+    // Старт: парит между полом (y=0) и столом (y=1.0).
+    spawnPosition: { x: -0.55, y: 0.55, z: 0.15 },
+    spawnRotation: { x: 15, y: 40, z: 0 },
+    containmentRadius: 0.22,
     linearDamping:  0.1,
     angularDamping: 0.15,
     material: {
@@ -328,6 +328,15 @@ const CONFIG = {
       dynamicFriction:  0.45,
     },
     throwVelocityScale: 1.15,
+    float: {
+      initialImpulseSpeed:  0.12,
+      initialAngularSpeed:  0.35,
+      minDriftSpeed:        0.1,
+      minAngularDriftSpeed: 0.3,
+      linearDamping:        0.03,
+      angularDamping:       0.05,
+      floorReturnSpeed:     0.18,
+    },
   },
 
   // === Купол над пьедесталом (Этап 3) ===
@@ -395,6 +404,9 @@ const CONFIG = {
     // Применяются при release кубика внутри купола.
     // Подобраны «на глаз», уточним по результатам тестов с башней.
     gravityMode: {
+      // gravity-кубики на столе следуют timeScale (ADR-12 v2); руки/захват — realtime.
+      useTimeScale: true,
+      sceneGravityY: -9.8,
       // Низкий damping ≈ свободное падение. Для куба 10 см сопротивление воздуха
       // на коротком падении пренебрежимо; прежние 0.08/0.12 делали падение/
       // опрокидывание «вязким». Затухание в стопке обеспечивают friction + restitution.
