@@ -40,10 +40,10 @@ AFRAME.registerComponent('float-motion-trail', {
     this._deployAnchorPos = new THREE.Vector3();
     this._deployAnchorQuat = new THREE.Quaternion();
     this._prevDeployPos = new THREE.Vector3();
+    this._ballTrailCfg = null;
 
-    var nSec = this.cfg.loftSectionCount !== undefined ? this.cfg.loftSectionCount : 14;
-    this._sectionCount = nSec;
     this._resolveProfileSettings();
+    var nSec = this._sectionCount;
 
     this._curvePoints = [];
     this._curveQuats = [];
@@ -114,22 +114,35 @@ AFRAME.registerComponent('float-motion-trail', {
     this._mesh.visible = false;
   },
 
+  _getTrailParam: function (name, fallback) {
+    if (this._ballTrailCfg && this._ballTrailCfg[name] !== undefined) {
+      return this._ballTrailCfg[name];
+    }
+    if (this.cfg[name] !== undefined) return this.cfg[name];
+    return fallback;
+  },
+
   _resolveProfileSettings: function () {
+    var defaultSec = this.cfg.loftSectionCount !== undefined ? this.cfg.loftSectionCount : 14;
     var geo = this.el.getAttribute('geometry') || {};
     if (geo.primitive === 'sphere') {
       var bt = (typeof CONFIG !== 'undefined' && CONFIG.balls && CONFIG.balls.trail) || {};
+      this._ballTrailCfg = bt;
       this._profileVerts = bt.profileVerts !== undefined ? bt.profileVerts : 10;
       this._trailSizeScale = bt.sizeScale !== undefined ? bt.sizeScale : 0.52;
       this._trailHeadSizeScale = bt.headSizeScale !== undefined ? bt.headSizeScale : 0.95;
       this._trailTailSizeScale = bt.tailSizeScale !== undefined ? bt.tailSizeScale : 0.5;
       this._trailHeadSkipM = bt.headSkipM;
+      this._sectionCount = bt.loftSectionCount !== undefined ? bt.loftSectionCount : defaultSec;
       return;
     }
+    this._ballTrailCfg = null;
     this._profileVerts = 4;
     this._trailSizeScale = null;
     this._trailHeadSizeScale = null;
     this._trailTailSizeScale = null;
     this._trailHeadSkipM = null;
+    this._sectionCount = defaultSec;
   },
 
   _profileOffset: function (c, pv, half) {
@@ -344,7 +357,7 @@ AFRAME.registerComponent('float-motion-trail', {
   },
 
   _trimPathByLength: function () {
-    var maxLen = this.cfg.trailLengthM !== undefined ? this.cfg.trailLengthM : 0.4;
+    var maxLen = this._getTrailParam('trailLengthM', 0.4);
     while (this._path.length > 2 && this._pathTotalLength() > maxLen) {
       this._path.shift();
     }
@@ -605,7 +618,7 @@ AFRAME.registerComponent('float-motion-trail', {
     var headSkip = this._trailHeadSkipM !== null && this._trailHeadSkipM !== undefined
       ? this._trailHeadSkipM
       : (cfg.headSkipM !== undefined ? cfg.headSkipM : (size * 0.28));
-    var spacing = cfg.trailSpacingM !== undefined ? cfg.trailSpacingM : 0.02;
+    var spacing = this._getTrailParam('trailSpacingM', 0.02);
     var maxOp = cfg.maxOpacity !== undefined ? cfg.maxOpacity : 1.0;
     var nSec = this._sectionCount;
     var pv = this._profileVerts;

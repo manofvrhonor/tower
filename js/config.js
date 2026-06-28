@@ -6,6 +6,28 @@
  */
 
 const CONFIG = {
+  // === Отладка (диагностика коллайдеров) ===
+  debug: {
+    // true → контуры реальных PhysX PxShape (getBoxGeometry/getSphereGeometry + pose из rigidBody).
+    showColliders: true,
+    colliderOpacity: 0.85,
+    showBBoxHelper: false,
+    // Зарезервировано; контуры рисуются на всех physx-body через EdgesGeometry.
+    showAllPhysxBodies: false,
+    // Палитра wireframe: ключ = имя слоя CONFIG.collisionLayers или KINEMATIC.
+    colliderColors: {
+      WORLD:        '#7a9eb0',  // пол, стены, пьедestal
+      DOME:         '#44aaff',  // плитки купола
+      FLOAT_CUBE:   '#33cc66',  // куб в float
+      GRAVITY_CUBE: '#ffcc00',  // куб на столе
+      GRABBED_CUBE: '#ff8800',  // куб в руке
+      BALL:         '#ff3333',  // красный шар
+      BAT:          '#cc9900',  // бита-сковородка
+      HAND:         '#aa44ff',  // сфера руки
+      KINEMATIC:    '#ffffff',  // прочее kinematic
+    },
+  },
+
   // === Комната ===
   room: {
     width: 3,        // метры (X)
@@ -16,16 +38,26 @@ const CONFIG = {
     ceilingColor: '#f0ede5',
   },
 
-  // === Пьедестал в центре ===
+  // === Парящий стол (центр комнаты) ===
   pedestal: {
-    radius: 0.3,     // метры (диаметр 60 см)
-    height: 1.0,     // метры
+    radius: 0.3,           // метры (диаметр 60 см)
+    tableSurfaceY: 1.0,    // мир: верх стола (плоскость коллайдера)
+    height: 1.0,           // только для бортика, если wallSegments > 0
     color: '#3a3a3a',
-    // Деревянная поверхность стола (gravity-кубики). См. main.js → #pedestal.
+    visual: {
+      diskThickness: 0.03, // визуал и PhysX-диск (wallSegments=0)
+    },
     physxMaterial: {
       restitution:      0.15,
       staticFriction:   0.70,
       dynamicFriction:  0.60,
+    },
+    collider: {
+      wallSegments:   0,     // 0 = один диск; >0 = столб с бортом (legacy)
+      shellThickness: 0.02,
+      topThickness:   0.01,  // только при wallSegments > 0
+      tileOverlap:    1.08,
+      debugVisible:   false,
     },
   },
 
@@ -144,7 +176,10 @@ const CONFIG = {
     // Раннее обнаружение контакта (м): солвер тормозит куб ДО глубокого
     // проникновения, поэтому нет «резинового» выброса депенетрации на рёберном
     // ударе. Куб всё равно ложится на restOffset≈0, не «висит» над поверхностью.
+    // Gravity: 0.03 — анти-«резиновый» выброс на столе (ADR-14). Float: меньше —
+    // шары r=0.04, иначе ранний contactbegin + _boostHitCube до касания.
     contactOffset:            0.03,
+    floatContactOffset:       0.012,
 
     // Стартовая линейная скорость, м/с.
     // Эмпирически: 0.2 даёт слишком вялое движение из-за потерь
@@ -203,13 +238,20 @@ const CONFIG = {
   // скорости = floatingCubes × случайный множитель в диапазоне [min, max].
   balls: {
     count: 3,
-    radius: 0.07,
+    radius: 0.04,
     mass: 2.0,
     color: '#E04040',
 
     // Импульс в куб при ударе (× «полной» скорости шара). Масса шара > куба.
     cubeHitImpulseMultiplier: 2.8,
     cubeHitCooldownMs: 90,
+    // Допуск (м) к визуальному касанию для _boostHitCube (ранний contactOffset).
+    cubeHitVisualSlack: 0.012,
+    cubeHitGhostSlack: 0.008,
+    // Ниже этого timeScale — импульс разрешён в ghost-зоне (slo-mo).
+    cubeHitSloMoTimeScale: 0.85,
+    // Мс — держать курс на куб после ghost-contactbegin (slo-mo дожимает до касания).
+    cubeHitPendingMs: 600,
     // Доля скорости шара после удара по кубу (меньше = меньше отскок от башни).
     cubeHitBallRetain: 0.72,
 
@@ -245,16 +287,23 @@ const CONFIG = {
     steerBounceDelays: [0, 1, 2],
     steerContinuous: 0,
 
-    contactOffset: 0.03,
+    // Масштаб от r=0.07 (было 0.03). При r=0.04 старый 0.03 давал ~6 см зазора
+    // до куба (0.03+0.03) — куб отлетал до визуального касания, особенно в slo-mo.
+    contactOffset: 0.017,
     speculativeCCD: true,
 
-    // Хвост в slo-mo: круглый профиль, ширина ≈ диаметр шара.
+    // Хвост в slo-mo: круглый профиль. sizeScale компенсирует меньший шар —
+    // абсолютная ширина хвоста ≈ как при radius 0.07 и sizeScale 0.52 (~7.3 см).
     trail: {
       profileVerts: 10,
-      sizeScale: 0.52,
+      sizeScale: 0.91,
       headSizeScale: 0.95,
       tailSizeScale: 0.5,
       headSkipM: 0.02,
+      // Длина хвоста — только у шаров (кубики используют slowmoFx.trail).
+      loftSectionCount: 14,
+      trailSpacingM: 0.045,
+      trailLengthM: 0.75,
     },
   },
 
@@ -268,8 +317,8 @@ const CONFIG = {
     handleThickness: 0.022,
     panColor: '#5a5a62',
     handleColor: '#6b4423',
-    // На столе пьедестала (topY=1.0), чуть к игроку (z>0).
-    spawnPosition: { x: 0.12, y: 1.011, z: 0.14 },
+    // На столе (topY=1.0), ближе к центру — ручка не упирается в боковину r=0.3.
+    spawnPosition: { x: 0.04, y: 1.015, z: 0.05 },
     spawnRotation: { x: 0, y: -35, z: 0 },
     linearDamping:  0.1,
     angularDamping: 0.15,
@@ -395,7 +444,8 @@ const CONFIG = {
    *   GRAVITY_CUBE — кубик в режиме гравитации (Шаг 4).
    *   GRABBED_CUBE — кубик, схваченный рукой.
    *   BALL         — красные шары (Этап 6).
-   *   HAND         — зарезервировано, сейчас не используется.
+   *   HAND         — сфера коллайдера руки.
+   *   BAT          — бита (Этап 7); всегда бьётся о WORLD/пьедestal, не DOME.
    */
   collisionLayers: {
     WORLD:        0,
@@ -405,6 +455,7 @@ const CONFIG = {
     GRABBED_CUBE: 4,
     BALL:         5,
     HAND:         6,
+    BAT:          7,
   },
 
   // === Победа (Этап 5) ===

@@ -37,6 +37,8 @@
   <script src="js/spawn-red-balls.js"></script>
   <script src="js/spawn-ball-bat.js"></script>
   <script src="js/components/dome-builder.js"></script>
+  <script src="js/components/collider-debug-viz.js"></script>
+  <script src="js/components/pedestal-builder.js"></script>
   <script src="js/components/ghost-tower-hint.js"></script>
   <script src="js/components/victory-check.js"></script>
   <script src="js/components/victory-ui.js"></script>
@@ -47,6 +49,7 @@
   <a-scene
     victory-check
     victory-ui
+    collider-debug-viz
     background="color: #1a1a1a"
     physx="
       autoLoad: true;
@@ -72,49 +75,40 @@
          id для contactbegin в floating-cube. Материал пола — main.js из CONFIG. -->
     <a-box id="floor" position="0 -0.05 0" width="3" height="0.1" depth="3" color="#8a8580"
            physx-body="type: static"
-           physx-material="restitution: 0.15; staticFriction: 0.70; dynamicFriction: 0.60; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-box>
+           physx-material="restitution: 0.15; staticFriction: 0.70; dynamicFriction: 0.60; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5, 7"></a-box>
     <!-- Потолок (внутренняя грань на y=3) -->
     <a-box position="0 3.05 0" width="3" height="0.1" depth="3" color="#f0ede5"
            physx-body="type: static"
-           physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-box>
+           physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5, 7"></a-box>
     <!-- Стена СЕВЕР (внутренняя грань на z=-1.5) -->
     <a-box position="0 1.5 -1.55" width="3" height="3" depth="0.1" color="#d4cfc0"
            physx-body="type: static"
-           physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-box>
+           physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5, 7"></a-box>
     <!-- Стена ЮГ (внутренняя грань на z=1.5) -->
     <a-box position="0 1.5 1.55" width="3" height="3" depth="0.1" color="#d4cfc0"
            physx-body="type: static"
-           physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-box>
+           physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5, 7"></a-box>
     <!-- Стена ЗАПАД (внутренняя грань на x=-1.5) -->
     <a-box position="-1.55 1.5 0" width="0.1" height="3" depth="3" color="#d4cfc0"
            physx-body="type: static"
-           physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-box>
+           physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5, 7"></a-box>
     <!-- Стена ВОСТОК (внутренняя грань на x=1.5) -->
     <a-box position="1.55 1.5 0" width="0.1" height="3" depth="3" color="#d4cfc0"
            physx-body="type: static"
-           physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5"></a-box>
+           physx-material="restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5, 7"></a-box>
 
 
-    <!-- ====== ПЬЕДЕСТАЛ ====== -->
-    <a-cylinder
-      id="pedestal"
-      position="0 0.5 0"
-      radius="0.3"
-      height="1"
-      color="#3a3a3a"
-      physx-body="type: static"
-      physx-material="restitution: 0.15; staticFriction: 0.70; dynamicFriction: 0.60; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5">
-      <!-- Плоская крышка: у цилиндра PhysX иногда ненадёжен top-cap для быстрых шаров. -->
-      <a-box
-        position="0 0.5 0"
-        width="0.6"
-        height="0.02"
-        depth="0.6"
-        visible="false"
-        physx-body="type: static"
-        physx-material="restitution: 0.15; staticFriction: 0.70; dynamicFriction: 0.60; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5">
-      </a-box>
-    </a-cylinder>
+    <!-- ====== ПАРЯЩИЙ СТОЛ ======
+         Визуал = коллайдер: r/th из CONFIG.pedestal (index.html дублирует). -->
+    <a-entity id="pedestal" position="0 1 0" pedestal-builder>
+      <a-cylinder
+        position="0 -0.015 0"
+        radius="0.3"
+        height="0.03"
+        color="#3a3a3a"
+        material="metalness: 0.1; roughness: 0.85">
+      </a-cylinder>
+    </a-entity>
 
     <!-- Призрачная башня: схема победы (цвета из init-session.js). Без физики. -->
     <a-entity id="ghost-tower-hint" ghost-tower-hint position="0 0 0"></a-entity>
@@ -181,7 +175,9 @@
         <a-sphere id="leftHandCollider"
                   radius="0.05"
                   visible="false"
-                  physx-body="type: kinematic; emitCollisionEvents: true">
+                  data-physx-hidden-collider
+                  physx-body="type: kinematic; emitCollisionEvents: true"
+                  physx-material="collisionLayers: 6; collidesWithLayers: 2, 3, 4, 5, 7">
         </a-sphere>
       </a-entity>
 
@@ -193,7 +189,9 @@
         <a-sphere id="rightHandCollider"
                   radius="0.05"
                   visible="false"
-                  physx-body="type: kinematic; emitCollisionEvents: true">
+                  data-physx-hidden-collider
+                  physx-body="type: kinematic; emitCollisionEvents: true"
+                  physx-material="collisionLayers: 6; collidesWithLayers: 2, 3, 4, 5, 7">
         </a-sphere>
       </a-entity>
     </a-entity>

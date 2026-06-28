@@ -1,10 +1,11 @@
 /* global AFRAME, CONFIG, THREE */
 
 /**
- * ball-bat — короткая бита-сковородка для отбивания красных шаров.
+ * ball-bat — бита-сковородка (Этап 7).
  *
- * Лежит на пьедестале (гравитация). В руке — state `grabbed` на physx-body
- * (kinematic + setKinematicTarget) + parenting к руке для следования за замахом.
+ * Слой BAT — отдельно от GRABBED_CUBE (куб в руке). В руке и на столе
+ * остаётся BAT → всегда сталкивается с пьедestalом (WORLD).
+ * В руке — dynamic + D6 joint (physx-grab), не kinematic-телепорт.
  */
 AFRAME.registerComponent('ball-bat', {
   schema: {},
@@ -14,7 +15,6 @@ AFRAME.registerComponent('ball-bat', {
     this._physicsApplied = false;
     this._grabbed = false;
     this._handEl = null;
-    this._sceneRoot = null;
     this._prevHandPos = new THREE.Vector3();
     this._handVel = new THREE.Vector3();
     this._lastHandSampleMs = 0;
@@ -44,9 +44,8 @@ AFRAME.registerComponent('ball-bat', {
     if (!rb) return;
 
     this._rb = rb;
-    this._sceneRoot = this.el.sceneEl.object3D;
     this._applyRestPhysics(rb);
-    this._setCollisionLayer('GRAVITY_CUBE');
+    this._applyBatCollisionLayer();
     this._physicsApplied = true;
 
     if (this._pollIntervalId) {
@@ -107,10 +106,10 @@ AFRAME.registerComponent('ball-bat', {
         rb.setActorFlag(sysPX.PxActorFlag.eDISABLE_GRAVITY, true);
       } catch (e) { /* ignore */ }
     }
-    // Kinematic — через state `grabbed` на entity (physx-body → setKinematicTarget).
   },
 
-  _setCollisionLayer: function (layerName) {
+  /** Маска BAT: WORLD + кубы + шары; без DOME (как GRAVITY_CUBE на столе). */
+  _applyBatCollisionLayer: function () {
     var body = this.el.components['physx-body'];
     if (!body || !body.shapes) return;
     var PX = this._getPhysX();
@@ -118,17 +117,13 @@ AFRAME.registerComponent('ball-bat', {
 
     var L = (typeof CONFIG !== 'undefined' && CONFIG.collisionLayers) || {
       WORLD: 0, DOME: 1, FLOAT_CUBE: 2, GRAVITY_CUBE: 3,
-      GRABBED_CUBE: 4, BALL: 5, HAND: 6,
+      GRABBED_CUBE: 4, BALL: 5, HAND: 6, BAT: 7,
     };
     var bit = function (i) { return (1 << i) >>> 0; };
-    var layerIndex = L[layerName];
-    if (layerIndex === undefined) return;
 
-    var newWord0 = bit(layerIndex);
+    var newWord0 = bit(L.BAT);
     var newWord1 = bit(L.WORLD) | bit(L.FLOAT_CUBE) | bit(L.GRAVITY_CUBE) |
                    bit(L.GRABBED_CUBE) | bit(L.BALL);
-    newWord0 = newWord0 >>> 0;
-    newWord1 = newWord1 >>> 0;
 
     var shapes = Array.isArray(body.shapes) ? body.shapes : [body.shapes];
     for (var i = 0; i < shapes.length; i++) {
@@ -138,33 +133,23 @@ AFRAME.registerComponent('ball-bat', {
     }
   },
 
-  /** physx-grab → взяли биту (без joint). */
   onGrabAcquired: function () {
     this._grabbed = true;
-    this._setCollisionLayer('GRABBED_CUBE');
     if (this._rb) this._applyGrabbedPhysics(this._rb);
   },
 
-  /** Прикрепить к руке: сохранить мировой pose. PhysX pose — через `grabbed` state. */
   attachToHand: function (handEl) {
     if (!handEl || !handEl.object3D) return;
     this._handEl = handEl;
     this._handVel.set(0, 0, 0);
     this._lastHandSampleMs = performance.now();
     handEl.object3D.getWorldPosition(this._prevHandPos);
-
-    handEl.object3D.attach(this.el.object3D);
   },
 
-  /** Отпустить: вернуть в сцену, dynamic + импульс от движения руки. */
   detachFromHand: function () {
     if (!this._grabbed && !this._handEl) return;
 
-    if (this._sceneRoot && this.el.object3D.parent) {
-      this._sceneRoot.attach(this.el.object3D);
-    }
     this._handEl = null;
-    this.el.removeState('grabbed');
 
     var rb = this._rb;
     if (rb) {
@@ -181,10 +166,8 @@ AFRAME.registerComponent('ball-bat', {
     }
   },
 
-  /** physx-grab → отпустили биту. */
   onGrabReleased: function () {
     this._grabbed = false;
-    this._setCollisionLayer('GRAVITY_CUBE');
     if (this._rb) this._applyRestPhysics(this._rb);
   },
 
@@ -210,18 +193,13 @@ AFRAME.registerComponent('ball-bat', {
     }
   },
 
-  /** Сброс позиции («Заново»). */
   resetToSpawn: function () {
     if (this._grabbed) {
       this.detachFromHand();
       this._grabbed = false;
     }
-    if (this._sceneRoot && this.el.object3D.parent !== this._sceneRoot) {
-      this._sceneRoot.attach(this.el.object3D);
-    }
-
     var cfg = this.cfg;
-    var p = cfg.spawnPosition || { x: 0.12, y: 1.011, z: 0.14 };
+    var p = cfg.spawnPosition || { x: 0.04, y: 1.015, z: 0.05 };
     var r = cfg.spawnRotation || { x: 0, y: -35, z: 0 };
     this.el.setAttribute('position', p.x + ' ' + p.y + ' ' + p.z);
     this.el.setAttribute('rotation', r.x + ' ' + r.y + ' ' + r.z);
@@ -234,7 +212,7 @@ AFRAME.registerComponent('ball-bat', {
       if (typeof rb.setAngularVelocity === 'function') {
         rb.setAngularVelocity({ x: 0, y: 0, z: 0 }, false);
       }
-      this._setCollisionLayer('GRAVITY_CUBE');
+      this._applyBatCollisionLayer();
       this._applyRestPhysics(rb);
     }
     this._handEl = null;

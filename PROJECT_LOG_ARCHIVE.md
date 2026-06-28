@@ -195,3 +195,59 @@
 
 **Следующая задача:** не выбрана — взять пункт из бэклога (меню/сложность, размер шаров,
 руки-пальцы, текстуры).
+
+---
+
+## Сессия 23 — уменьшение шаров + открытые баги контактов
+
+- Шары Ø4 см, хвост — визуал ✅. Ранний контакт шар→куб и пьедestal — отложено на 24.
+- **Файлы:** `config.js`, `float-motion-trail.js`, `floating-cube.js`.
+
+---
+
+## Сессия 25 — collider-debug PhysX, слой BAT, круглая крышка (QA частично)
+
+- **collider-debug-viz:** контуры из **PxShape** (`getBoxGeometry`/`getSphereGeometry`), pose
+  из `getGlobalPose`; материалы объектов не трогаются.
+- **Слой BAT (7):** отдельно от `GRABBED_CUBE`; `ball-bat.js`, `spawn-ball-bat.js`,
+  `pedestal-builder` (боковина + крышка), `index.html`, spawn-скрипты.
+- **pedestal-builder:** крышка — **один** `a-cylinder` (диск r=0.3); убран квадрат 0.6×0.6.
+- **dome-builder:** плитки всегда `visible: false` (ghost-башня не перекрывается).
+- **QA ❌:** бита **в руке** проходит сквозь пьедestal — **не слои**; kinematic grab
+  (`setKinematicTarget`, ADR-16). → сессия 26.
+- **Файлы:** `collider-debug-viz.js`, `config.js`, `pedestal-builder.js`, `ball-bat.js`,
+  `spawn-ball-bat.js`, `dome-builder.js`, `index.html`, `floating-cube.js`, `physx-grab.js`.
+
+---
+
+## Сессия 26 — бита × пьедestal; эксперименты захвата (откат)
+
+### Закрыто
+
+- **Бита в руке × пьедestal ✅:** kinematic `grabbed` прошивал static; фикс —
+  **dynamic + D6 softFixed**, слой BAT (`physx-grab.js`, `ball-bat.js`). QA ✅.
+
+### Откат (не в коде)
+
+- Усиление joint / tick / dual-mode / damping / solver — дрожь биты, отскок кубов.
+- Offset сферы HAND + anchor по `contactbegin` — регрессия (мизинец, «парит»).
+
+### Бэклог (оставляем как есть)
+
+- Отлёт при тряске; естественный хват — только VR-калибровка.
+
+**Файлы (итог):** `physx-grab.js`, `ball-bat.js`.
+
+**Следующая сессия:** парящий стол + купол.
+
+---
+
+## Сессия 24 — pedestal-builder, red-ball, collider-debug (QA частично)
+
+- **pedestal-builder** вместо convex hull; квадратная крышка 0.6×0.6 на круге r=0.3 —
+  **не закрыто** (запинание). Диагностика: бита на столе — отдельный collider.
+- **red-ball:** `_isNearVisualCubeHit`, pending/hold, slo-mo ghost-boost. Slo-mo QA ❌.
+- **collider-debug-viz** прототип (один розовый цвет).
+- **Файлы:** `pedestal-builder.js`, `red-ball.js`, `collider-debug-viz.js`, `config.js`,
+  `index.html`, `dome-builder.js`.
+- **Следующая сессия (25):** wireframe по типам; парящий стол + купол; комната-купол + skybox.

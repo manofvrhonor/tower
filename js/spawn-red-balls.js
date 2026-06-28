@@ -20,7 +20,7 @@
 
     var layers = (CONFIG && CONFIG.collisionLayers) || {
       WORLD: 0, DOME: 1, FLOAT_CUBE: 2, GRAVITY_CUBE: 3,
-      GRABBED_CUBE: 4, BALL: 5, HAND: 6,
+      GRABBED_CUBE: 4, BALL: 5, HAND: 6, BAT: 7,
     };
     var ownLayer = layers.BALL;
     // BALL не сталкивается с DOME — пролетает сквозь стенку купola к башне
@@ -31,6 +31,7 @@
       layers.GRAVITY_CUBE,
       layers.GRABBED_CUBE,
       layers.BALL,
+      layers.BAT,
     ].join(', ');
 
     var positions = cfg.spawnPositions || [];

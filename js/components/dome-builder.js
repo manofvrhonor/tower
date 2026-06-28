@@ -84,7 +84,7 @@ AFRAME.registerComponent('dome-builder', {
     // "ВАЖНО про числа в physx-material".
     const layers = (window.CONFIG && window.CONFIG.collisionLayers) || {
       WORLD: 0, DOME: 1, FLOAT_CUBE: 2, GRAVITY_CUBE: 3,
-      GRABBED_CUBE: 4, BALL: 5, HAND: 6,
+      GRABBED_CUBE: 4, BALL: 5, HAND: 6, BAT: 7,
     };
     // DOME — только FLOAT_CUBE снаружи. BALL проходит сквозь купол (Этап 6).
     const collidesWithList = [
@@ -263,12 +263,9 @@ AFRAME.registerComponent('dome-builder', {
     el.setAttribute('height', height);
     el.setAttribute('depth',  depth);
 
-    if (debug) {
-      el.setAttribute('material', 'color: #ff00aa; opacity: 0.35; transparent: true; side: double');
-    } else {
-      // Невидимый, но геометрия нужна, чтобы physx-body построил PxBoxGeometry
-      el.setAttribute('visible', false);
-    }
+    // Коллайдер всегда невидим; контур — collider-debug-viz (PhysX PxShape).
+    el.setAttribute('visible', false);
+    el.setAttribute('data-physx-hidden-collider', '');
 
     el.setAttribute('physx-body', 'type: static');
     el.setAttribute('physx-material', material + this._layerSuffix);

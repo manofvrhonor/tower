@@ -28,6 +28,8 @@ AFRAME.registerComponent('red-ball', {
     // Окно удержания скорости после удара битой (см. _deflectOffBat / _clampBatDeflect).
     this._batClampUntilMs = 0;
     this._batClampSpeed = this._speeds.minDrift;
+    // Ранний contactbegin (contactOffset): ждём визуального касания, не отскакиваем.
+    this._pendingCubeHit = null;
 
     this._onContactBegin = this._onContactBegin.bind(this);
     var onReady = this._tryApply.bind(this);
@@ -206,7 +208,7 @@ AFRAME.registerComponent('red-ball', {
     if (!other) return;
 
     if (other.data.type === 'dynamic' && other.el.components['floating-cube']) {
-      this._boostHitCube(other);
+      this._onCubeContactBegin(other);
       return;
     }
 
@@ -234,12 +236,152 @@ AFRAME.registerComponent('red-ball', {
   },
 
   /**
-   * Доп. импульс кубу при ударе шара — чтобы валить башню, а не отскакивать.
+   * contactbegin с кубом: импульс только при визуальном касании.
+   * Раньше — pending: шар не отскакивает от «ghost»-контакта, в tick дожимаем до касания.
    */
-  _boostHitCube: function (otherComp) {
+  _onCubeContactBegin: function (otherComp) {
+    if (this._isNearVisualCubeHit(otherComp.el)) {
+      this._boostHitCube(otherComp, true, this._getInboundDir(otherComp.el));
+      return;
+    }
+    var holdMs = this.cfg.cubeHitPendingMs !== undefined
+      ? this.cfg.cubeHitPendingMs : 600;
+    this._pendingCubeHit = {
+      el: otherComp.el,
+      comp: otherComp,
+      untilMs: performance.now() + holdMs,
+      dir: this._getInboundDir(otherComp.el),
+    };
+  },
+
+  _clearPendingCubeHit: function () {
+    this._pendingCubeHit = null;
+  },
+
+  /**
+   * Пока pending — каждый кадр держим шар на курсе к кубу (мировая скорость),
+   * перебивая ранний отскок солвера. При dist ≤ порога — _boostHitCube.
+   */
+  _processPendingCubeHit: function () {
+    var pending = this._pendingCubeHit;
+    if (!pending) return false;
+
+    if (performance.now() > pending.untilMs || !pending.el.parentNode) {
+      this._clearPendingCubeHit();
+      return false;
+    }
+
+    if (this._isNearVisualCubeHit(pending.el)) {
+      this._boostHitCube(pending.comp, true, pending.dir);
+      return false;
+    }
+
+    // Slo-mo: до визуального касания не доходит — ghost-contact + inbound hold.
+    var ts = this._getTimeScale();
+    var sloMoMax = this.cfg.cubeHitSloMoTimeScale !== undefined
+      ? this.cfg.cubeHitSloMoTimeScale : 0.85;
+    if (ts < sloMoMax && this._isGhostCubeContact(pending.el)) {
+      this._boostHitCube(pending.comp, true, pending.dir);
+      return false;
+    }
+
+    this._holdBallTowardCube(pending.el, pending.dir);
+    return true;
+  },
+
+  /** Направление полёта шара (мировое), не к центру куба — без «магнита». */
+  _getInboundDir: function (cubeEl) {
+    var rb = this._rb;
+    if (rb && typeof rb.getLinearVelocity === 'function') {
+      var prev = this._lastAppliedTimeScale;
+      if (!prev || prev < 0.001) prev = 1.0;
+      var invPrev = 1 / prev;
+      try {
+        var lv = rb.getLinearVelocity();
+        if (lv) {
+          var fx = lv.x * invPrev;
+          var fy = lv.y * invPrev;
+          var fz = lv.z * invPrev;
+          var speed = Math.sqrt(fx * fx + fy * fy + fz * fz);
+          if (speed > 0.05) {
+            return { x: fx / speed, y: fy / speed, z: fz / speed };
+          }
+        }
+      } catch (e) { /* fallback below */ }
+    }
+    if (!cubeEl || !cubeEl.object3D) return { x: 0, y: 0, z: -1 };
+
+    this.el.object3D.getWorldPosition(this._worldPos);
+    var bx = this._worldPos.x;
+    var by = this._worldPos.y;
+    var bz = this._worldPos.z;
+    cubeEl.object3D.getWorldPosition(this._worldPos);
+    var dx = this._worldPos.x - bx;
+    var dy = this._worldPos.y - by;
+    var dz = this._worldPos.z - bz;
+    var len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (len < 1e-5) return { x: 0, y: 0, z: -1 };
+    return { x: dx / len, y: dy / len, z: dz / len };
+  },
+
+  /**
+   * Продолжить полёт по сохранённому inbound-направлению (перебить ghost-отскок солвера).
+   */
+  _holdBallTowardCube: function (cubeEl, inboundDir) {
+    var rb = this._rb;
+    if (!rb) return;
+
+    var nx = inboundDir && inboundDir.x !== undefined ? inboundDir.x : 0;
+    var ny = inboundDir && inboundDir.y !== undefined ? inboundDir.y : 0;
+    var nz = inboundDir && inboundDir.z !== undefined ? inboundDir.z : -1;
+    var dirLen = Math.sqrt(nx * nx + ny * ny + nz * nz);
+    if (dirLen < 1e-5) {
+      var fb = this._getInboundDir(cubeEl);
+      nx = fb.x; ny = fb.y; nz = fb.z;
+    } else {
+      nx /= dirLen; ny /= dirLen; nz /= dirLen;
+    }
+
+    try {
+      var lv = rb.getLinearVelocity();
+      if (!lv || typeof rb.setLinearVelocity !== 'function') return;
+
+      var prev = this._lastAppliedTimeScale;
+      if (!prev || prev < 0.001) prev = 1.0;
+      var invPrev = 1 / prev;
+
+      var fx = lv.x * invPrev;
+      var fy = lv.y * invPrev;
+      var fz = lv.z * invPrev;
+      var speed = Math.sqrt(fx * fx + fy * fy + fz * fz);
+      var minSp = this._speeds.minDrift;
+      if (speed < minSp) speed = minSp;
+
+      rb.setLinearVelocity({
+        x: nx * speed,
+        y: ny * speed,
+        z: nz * speed,
+      }, false);
+      this._lastAppliedTimeScale = 1.0;
+      if (typeof rb.wakeUp === 'function') rb.wakeUp();
+    } catch (e) {
+      if (!this._holdCubeWarned) {
+        console.warn('[red-ball] hold toward cube failed:', e.message);
+        this._holdCubeWarned = true;
+      }
+    }
+  },
+
+  /**
+   * Доп. импульс кубу при ударе шара — чтобы валить башню, а не отскакивать.
+   * skipVisualCheck — после pending или уже проверенное касание.
+   */
+  _boostHitCube: function (otherComp, skipVisualCheck, dirOverride) {
     var rb = this._rb;
     var cubeRb = otherComp.rigidBody;
     if (!rb || !cubeRb || typeof rb.getLinearVelocity !== 'function') return;
+
+    if (!skipVisualCheck && !this._isNearVisualCubeHit(otherComp.el)) return;
 
     var now = performance.now();
     var cd = this.cfg.cubeHitCooldownMs !== undefined ? this.cfg.cubeHitCooldownMs : 90;
@@ -258,11 +400,17 @@ AFRAME.registerComponent('red-ball', {
       var by = lv.y * invPrev;
       var bz = lv.z * invPrev;
       var speed = Math.sqrt(bx * bx + by * by + bz * bz);
-      if (speed < 0.12) return;
+      if (speed < 0.12) speed = this._speeds.minDrift;
 
-      var nx = bx / speed;
-      var ny = by / speed;
-      var nz = bz / speed;
+      var nx; var ny; var nz;
+      if (dirOverride && dirOverride.x !== undefined) {
+        nx = dirOverride.x; ny = dirOverride.y; nz = dirOverride.z;
+        var dlen = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        if (dlen > 1e-5) { nx /= dlen; ny /= dlen; nz /= dlen; }
+        else { nx = bx / speed; ny = by / speed; nz = bz / speed; }
+      } else {
+        nx = bx / speed; ny = by / speed; nz = bz / speed;
+      }
       var mult = this.cfg.cubeHitImpulseMultiplier !== undefined
         ? this.cfg.cubeHitImpulseMultiplier : 2.8;
       var boost = speed * mult;
@@ -287,12 +435,56 @@ AFRAME.registerComponent('red-ball', {
         }, false);
         this._lastAppliedTimeScale = 1.0;
       }
+      this._clearPendingCubeHit();
     } catch (e) {
       if (!this._cubeHitWarned) {
         console.warn('[red-ball] cube hit boost failed:', e.message);
         this._cubeHitWarned = true;
       }
     }
+  },
+
+  _centerDistToCube: function (cubeEl) {
+    if (!cubeEl || !cubeEl.object3D) return Infinity;
+    this.el.object3D.getWorldPosition(this._worldPos);
+    var cx = this._worldPos.x;
+    var cy = this._worldPos.y;
+    var cz = this._worldPos.z;
+    cubeEl.object3D.getWorldPosition(this._worldPos);
+    var dx = this._worldPos.x - cx;
+    var dy = this._worldPos.y - cy;
+    var dz = this._worldPos.z - cz;
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
+  },
+
+  _getCubeContactOffset: function (cubeEl) {
+    var fc = cubeEl && cubeEl.components['floating-cube'];
+    if (fc && fc.state === 'float' && this._cubeCfg.floatContactOffset !== undefined) {
+      return this._cubeCfg.floatContactOffset;
+    }
+    return this._cubeCfg.contactOffset !== undefined ? this._cubeCfg.contactOffset : 0.03;
+  },
+
+  _isNearVisualCubeHit: function (cubeEl) {
+    if (!cubeEl || !cubeEl.object3D) return false;
+
+    var ballR = this.cfg.radius !== undefined ? this.cfg.radius : 0.04;
+    var cubeHalf = (this._cubeCfg.size !== undefined ? this._cubeCfg.size : 0.1) * 0.5;
+    var slack = this.cfg.cubeHitVisualSlack !== undefined
+      ? this.cfg.cubeHitVisualSlack : 0.012;
+
+    return this._centerDistToCube(cubeEl) <= ballR + cubeHalf + slack;
+  },
+
+  /** Расстояние contactbegin из-за суммы contactOffset (ghost-контакт). */
+  _isGhostCubeContact: function (cubeEl) {
+    var ballR = this.cfg.radius !== undefined ? this.cfg.radius : 0.04;
+    var cubeHalf = (this._cubeCfg.size !== undefined ? this._cubeCfg.size : 0.1) * 0.5;
+    var ballCo = this.cfg.contactOffset !== undefined ? this.cfg.contactOffset : 0.017;
+    var cubeCo = this._getCubeContactOffset(cubeEl);
+    var slack = this.cfg.cubeHitGhostSlack !== undefined
+      ? this.cfg.cubeHitGhostSlack : 0.008;
+    return this._centerDistToCube(cubeEl) <= ballR + cubeHalf + ballCo + cubeCo + slack;
   },
 
   /**
@@ -562,11 +754,19 @@ AFRAME.registerComponent('red-ball', {
     }
 
     this._maintainFloatDrift(rb);
+
+    // Hold/boost задают «мировую» скорость (prev=1.0) — timeScale применяем следом.
+    var heldPending = performance.now() < this._batClampUntilMs
+      ? false
+      : this._processPendingCubeHit();
+
     this._applyTimeScaleToVelocity(rb);
 
     // Окно после удара битой: держим скорость на доударной и НЕ обновляем
     // _preHitWorldSpeed завышенным значением (иначе следующий удар «запомнит» разгон).
     if (this._clampBatDeflect(rb)) return;
+
+    if (heldPending) return;
 
     // Запоминаем скорость, с которой шар входит в этот кадр симуляции —
     // если в tock'е он столкнётся с битой, восстановим именно её.

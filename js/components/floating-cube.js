@@ -386,9 +386,9 @@ AFRAME.registerComponent('floating-cube', {
   _getCollidesWithCsv: function (layerName) {
     var L = (typeof CONFIG !== 'undefined' && CONFIG.collisionLayers) || {
       WORLD: 0, DOME: 1, FLOAT_CUBE: 2, GRAVITY_CUBE: 3,
-      GRABBED_CUBE: 4, BALL: 5, HAND: 6,
+      GRABBED_CUBE: 4, BALL: 5, HAND: 6, BAT: 7,
     };
-    var list = [L.WORLD, L.FLOAT_CUBE, L.GRAVITY_CUBE, L.GRABBED_CUBE, L.BALL];
+    var list = [L.WORLD, L.FLOAT_CUBE, L.GRAVITY_CUBE, L.GRABBED_CUBE, L.BALL, L.BAT];
     if (layerName === 'FLOAT_CUBE') {
       list.splice(1, 0, L.DOME);
     }
@@ -407,12 +407,17 @@ AFRAME.registerComponent('floating-cube', {
     var layerName = (mode === 'gravity') ? 'GRAVITY_CUBE' : 'FLOAT_CUBE';
     var L = (typeof CONFIG !== 'undefined' && CONFIG.collisionLayers) || {
       WORLD: 0, DOME: 1, FLOAT_CUBE: 2, GRAVITY_CUBE: 3,
-      GRABBED_CUBE: 4, BALL: 5, HAND: 6,
+      GRABBED_CUBE: 4, BALL: 5, HAND: 6, BAT: 7,
     };
 
     // contactOffset — раннее обнаружение контакта (меньше проникновения и
-    // «резинового» выброса депенетрации). См. CONFIG.floatingCubes.contactOffset.
-    var co = (this.cfg.contactOffset !== undefined) ? this.cfg.contactOffset : -1;
+    // «резинового» выброса депенетрации). Float — floatContactOffset (шары малы).
+    var co = -1;
+    if (mode === 'float' && this.cfg.floatContactOffset !== undefined) {
+      co = this.cfg.floatContactOffset;
+    } else if (this.cfg.contactOffset !== undefined) {
+      co = this.cfg.contactOffset;
+    }
     var coStr = (co >= 0) ? ('; contactOffset: ' + co) : '';
 
     this.el.setAttribute('physx-material',
@@ -441,7 +446,7 @@ AFRAME.registerComponent('floating-cube', {
 
     var L = (typeof CONFIG !== 'undefined' && CONFIG.collisionLayers) || {
       WORLD: 0, DOME: 1, FLOAT_CUBE: 2, GRAVITY_CUBE: 3,
-      GRABBED_CUBE: 4, BALL: 5, HAND: 6,
+      GRABBED_CUBE: 4, BALL: 5, HAND: 6, BAT: 7,
     };
     var bit = function (i) { return (1 << i) >>> 0; };
     var layerIndex = L[layerName];
@@ -453,7 +458,7 @@ AFRAME.registerComponent('floating-cube', {
     var newWord0 = bit(layerIndex);
     // FLOAT_CUBE — барьер купола; GRAVITY_CUBE — проходит сквозь купол.
     var newWord1 = bit(L.WORLD) | bit(L.FLOAT_CUBE) | bit(L.GRAVITY_CUBE) |
-                   bit(L.GRABBED_CUBE) | bit(L.BALL);
+                   bit(L.GRABBED_CUBE) | bit(L.BALL) | bit(L.BAT);
     if (layerName === 'FLOAT_CUBE') {
       newWord1 = newWord1 | bit(L.DOME);
     }

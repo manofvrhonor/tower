@@ -111,7 +111,7 @@ static box-плиток (`dome-builder.js`), плотно без щелей.
 
 ---
 
-### ADR-07: Реестр collision layers (индексы 0..6)
+### ADR-07: Реестр collision layers (индексы 0..7)
 
 **Решение:** `CONFIG.collisionLayers` хранит **индексы**, не битовые маски.
 Биндинг в `physx-material` принимает CSV индексов и сам делает `1 << index`.
@@ -121,21 +121,24 @@ static box-плиток (`dome-builder.js`), плотно без щелей.
 |---|---|---|---|
 | WORLD | 0 | пол, стены, пьедестал | дефолт physx (word0=1) |
 | DOME | 1 | 89 плиток | FLOAT_CUBE — **не** GRAVITY_CUBE, **не** BALL (сессия 18) |
-| FLOAT_CUBE | 2 | state float | WORLD, DOME, все кубики, BALL |
-| GRAVITY_CUBE | 3 | state gravity | WORLD, кубики, BALL — **не DOME** |
-| GRABBED_CUBE | 4 | в руке | WORLD, кубики, BALL — **не DOME** |
-| BALL | 5 | красные шары (Этап 6) | WORLD, кубики — **не DOME** |
-| HAND | 6 | контроллеры | резерв |
+| FLOAT_CUBE | 2 | state float | WORLD, DOME, кубики, BALL, BAT |
+| GRAVITY_CUBE | 3 | state gravity | WORLD, кубики, BALL, BAT — **не DOME** |
+| GRABBED_CUBE | 4 | **куб** в руке | WORLD, кубики, BALL — **не DOME** |
+| BALL | 5 | красные шары (Этап 6) | WORLD, кубики, BAT — **не DOME** |
+| HAND | 6 | сфера руки | кубики, BALL, BAT |
+| BAT | 7 | бита (сессия 25) | WORLD, кубики, BALL — **не DOME** |
 
 **Отключённые пары (осознанно):** `GRABBED_CUBE × DOME`, `GRAVITY_CUBE × DOME`, `BALL × DOME`.
-Float снаружи — купол барьер; gravity на столе — может выпасть за край.
+Боковина пьедestala: **без** `GRABBED_CUBE`; **с** `BAT`.
 
 **Причина:** передача готовой маски 63 в атрибут → биндинг делал `1 << 63` → краш
 `-2147483648` (int32 overflow).
 
 **Не делать:** битовые маски в строке `physx-material`; `(1 << i)` без `>>> 0`.
+**Не делать:** биту на `GRABBED_CUBE` — слой `BAT`.
 
-**Потребители:** `dome-builder.js`, `spawn-floating-cubes.js`, `physx-grab.js`.
+**Потребители:** `dome-builder.js`, `spawn-floating-cubes.js`, `spawn-ball-bat.js`,
+`ball-bat.js`, `pedestal-builder.js`, `physx-grab.js`.
 
 ---
 
@@ -280,25 +283,31 @@ joint перебарывал контакты — схваченный куб п
 
 ---
 
-### ADR-16: Бита-сковородка (Этап 7) — захват через state `grabbed`
+### ADR-16: Бита-сковородка (Этап 7) — захват
 
-**Решение (сессии 19–20):**
+**Решение (сессии 19–20, уточнено сессия 26):**
 - `CONFIG.bat`, `spawn-ball-bat.js`, `ball-bat.js`, `respawnBallBat()` в `victory-ui`.
 - Визуал и физика: блин (`a-cylinder`) и ручка (`a-box`) — **дочерние** entity, без
   `geometry` на корне. Иначе `physx-body.createShapes` строит один шейп из geometry
   корня и игнорирует детей → коллайдер только на блине. Дочерние = коллайдер на
   каждом, захват по всей бите.
-- **Захват — через встроенный state `grabbed`:** `physx-grab` вешает `addState('grabbed')`
-  на биту → `physx-body` сам каждый tock делает `setKinematicTarget` из мирового pose
-  `object3D` (parenting биты к руке даёт нужный transform). Release → `removeState` +
-  импульс от скорости руки. Ручной `setRigidBodyFlag(eKINEMATIC)` НЕ работает: биндинг
-  его не отслеживает и возвращает тело на место.
+- **Захват биты (сессия 26):** `dynamic + D6 softFixed` joint, как кубы; слой **BAT**
+  **не** меняется на `GRABBED_CUBE` → бита в руке **упирается** в пьедestal (WORLD).
+  `ball-bat`: `onGrabAcquired` / `attachToHand` (скорость руки для броска), **без**
+  `object3D.attach` к руке и **без** state `grabbed` (kinematic-телепорт).
+- **Захват кубов:** без изменений — `grabbed-dynamic` + D6 softFixed + слой
+  `GRABBED_CUBE` (купол игнорирует).
+
+**Устарело (сессия 26):** state `grabbed` + `setKinematicTarget` для биты — прошивала
+пьедestal; откатан.
 
 **Не делать:**
-- Ставить kinematic-флаг бите вручную (минуя state `grabbed`).
+- Kinematic `grabbed` на бите (прошивает static).
 - Возвращать `geometry` на корень биты (сломает коллайдер ручки).
 - Логику «запомни контакт и хватай по grip» (`_touchEl`) в общем пути `physx-grab` —
   ломает захват кубиков (сессия 20).
+- Править захват «вслепую»: offset сферы руки и anchor joint по `contactbegin` без
+  калибровки в VR (сессия 26 — регрессия). Ghost-contact + неверные оси hand-controls.
 
 **Удар по шару (починено, сессия 21):** `red-ball._deflectOffBat` — отскок берёт
 пост-столкновительное направление, но величину возвращает к доударной. Одного сброса
@@ -342,7 +351,7 @@ inline: A-Frame-атрибуты не читают `window.CONFIG` (как и у
 | 4 | Замедление времени (SUPERHOT) | ✅ |
 | 5 | Цель и победа | ✅ |
 | 6 | Красные шары | в работе |
-| 7 | Предмет для отбивания (бита) | захват ✅, отбивание ✅ |
+| 7 | Предмет для отбивания (бита) | захват ✅, отбивание ✅, пьедestal в руке ✅ |
 | 8 | Полировка | план |
 
 ---
@@ -359,6 +368,15 @@ inline: A-Frame-атрибуты не читают `window.CONFIG` (как и у
   скорости (`_clampBatDeflect`), шар отлетает с обычной скоростью. Quest QA ✅.
 - **Полировка (сессия 22):** коллайдеры комнаты `a-plane → a-box` (ADR-17) — отскоки
   теперь ровно по видимым стенам/полу/потолку. Десктоп QA ✅.
+- **Полировка (сессия 23):** шары Ø7→Ø4 см (`balls.radius` 0.04), хвост — та же абсолютная
+  ширина (`trail.sizeScale` 0.91), длиннее (`trailSpacingM` 0.045). Визуал ✅.
+- **Полировка (сессия 24):** физика контактов — частичные фиксы; редизайн пространства.
+- **Полировка (сессия 25):** `collider-debug-viz` — контуры **PhysX PxShape**; слой **BAT**;
+  крышка пьедestala — один диск; плитки купola скрыты.
+- **Полировка (сессия 26):** бита × пьедestal **в руке ✅** — захват биты переведён с
+  kinematic `grabbed` на **dynamic + D6 softFixed** (слой BAT). Неудачные эксперименты
+  с joint/damping/anchor **откачены**; базовый захват стабилен. **Бэклог:** отлёт при
+  тряске; «естественный хват» (сфера на запястье vs модель ладони) — только с VR-калибровкой.
 - **VR-виньетка:** отложена на этап 8.
 - Стек стабилен: PhysX 0.3.0 + physx-grab. Тесты — localhost + Quest Link.
 
@@ -371,16 +389,21 @@ inline: A-Frame-атрибуты не читают `window.CONFIG` (как и у
 - **Гонка spawn float** — ADR-11.
 - **VR-виньетка slo-mo:** в Quest не видна → отложена на этап 8 (polish), не блокирует.
 - **Шары (Этап 6):** Quest QA пьедестала и сбивания башни — не закрыт.
-- **Бита (Этап 7, ADR-16):** захват ✅ и отбивание ✅ (Quest, сессия 21).
-- **Бэклог (заведён в сессии 20, обновлён в 22)** — см. `CURRENT_TASK.md`:
-  - ~~скорость шара при отбивании битой~~ — **починено (сессия 21)**;
-  - ~~рассинхрон видимой комнаты и физической~~ — **починено (сессия 22, ADR-17: a-box)**;
-  - меню входа + выбор уровней сложности;
-  - текстуры, визуальные эффекты, общая полировка;
-  - уменьшить размер шаров ~×2;
-  - руки «как магниты» — нет хвата пальцами; изучить хват живыми пальцами вместо контроллеров.
+- **Бита (Этап 7):** захват ✅, отбивание ✅. Слой **BAT** ✅. **В руке × пьедestal ✅**
+  (с.26, D6 joint). **Захват (общий):** softFixed — при тряске отлёт ~20–30 см; сфера HAND
+  в origin руки (модель glTF декоративна) — «прилипание», не «сжатие ладонью». Правки
+  захвата — только с VR-калибровкой, одна гипотеза за раз (с.26).
+- **Ранний контакт шар→куб (сессия 24, частично):** `_isNearVisualCubeHit`, pending/hold,
+  slo-mo ghost-boost. Realtime — лучше; slo-mo — башня слабо валится. Quest QA не закрыт.
+- **Пьедестал — «невидимые препятствия» (сессия 23, открыто):** при переносе кубов вокруг
+  стола запинание в отдельных местах. Гипотеза: `#pedestal` — `a-cylinder` + `physx-body` →
+  convex hull (аналог проблемы купола до ADR-05); дочерний top-cap `a-box`; `contactOffset`
+  куба; soft-grab (куб отстаёт от руки). Купол (GRABBED × DOME off) — маловероятная причина.
+- **Бэклог** — см. `CURRENT_TASK.md`.
 
 ---
+
+
 
 ## СТРУКТУРА ПРОЕКТА
 
@@ -390,8 +413,8 @@ Tower/
 ├── js/config.js, main.js, init-session.js
 ├── js/spawn-floating-cubes.js, spawn-red-balls.js, spawn-ball-bat.js
 ├── js/components/  physx-grab, floating-cube, red-ball, ball-bat, dome-builder,
-│                   time-scale, slowmo-vignette-3d, float-motion-trail,
-│                   ghost-tower-hint, victory-check, victory-ui
+│                   pedestal-builder, collider-debug-viz, time-scale, slowmo-vignette-3d,
+│                   float-motion-trail, ghost-tower-hint, victory-check, victory-ui
 ├── assets/models/  leftHandLow.glb, rightHandLow.glb
 ├── AGENTS.md, CURRENT_TASK.md, PROJECT_LOG.md, PROJECT_LOG_ARCHIVE.md
 ```
@@ -412,7 +435,8 @@ Tower/
   `victory-ui` + рестарт без reload. Quest QA ✅.
 - **6 (сессии 18–19):** шары (скорость ×2–×3, homing-циклы, trail круглый, импульс кубам,
   слои стен/пьедестала). Десктоп: не в центре, не за стены.
-- **7 (сессия 19, начат):** `ball-bat` сковородка; захват сломан → 7a.
+- **7 (сессия 19–21):** `ball-bat`; отбивание clamp-окно. **Сессия 26:** бита × пьедestal
+  в руке (D6 вместо kinematic grab).
 
 **QA купола (уточнение теста 1):** float-кубики сталкиваются с куполом **снаружи**
 (слой FLOAT_CUBE × DOME). Внутри на пьедестале кубики в gravity и **не** бьются о
