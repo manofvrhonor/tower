@@ -502,6 +502,115 @@ const CONFIG = {
     releaseContainment: 'lenient',
   },
 
+  // === Машина времени: детали, локации, механизмы, маршруты (Фаза 0) ===
+  //
+  // ВАЖНО: на этом шаге структуры НЕ подключены к рантайму — это контракт данных
+  // для будущих фаз (снеп-сборка, локации). Текущие значения — лишь НАЧАЛЬНОЕ
+  // наполнение (3 локации); движок не должен предполагать ровно 3.
+  //
+  // Связи держим согласованными вручную:
+  //   part.id           ←→ mechanisms[*].slots[].acceptPartId   (деталь → слот)
+  //   part.mechanism    ←→ mechanisms[<id>]                      (деталь → механизм)
+  //   part.homeLocation ←→ locations[].id                        (где деталь спавнится)
+  //   progression.edges[].requiresMechanism / unlocksLocation    (граф маршрутов)
+  //
+  // model: null → примитив-заглушка (бокс/цилиндр с cyan-материалом);
+  //        строка → путь к GLB в assets/models/ (подставим, когда будет арт).
+
+  // Допуски снепа детали в слот и сила «слома» сборки при попадании опасного объекта.
+  assembly: {
+    snapPosTolerance:    0.05,  // м — насколько близко к слоту, чтобы деталь снепнулась
+    snapRotToleranceDeg:  35,   // ° — допуск по ориентации при снепе
+    breakImpulse:        1.5,   // м/с — импульс разлёта детали при сломе сборки
+  },
+
+  // Локации-комнаты. Массив произвольной длины. start: true — стартовая комната.
+  // partIds — какие детали спавнятся здесь изначально (источник истины — part.homeLocation;
+  // дублируем для удобства спавнера). fogTint — оттенок поля времени/тумана этой эпохи.
+  // hazardLevel — базовый уровень угрозы (число опасных объектов масштабируется в Фазе 5).
+  locations: [
+    {
+      id: 'future', label: 'Будущее', start: true,
+      hdri: null, fogTint: '#33e0ff', hazardLevel: 1,
+      partIds: ['fa_core', 'fa_coil', 'pa_future_gear', 'junk_f1', 'junk_f2'],
+    },
+    {
+      id: 'past', label: 'Прошлое',
+      hdri: null, fogTint: '#ffb066', hazardLevel: 2,
+      partIds: ['pa_past_rod', 'pa_past_plate', 'fin_past_lens', 'junk_p1', 'junk_p2'],
+    },
+    {
+      id: 'present', label: 'Настоящее',
+      hdri: null, fogTint: '#66ff99', hazardLevel: 3,
+      partIds: ['fin_pres_frame', 'fin_pres_crystal', 'junk_n1', 'junk_n2'],
+    },
+  ],
+
+  // Детали. kind: 'mechanism' — важные (снепятся в слоты), 'junk' — мусор (помехи).
+  // Деталь можно унести в другую локацию (механика переноса — Фаза 4).
+  parts: [
+    // — будущее —
+    { id: 'fa_core',        kind: 'mechanism', model: null, homeLocation: 'future',  mechanism: 'pastActivation',    slot: 'pa_s1' },
+    { id: 'fa_coil',        kind: 'mechanism', model: null, homeLocation: 'future',  mechanism: 'pastActivation',    slot: 'pa_s2' },
+    { id: 'pa_future_gear', kind: 'mechanism', model: null, homeLocation: 'future',  mechanism: 'presentActivation', slot: 'pr_s1' },
+    { id: 'junk_f1',        kind: 'junk',      model: null, homeLocation: 'future',  mechanism: null,                slot: null  },
+    { id: 'junk_f2',        kind: 'junk',      model: null, homeLocation: 'future',  mechanism: null,                slot: null  },
+    // — прошлое —
+    { id: 'pa_past_rod',    kind: 'mechanism', model: null, homeLocation: 'past',    mechanism: 'presentActivation', slot: 'pr_s2' },
+    { id: 'pa_past_plate',  kind: 'mechanism', model: null, homeLocation: 'past',    mechanism: 'presentActivation', slot: 'pr_s3' },
+    { id: 'fin_past_lens',  kind: 'mechanism', model: null, homeLocation: 'past',    mechanism: 'final',             slot: 'fin_s1' },
+    { id: 'junk_p1',        kind: 'junk',      model: null, homeLocation: 'past',    mechanism: null,                slot: null  },
+    { id: 'junk_p2',        kind: 'junk',      model: null, homeLocation: 'past',    mechanism: null,                slot: null  },
+    // — настоящее —
+    { id: 'fin_pres_frame',   kind: 'mechanism', model: null, homeLocation: 'present', mechanism: 'final', slot: 'fin_s2' },
+    { id: 'fin_pres_crystal', kind: 'mechanism', model: null, homeLocation: 'present', mechanism: 'final', slot: 'fin_s3' },
+    { id: 'junk_n1',          kind: 'junk',      model: null, homeLocation: 'present', mechanism: null,    slot: null  },
+    { id: 'junk_n2',          kind: 'junk',      model: null, homeLocation: 'present', mechanism: null,    slot: null  },
+  ],
+
+  // Механизмы. requiredPartIds — что нужно собрать; slots — позы относительно
+  // верха ядра (position/rotation локальны к ядру; rotation в градусах).
+  // Детали одного механизма могут жить в РАЗНЫХ локациях → нужно переносить вещи.
+  mechanisms: {
+    pastActivation: {
+      id: 'pastActivation',
+      requiredPartIds: ['fa_core', 'fa_coil'],
+      slots: [
+        { id: 'pa_s1', acceptPartId: 'fa_core', position: { x: 0,    y: 0.06, z: 0 }, rotation: { x: 0, y: 0,  z: 0 } },
+        { id: 'pa_s2', acceptPartId: 'fa_coil', position: { x: 0.08, y: 0.06, z: 0 }, rotation: { x: 0, y: 90, z: 0 } },
+      ],
+    },
+    presentActivation: {
+      id: 'presentActivation',
+      requiredPartIds: ['pa_future_gear', 'pa_past_rod', 'pa_past_plate'],
+      slots: [
+        { id: 'pr_s1', acceptPartId: 'pa_future_gear', position: { x: -0.08, y: 0.06, z: 0    }, rotation: { x: 0, y: 0, z: 0 } },
+        { id: 'pr_s2', acceptPartId: 'pa_past_rod',     position: { x: 0,     y: 0.14, z: 0    }, rotation: { x: 0, y: 0, z: 0 } },
+        { id: 'pr_s3', acceptPartId: 'pa_past_plate',   position: { x: 0,     y: 0.06, z: 0.08 }, rotation: { x: 0, y: 0, z: 0 } },
+      ],
+    },
+    final: {
+      id: 'final',
+      requiredPartIds: ['fin_past_lens', 'fin_pres_frame', 'fin_pres_crystal'],
+      slots: [
+        { id: 'fin_s1', acceptPartId: 'fin_past_lens',    position: { x: 0,     y: 0.22, z: 0    }, rotation: { x: 0, y: 0, z: 0 } },
+        { id: 'fin_s2', acceptPartId: 'fin_pres_frame',   position: { x: 0.08,  y: 0.14, z: 0.08 }, rotation: { x: 0, y: 0, z: 0 } },
+        { id: 'fin_s3', acceptPartId: 'fin_pres_crystal', position: { x: -0.08, y: 0.14, z: 0.08 }, rotation: { x: 0, y: 0, z: 0 } },
+      ],
+    },
+  },
+
+  // Граф маршрутов: какой собранный механизм какую локацию открывает.
+  // Стартовая локация — та, у которой start: true. Добавление уровня = дополнить
+  // locations + parts + mechanisms + edges, БЕЗ правок кода движка.
+  progression: {
+    edges: [
+      { requiresMechanism: 'pastActivation',    unlocksLocation: 'past' },
+      { requiresMechanism: 'presentActivation', unlocksLocation: 'present' },
+    ],
+    finalMechanism: 'final',  // собран в 'present' → запуск машины = победа
+  },
+
   /**
    * Индексы слоёв коллизий для биндинга physx-material (@c-frame/physx).
    *
