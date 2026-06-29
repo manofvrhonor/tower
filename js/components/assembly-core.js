@@ -5,8 +5,16 @@
  *
  * Читает CONFIG.mechanisms[<mechanism>] и рисует призрачные wireframe-боксы
  * в позах слотов (эволюция ghost-tower-hint). Это ВИЗУАЛ-подсказка «куда
- * ставить деталь». Снеп детали в слот, слом при ударе и проверка победы —
- * следующие микро-шаги (1.3–1.5).
+ * ставить деталь».
+ *
+ * Шаг 1.3: компонент также ведёт учёт занятости слотов и отдаёт мировую позу
+ * ближайшего свободного слота для снепа детали. Публичное API (зовёт
+ * floating-cube при release):
+ *   - findFreeSlotNear(worldPos) → { slotId, position, quaternion } | null
+ *   - occupySlot(slotId, el)  — пометить слот занятым (призрак скрывается)
+ *   - releaseSlot(slotId)     — освободить слот (для слома, шаг 1.4)
+ *   - isSlotOccupied(slotId)
+ * Слом при ударе и проверка победы — следующие микро-шаги (1.4–1.5).
  *
  * Слоты в CONFIG заданы локально к верху ядра. Entity ставится в позицию
  * верха стола (см. index.html: position = pedestal.tableSurfaceY), поэтому
@@ -25,6 +33,8 @@ AFRAME.registerComponent('assembly-core', {
   init: function () {
     this._slotMeshes = [];
     this._mechanismId = null;
+    this._occupied = {};          // slotId → entity (или true), занятые слоты
+    this._tmpVec = new THREE.Vector3();
     this._group = new THREE.Group();
     this._group.name = 'assembly-core-slots';
     this.el.object3D.add(this._group);
@@ -61,6 +71,7 @@ AFRAME.registerComponent('assembly-core', {
 
   _buildSlots: function () {
     this._clear();
+    this._occupied = {};
     var slots = this._getSlots();
     var s = this.data.slotSize;
 
@@ -96,5 +107,64 @@ AFRAME.registerComponent('assembly-core', {
 
     console.log('[assembly-core] built', this._slotMeshes.length,
       'slot ghosts for mechanism', this._mechanismId);
+  },
+
+  /** Призрак-mesh слота по его id (или null). */
+  _meshById: function (slotId) {
+    for (var i = 0; i < this._slotMeshes.length; i++) {
+      if (this._slotMeshes[i].userData.slotId === slotId) return this._slotMeshes[i];
+    }
+    return null;
+  },
+
+  /**
+   * Ближайший СВОБОДНЫЙ слот в пределах допуска CONFIG.assembly.snapPosTolerance.
+   * Возвращает мировую позу слота для снепа детали или null.
+   *
+   * Прототип Фазы 1: матч по расстоянию, без part-id (любая важная деталь →
+   * ближайший свободный слот). Точный матч по acceptPartId — Фаза 4.
+   *
+   * @param {THREE.Vector3} worldPos — мировой центр детали при release.
+   * @returns {{slotId:string, position:THREE.Vector3, quaternion:THREE.Quaternion}|null}
+   */
+  findFreeSlotNear: function (worldPos) {
+    var tol = (typeof CONFIG !== 'undefined' && CONFIG.assembly &&
+      CONFIG.assembly.snapPosTolerance !== undefined)
+      ? CONFIG.assembly.snapPosTolerance : 0.05;
+
+    var best = null;
+    var bestDist = tol;
+    for (var i = 0; i < this._slotMeshes.length; i++) {
+      var m = this._slotMeshes[i];
+      if (this._occupied[m.userData.slotId]) continue;
+      m.getWorldPosition(this._tmpVec);
+      var d = this._tmpVec.distanceTo(worldPos);
+      if (d <= bestDist) { bestDist = d; best = m; }
+    }
+    if (!best) return null;
+
+    var pos = new THREE.Vector3();
+    best.getWorldPosition(pos);
+    var quat = new THREE.Quaternion();
+    best.getWorldQuaternion(quat);
+    return { slotId: best.userData.slotId, position: pos, quaternion: quat };
+  },
+
+  isSlotOccupied: function (slotId) {
+    return !!this._occupied[slotId];
+  },
+
+  /** Пометить слот занятым; призрак занятого слота скрываем (визуальный фидбэк). */
+  occupySlot: function (slotId, el) {
+    this._occupied[slotId] = el || true;
+    var m = this._meshById(slotId);
+    if (m) m.visible = false;
+  },
+
+  /** Освободить слот (слом сборки, шаг 1.4); призрак снова виден. */
+  releaseSlot: function (slotId) {
+    delete this._occupied[slotId];
+    var m = this._meshById(slotId);
+    if (m) m.visible = true;
   },
 });

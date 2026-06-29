@@ -12,10 +12,15 @@
  *
  * Состояние state:
  *   - 'float'   — невесомость, слой FLOAT_CUBE;
- *   - 'gravity' — гравитация включена, слой GRAVITY_CUBE (задача 3, Шаг 4).
+ *   - 'gravity' — гравитация включена, слой GRAVITY_CUBE (задача 3, Шаг 4);
+ *   - 'snapped' — деталь зафиксирована в слоте сборки, тело kinematic
+ *                 (Фаза 1, шаг 1.3). Поза держится из object3D, tick её не трогает.
  *
- * При release (physx-grab → onGrabReleased) центр кубика проверяется
- * containment-тестом купола: внутри → gravity, снаружи → float.
+ * При release (physx-grab → onGrabReleased):
+ *   - важная деталь (dataset.isTarget==='true') рядом со свободным слотом
+ *     механизма → СНЕП в слот (kinematic-lock), см. _trySnapToSlot;
+ *   - иначе центр кубика проверяется containment-тестом купола:
+ *     внутри → gravity, снаружи → float. Серый мусор не снепится.
  *
  * Контакт gravity-кубика с #floor → возврат в float (задача 3, Шаг 5).
  * Float: после 2–5 отскоков от стен комнаты — разворот к куполу (как red-ball).
@@ -67,11 +72,15 @@ AFRAME.registerComponent('floating-cube', {
     this._gravityScaleDiagDone = false;
     this._physxGravityOffForSloMo = false;
     this._onContactBegin = this._onContactBegin.bind(this);
+    this._onStateAdded = this._onStateAdded.bind(this);
     // Slo-mo: удар grabbed-кубом/битой — перенаправление без разгона (как шар).
     this._preHitWorldSpeed = 0;
     this._strikerClampUntilMs = 0;
     this._strikerClampSpeed = 0;
     this._strikeCfg = (typeof CONFIG !== 'undefined' && CONFIG.inHandStrike) || {};
+    // Снеп в слот сборки (Фаза 1, шаг 1.3).
+    this._assemblyCore = null;
+    this._snappedSlotId = null;
     this._beginSteerCycle();
 
     // Подписка на возможные события готовности тела (план А).
@@ -87,10 +96,60 @@ AFRAME.registerComponent('floating-cube', {
 
   play: function () {
     this.el.addEventListener('contactbegin', this._onContactBegin);
+    // Захват снепнутой детали рукой → ручное разъединение (см. _onStateAdded).
+    this.el.addEventListener('stateadded', this._onStateAdded);
   },
 
   pause: function () {
     this.el.removeEventListener('contactbegin', this._onContactBegin);
+    this.el.removeEventListener('stateadded', this._onStateAdded);
+  },
+
+  /**
+   * Игрок схватил рукой деталь, уже стоящую в слоте → отщёлкиваем её из слота
+   * (Фаза 1: ручной разбор сборки; пригодится для деталей-обманок). physx-grab
+   * вешает состояние 'grabbed-dynamic' при захвате; ловим его и возвращаем тело
+   * в dynamic, слот освобождаем. Дальше работает обычный захват/release.
+   *
+   * РИСК (на проверку в Quest): рука — kinematic, снепнутая деталь — kinematic.
+   * Если PhysX не генерит контакт для пары kinematic↔kinematic, захват детали не
+   * сработает и сюда мы не попадём — тогда нужен запасной путь (proximity-grab).
+   */
+  _onStateAdded: function (evt) {
+    var st = (evt.detail && evt.detail.state) ? evt.detail.state : evt.detail;
+    if (st !== 'grabbed-dynamic') return;
+    if (this.state !== 'snapped') return;
+    this._unsnapFromSlot();
+  },
+
+  /** Снять деталь со слота: освободить слот, вернуть тело в dynamic. */
+  _unsnapFromSlot: function () {
+    var core = this._getAssemblyCore();
+    if (core && this._snappedSlotId && typeof core.releaseSlot === 'function') {
+      core.releaseSlot(this._snappedSlotId);
+    }
+    this._snappedSlotId = null;
+    // Временное состояние; финальное (snapped/gravity/float) определит onGrabReleased.
+    this.state = 'float';
+    this._lastAppliedTimeScale = 1.0;
+    this.el.setAttribute('physx-body', 'type: dynamic');
+    this._resetKinematicLatch();
+    console.log('[floating-cube] un-snapped by hand', this.el.id || '(no id)');
+  },
+
+  /**
+   * Сброс защёлки physx-body.setKinematic.
+   *
+   * @c-frame/physx@0.3.0 выставляет флаг eKINEMATIC в tock() ОДИН раз:
+   * `if (type === 'kinematic' && !this.setKinematic) { eKINEMATIC=true; setKinematic=true }`
+   * (physics.js, ~стр.1257). Обратно защёлку не сбрасывает. Поэтому без этого
+   * сброса ПОВТОРНЫЙ снеп (type→kinematic) не станет настоящим kinematic: тело
+   * останется dynamic, визуал (object3D) разойдётся с физ-телом → объекты проходят
+   * сквозь деталь и её нельзя снова взять рукой. Сбрасываем при возврате в dynamic.
+   */
+  _resetKinematicLatch: function () {
+    var bodyComp = this.el.components['physx-body'];
+    if (bodyComp) bodyComp.setKinematic = false;
   },
 
   _tryApply: function () {
@@ -121,11 +180,15 @@ AFRAME.registerComponent('floating-cube', {
 
   /**
    * Вызывается из physx-grab при отпускании кубика.
-   * Containment-тест по CONFIG.dome → gravity или float.
+   * Сначала пытаемся снепнуть важную деталь в слот (1.3); иначе
+   * containment-тест по CONFIG.dome → gravity или float.
    */
   onGrabReleased: function () {
     // После joint velocity в теле «полная» — сброс для корректного масштабирования.
     this._lastAppliedTimeScale = 1.0;
+
+    // Важная деталь рядом со свободным слотом → снеп (Фаза 1, шаг 1.3).
+    if (this._trySnapToSlot()) return;
 
     var pos = this._getWorldPosition();
     var inside = this._isInsideDome(pos, true);
@@ -140,6 +203,60 @@ AFRAME.registerComponent('floating-cube', {
       '[floating-cube] release', this.el.id || '(no id)',
       inside ? 'inside → gravity' : 'outside → float'
     );
+  },
+
+  /** Компонент assembly-core (#assembly-core), с кэшем. */
+  _getAssemblyCore: function () {
+    var c = this._assemblyCore;
+    if (c && c.el && c.el.isConnected) return c;
+    var el = document.getElementById('assembly-core');
+    this._assemblyCore = (el && el.components && el.components['assembly-core']) || null;
+    return this._assemblyCore;
+  },
+
+  /**
+   * Снеп важной детали в ближайший свободный слот при release.
+   * Серый мусор (dataset.isTarget!=='true') не снепится.
+   * @returns {boolean} true — деталь снепнута (containment-логику пропускаем).
+   */
+  _trySnapToSlot: function () {
+    if (!this.el.dataset || this.el.dataset.isTarget !== 'true') return false;
+    var core = this._getAssemblyCore();
+    if (!core || typeof core.findFreeSlotNear !== 'function') return false;
+
+    var slot = core.findFreeSlotNear(this._getWorldPosition());
+    if (!slot) return false;
+
+    this._snapToSlot(core, slot);
+    return true;
+  },
+
+  /**
+   * Ставит деталь в позу слота и фиксирует kinematic-локом (ADR-02 п.7):
+   * смена type на kinematic не пересоздаёт actor, тело держит позу из object3D.
+   * tick для state 'snapped' позу не трогает.
+   */
+  _snapToSlot: function (core, slot) {
+    var obj = this.el.object3D;
+    var parent = obj.parent;
+    if (parent) {
+      // Мировая поза слота → локальная к родителю детали (#floating-cubes-root).
+      obj.position.copy(parent.worldToLocal(slot.position.clone()));
+      var pq = new THREE.Quaternion();
+      parent.getWorldQuaternion(pq);
+      obj.quaternion.copy(pq.invert().multiply(slot.quaternion));
+    } else {
+      obj.position.copy(slot.position);
+      obj.quaternion.copy(slot.quaternion);
+    }
+    obj.updateMatrixWorld(true);
+
+    this.state = 'snapped';
+    this._snappedSlotId = slot.slotId;
+    this.el.setAttribute('physx-body', 'type: kinematic');
+    core.occupySlot(slot.slotId, this.el);
+
+    console.log('[floating-cube] snapped', this.el.id || '(no id)', '→ slot', slot.slotId);
   },
 
   _enterGravityMode: function () {
@@ -895,6 +1012,8 @@ AFRAME.registerComponent('floating-cube', {
     var rb = this._rb;
     if (!rb) return;
     if (this.el.is && this.el.is('grabbed-dynamic')) return;
+    // Снепнутая деталь kinematic — позу держит object3D, физику не трогаем.
+    if (this.state === 'snapped') return;
 
     if (this.state === 'gravity') {
       if (this._useGravityTimeScale()) {
