@@ -7,6 +7,9 @@
  * Не хватается. Не сталкивается с DOME — пролетает к башне.
  * После отскока от стен комнаты — разворот к куполу; задержка 0/1/2 отскока
  * заново бросается после каждого такого разворота (цикл).
+ * После отскока от пола — разворот к башне (steerBounceDelays).
+ * room-dome-collider: чистый отскок внутрь (roomWallBounce), без скольжения.
+ * Пол: floorEscape в tick.
  */
 AFRAME.registerComponent('red-ball', {
   schema: {
@@ -30,6 +33,23 @@ AFRAME.registerComponent('red-ball', {
     this._batClampSpeed = this._speeds.minDrift;
     // Ранний contactbegin (contactOffset): ждём визуального касания, не отскакиваем.
     this._pendingCubeHit = null;
+    this._lastFloorEscapeMs = 0;
+
+    // Режим волны (ball-wave-manager): подлёт по заданному прицелу, без containment,
+    // homing и floorEscape. Метаданные прицела — в dataset (ставит менеджер).
+    this._waveMode = !!(this.el.dataset && this.el.dataset.waveMode === '1');
+    this._retired = false;
+    this._waveState = 'incoming';
+    if (this._waveMode) {
+      var ax = parseFloat(this.el.dataset.waveAimX);
+      var ay = parseFloat(this.el.dataset.waveAimY);
+      var az = parseFloat(this.el.dataset.waveAimZ);
+      if (isFinite(ax) && isFinite(ay) && isFinite(az) && (ax || ay || az)) {
+        this._waveAim = { x: ax, y: ay, z: az };
+      } else {
+        this._waveMode = false;
+      }
+    }
 
     this._onContactBegin = this._onContactBegin.bind(this);
     var onReady = this._tryApply.bind(this);
@@ -147,13 +167,31 @@ AFRAME.registerComponent('red-ball', {
     return { x: x * inv, y: y * inv, z: z * inv };
   },
 
+  _getWallBounceOpts: function () {
+    var prev = this._lastAppliedTimeScale;
+    return {
+      worldVelInvScale: prev > 0.001 ? 1 / prev : 1,
+      minBounceSpeed: this._speeds.minDrift,
+    };
+  },
+
   /**
    * Задаёт направление скорости к куполу, сохраняя текущую величину (не притяжение).
+   * @param {number} [upBias] — мин. Y единичного направления (floorEscape).
    */
-  _setVelocityDirectionTowardDome: function (rb) {
+  _setVelocityDirectionTowardDome: function (rb, upBias) {
     if (!rb || typeof rb.getLinearVelocity !== 'function') return;
 
     var toward = this._directionTowardDome();
+    if (upBias !== undefined && upBias > 0 && toward.y < upBias) {
+      toward.y = upBias;
+      var tl = Math.sqrt(toward.x * toward.x + toward.y * toward.y + toward.z * toward.z);
+      if (tl > 1e-5) {
+        toward.x /= tl;
+        toward.y /= tl;
+        toward.z /= tl;
+      }
+    }
     var prev = this._lastAppliedTimeScale;
     if (!prev || prev < 0.001) prev = 1.0;
     var invPrev = 1 / prev;
@@ -183,7 +221,60 @@ AFRAME.registerComponent('red-ball', {
     }
   },
 
-  /** Отскок от стен/пола/потолка комнаты — да; пьедестал и плитки купола — нет. */
+  _getFloorEscapeCfg: function () {
+    return this.cfg.floorEscape || {};
+  },
+
+  /** Низко у пола, далеко от центра, горизонтальная скорость — «застрял у периметра». */
+  _isFloorEscapeCandidate: function (rb) {
+    var fe = this._getFloorEscapeCfg();
+    if (fe.enabled === false) return false;
+
+    this.el.object3D.getWorldPosition(this._worldPos);
+    var y = this._worldPos.y;
+    if (y > (fe.maxY !== undefined ? fe.maxY : 0.22)) return false;
+
+    var horizDist = Math.sqrt(
+      this._worldPos.x * this._worldPos.x + this._worldPos.z * this._worldPos.z
+    );
+    if (horizDist < (fe.minHorizDist !== undefined ? fe.minHorizDist : 0.45)) return false;
+
+    if (!rb || typeof rb.getLinearVelocity !== 'function') return false;
+    var prev = this._lastAppliedTimeScale;
+    if (!prev || prev < 0.001) prev = 1.0;
+    var invPrev = 1 / prev;
+
+    try {
+      var lv = rb.getLinearVelocity();
+      if (!lv) return false;
+      var fx = lv.x * invPrev;
+      var fz = lv.z * invPrev;
+      var horizSp = Math.sqrt(fx * fx + fz * fz);
+      var minHoriz = fe.minHorizSpeed !== undefined ? fe.minHorizSpeed : 0.12;
+      return horizSp >= minHoriz;
+    } catch (e) {
+      return false;
+    }
+  },
+
+  /** Разворот к куполу с upBias — выход из «желоба» у пола круглой комнаты. */
+  _tryFloorEscape: function (rb) {
+    var fe = this._getFloorEscapeCfg();
+    if (fe.enabled === false) return false;
+
+    var cd = fe.cooldownMs !== undefined ? fe.cooldownMs : 800;
+    if (performance.now() - this._lastFloorEscapeMs < cd) return false;
+    if (!this._isFloorEscapeCandidate(rb)) return false;
+
+    var upBias = fe.upBias !== undefined ? fe.upBias : 0.35;
+    this._setVelocityDirectionTowardDome(rb, upBias);
+    this._beginSteerCycle();
+    this._lastFloorEscapeMs = performance.now();
+    if (typeof rb.wakeUp === 'function') rb.wakeUp();
+    return true;
+  },
+
+  /** Отскок от стен/пола/потолка комнаты — да; пьедестал и малый купол — нет. */
   _isRoomWallContact: function (otherEl) {
     if (!otherEl) return false;
     var node = otherEl;
@@ -228,10 +319,30 @@ AFRAME.registerComponent('red-ball', {
       return;
     }
 
+    // Волна: с куполом не сталкивается (слой WAVE_BALL), homing не нужен. С полом/
+    // пьедесталом (static) сталкивается — направляем наружу-вверх, чтобы шар не катился
+    // по полу (restitution низкий, gravity off), а улетел за купол и деспавнился.
+    if (this._waveMode) {
+      if (other.data.type === 'static' && this._rb) {
+        this._deflectWaveOffSurface(this._rb);
+      }
+      return;
+    }
+
     if (other.data.type !== 'static') return;
     if (!this._isRoomWallContact(other.el)) return;
     var rb = this._rb;
     if (!rb) return;
+
+    // Стенка комнаты (room-dome-collider): сразу отскок внутрь.
+    if (typeof isRoomDomeWallElement === 'function' && isRoomDomeWallElement(other.el)) {
+      var br = this.cfg.radius !== undefined ? this.cfg.radius : 0.04;
+      if (typeof bounceOffRoomDomeWall === 'function' &&
+          bounceOffRoomDomeWall(this.el, rb, br, this._getWallBounceOpts())) {
+        this._lastAppliedTimeScale = 1.0;
+      }
+      return;
+    }
 
     this._wallBounceCount++;
     if (this._wallBounceCount <= this._steerBounceDelay) {
@@ -638,12 +749,18 @@ AFRAME.registerComponent('red-ball', {
     this._applyBallCCD(rb);
 
     if (typeof rb.setLinearVelocity === 'function') {
-      var rnd = this._randomUnitVector();
-      var dx = rnd.x;
-      var dy = rnd.y;
-      var dz = rnd.z;
-      var dlen = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      var sp = speeds.initialImpulse;
+      var dx; var dy; var dz; var sp;
+      if (this._waveMode) {
+        // Волна: летим по прицелу к столу со скоростью подлёта (мировая, prev=1.0).
+        dx = this._waveAim.x; dy = this._waveAim.y; dz = this._waveAim.z;
+        var w = cfg.waves || {};
+        sp = w.incomingSpeed !== undefined ? w.incomingSpeed : 1.4;
+      } else {
+        var rnd = this._randomUnitVector();
+        dx = rnd.x; dy = rnd.y; dz = rnd.z;
+        sp = speeds.initialImpulse;
+      }
+      var dlen = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
       try {
         rb.setLinearVelocity({
           x: (dx / dlen) * sp,
@@ -773,25 +890,127 @@ AFRAME.registerComponent('red-ball', {
     }
   },
 
+  /**
+   * Волна: после удара о пол/пьедестал направить шар НАРУЖУ и ВВЕРХ (мировая скорость),
+   * чтобы не катился по полу, а ушёл за купол → деспавн. timeScale применяется в _waveTick.
+   */
+  _deflectWaveOffSurface: function (rb) {
+    if (!rb || typeof rb.setLinearVelocity !== 'function') return;
+    this.el.object3D.getWorldPosition(this._worldPos);
+    var hx = this._worldPos.x;
+    var hz = this._worldPos.z;
+    var hlen = Math.sqrt(hx * hx + hz * hz);
+    var ox; var oz;
+    if (hlen > 1e-3) {
+      ox = hx / hlen; oz = hz / hlen;
+    } else {
+      var a = Math.random() * Math.PI * 2;
+      ox = Math.cos(a); oz = Math.sin(a);
+    }
+    // Наружу по горизонтали + заметно вверх.
+    var dir = { x: ox * 0.6, y: 0.8, z: oz * 0.6 };
+    var dl = Math.sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z) || 1;
+    dir.x /= dl; dir.y /= dl; dir.z /= dl;
+
+    var w = this.cfg.waves || {};
+    var sp = w.incomingSpeed !== undefined ? w.incomingSpeed : 1.4;
+
+    try {
+      rb.setLinearVelocity({ x: dir.x * sp, y: dir.y * sp, z: dir.z * sp }, false);
+      this._lastAppliedTimeScale = 1.0;
+      if (typeof rb.wakeUp === 'function') rb.wakeUp();
+    } catch (e) {
+      if (!this._surfaceWarned) {
+        console.warn('[red-ball] wave surface deflect failed:', e.message);
+        this._surfaceWarned = true;
+      }
+    }
+  },
+
+  /** Шар вышел из игры (улетел наружу / отбит) — сообщить менеджеру для респавна. */
+  _retire: function () {
+    if (this._retired) return;
+    this._retired = true;
+    this._waveState = 'retiring';
+    if (this.el.sceneEl) {
+      this.el.sceneEl.emit('ball-retired', { el: this.el }, false);
+    }
+  },
+
+  /**
+   * Tick для wave-режима: без containment/homing/floorEscape. Летит сквозь туман,
+   * бьёт детали, отбивается битой/кубом; деспавн за despawnRadius → 'ball-retired'.
+   */
+  _waveTick: function (rb) {
+    if (this._retired) return;
+
+    if (typeof rb.isSleeping === 'function' && rb.isSleeping()) {
+      if (typeof rb.wakeUp === 'function') rb.wakeUp();
+    }
+
+    this.el.object3D.getWorldPosition(this._worldPos);
+    var dist = Math.sqrt(
+      this._worldPos.x * this._worldPos.x +
+      this._worldPos.y * this._worldPos.y +
+      this._worldPos.z * this._worldPos.z
+    );
+    var room = (typeof CONFIG !== 'undefined' && CONFIG.room) || {};
+    var fogR = (room.fogDome && room.fogDome.radius !== undefined) ? room.fogDome.radius : 2.0;
+    if (this._waveState === 'incoming' && dist < fogR) {
+      this._waveState = 'active';
+    } else if (this._waveState === 'active' && dist > fogR) {
+      this._waveState = 'retiring';
+    }
+
+    var w = this.cfg.waves || {};
+    var despawnR = w.despawnRadius !== undefined ? w.despawnRadius : 3.6;
+    if (dist > despawnR) { this._retire(); return; }
+
+    // Поддержка минимальной скорости (только магнитуда, без редиректа) — чтобы не зависал.
+    this._maintainFloatDrift(rb);
+
+    var inBatClamp = performance.now() < this._batClampUntilMs;
+    var heldPending = inBatClamp ? false : this._processPendingCubeHit();
+
+    this._applyTimeScaleToVelocity(rb);
+
+    if (this._clampBatDeflect(rb)) return;
+    if (heldPending) return;
+
+    this._preHitWorldSpeed = this._currentWorldSpeed(rb);
+  },
+
   tick: function () {
     var rb = this._rb;
     if (!rb) return;
+
+    if (this._waveMode) { this._waveTick(rb); return; }
 
     if (typeof rb.isSleeping === 'function' && rb.isSleeping()) {
       if (typeof rb.wakeUp === 'function') rb.wakeUp();
     }
 
     var r = this.cfg.radius !== undefined ? this.cfg.radius : 0.04;
+    var bounceOpts = this._getWallBounceOpts();
     if (typeof enforceRoomDomeContainment === 'function') {
-      enforceRoomDomeContainment(this.el, rb, r);
+      if (enforceRoomDomeContainment(this.el, rb, r, bounceOpts) === 'sphere') {
+        this._lastAppliedTimeScale = 1.0;
+      }
+    }
+    if (typeof enforceRoomDomeWallBounce === 'function' &&
+        enforceRoomDomeWallBounce(this.el, rb, r, bounceOpts)) {
+      this._lastAppliedTimeScale = 1.0;
     }
 
     this._maintainFloatDrift(rb);
 
     // Hold/boost задают «мировую» скорость (prev=1.0) — timeScale применяем следом.
-    var heldPending = performance.now() < this._batClampUntilMs
-      ? false
-      : this._processPendingCubeHit();
+    var inBatClamp = performance.now() < this._batClampUntilMs;
+    var heldPending = inBatClamp ? false : this._processPendingCubeHit();
+
+    if (!inBatClamp && !heldPending) {
+      this._tryFloorEscape(rb);
+    }
 
     this._applyTimeScaleToVelocity(rb);
 

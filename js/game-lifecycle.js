@@ -43,6 +43,9 @@
 
   function clearWorld() {
     if (typeof window.clearFloatingCubes === 'function') window.clearFloatingCubes();
+    if (window.ballWaveManager && typeof window.ballWaveManager.stopWaves === 'function') {
+      window.ballWaveManager.stopWaves();
+    }
     if (typeof window.clearRedBalls === 'function') window.clearRedBalls();
     if (typeof window.clearBallBat === 'function') window.clearBallBat();
 
@@ -65,7 +68,12 @@
     if (typeof window.respawnFloatingCubes === 'function') {
       window.respawnFloatingCubes();
     }
-    if (typeof window.respawnRedBalls === 'function') {
+    // Шары: волны «атомы времени» (если включены) или старый фиксированный спавн.
+    var wavesOn = CONFIG.balls && CONFIG.balls.waves && CONFIG.balls.waves.enabled;
+    if (wavesOn && window.ballWaveManager &&
+        typeof window.ballWaveManager.startWaves === 'function') {
+      window.ballWaveManager.startWaves();
+    } else if (typeof window.respawnRedBalls === 'function') {
       window.respawnRedBalls();
     }
     if (typeof window.respawnBallBat === 'function') {

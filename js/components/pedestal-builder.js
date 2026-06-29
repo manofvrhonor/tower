@@ -37,6 +37,7 @@ AFRAME.registerComponent('pedestal-builder', {
       '; staticFriction: ' + (m.staticFriction !== undefined ? m.staticFriction : 0.70) +
       '; dynamicFriction: ' + (m.dynamicFriction !== undefined ? m.dynamicFriction : 0.60);
 
+    // WAVE_BALL (8) — шары волны отскакивают от стола (но летят сквозь купол).
     this._layerTop =
       '; collisionLayers: ' + layers.WORLD +
       '; collidesWithLayers: ' + [
@@ -45,6 +46,7 @@ AFRAME.registerComponent('pedestal-builder', {
         layers.GRABBED_CUBE,
         layers.BALL,
         layers.BAT,
+        layers.WAVE_BALL,
       ].join(', ');
 
     // GRABBED_CUBE — только куб в руке; BAT (7) — всегда.
@@ -55,6 +57,7 @@ AFRAME.registerComponent('pedestal-builder', {
         layers.GRAVITY_CUBE,
         layers.BALL,
         layers.BAT,
+        layers.WAVE_BALL,
       ].join(', ');
 
     this._buildAll(cfg);
