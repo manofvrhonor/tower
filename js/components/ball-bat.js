@@ -236,12 +236,49 @@ AFRAME.registerComponent('ball-bat', {
     return (x * x + dy * dy + z * z) <= innerR * innerR;
   },
 
+  _getWallBounceOpts: function () {
+    var prev = this._lastAppliedTimeScale;
+    return {
+      worldVelInvScale: prev > 0.001 ? 1 / prev : 1,
+      minBounceSpeed: this.floatCfg.minDriftSpeed !== undefined
+        ? this.floatCfg.minDriftSpeed : 0.1,
+    };
+  },
+
+  _applyRoomWallBounceTick: function (rb) {
+    var br = this.cfg.containmentRadius !== undefined ? this.cfg.containmentRadius : 0.22;
+    var bounceOpts = this._getWallBounceOpts();
+    if (typeof enforceRoomDomeContainment === 'function') {
+      if (enforceRoomDomeContainment(this.el, rb, br, bounceOpts) === 'sphere') {
+        this._lastAppliedTimeScale = 1.0;
+      }
+    }
+    if (typeof enforceRoomDomeWallBounce === 'function' &&
+        enforceRoomDomeWallBounce(this.el, rb, br, bounceOpts)) {
+      this._lastAppliedTimeScale = 1.0;
+    }
+  },
+
   _onContactBegin: function (evt) {
     var otherComp = evt.detail.otherComponent;
     var otherEl = otherComp && otherComp.el;
 
     if (this._grabbed) {
       this._applyGrabbedStrikeToVictim(otherComp, otherEl);
+      return;
+    }
+
+    if (otherComp && otherComp.data.type === 'static' && otherEl &&
+        this.state === 'float' &&
+        typeof isRoomDomeWallElement === 'function' && isRoomDomeWallElement(otherEl)) {
+      var rb = this._rb;
+      if (rb) {
+        var br = this.cfg.containmentRadius !== undefined ? this.cfg.containmentRadius : 0.22;
+        if (typeof bounceOffRoomDomeWall === 'function' &&
+            bounceOffRoomDomeWall(this.el, rb, br, this._getWallBounceOpts())) {
+          this._lastAppliedTimeScale = 1.0;
+        }
+      }
       return;
     }
 
@@ -597,6 +634,7 @@ AFRAME.registerComponent('ball-bat', {
       if (this._useTimeScale()) {
         this._tickGravityWithTimeScale(rb);
       }
+      this._applyRoomWallBounceTick(rb);
       if (this._clampStrikerDeflect(rb)) return;
       if (performance.now() >= this._strikerClampUntilMs) {
         this._preHitWorldSpeed = this._currentWorldSpeed(rb);
@@ -607,6 +645,7 @@ AFRAME.registerComponent('ball-bat', {
     if (typeof rb.isSleeping === 'function' && rb.isSleeping()) {
       if (typeof rb.wakeUp === 'function') rb.wakeUp();
     }
+    this._applyRoomWallBounceTick(rb);
     this._maintainFloatDrift(rb);
     this._applyTimeScaleToVelocity(rb);
     if (this._clampStrikerDeflect(rb)) return;

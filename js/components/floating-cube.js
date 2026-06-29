@@ -486,6 +486,15 @@ AFRAME.registerComponent('floating-cube', {
     var rb = this._rb;
     if (!rb) return;
 
+    if (typeof isRoomDomeWallElement === 'function' && isRoomDomeWallElement(otherComp.el)) {
+      var half = (this.cfg.size !== undefined ? this.cfg.size : 0.1) / 2;
+      if (typeof bounceOffRoomDomeWall === 'function' &&
+          bounceOffRoomDomeWall(this.el, rb, half, this._getWallBounceOpts())) {
+        this._lastAppliedTimeScale = 1.0;
+      }
+      return;
+    }
+
     this._wallBounceCount++;
     if (this._wallBounceCount <= this._steerBounceDelay) {
       if (typeof rb.wakeUp === 'function') rb.wakeUp();
@@ -495,6 +504,27 @@ AFRAME.registerComponent('floating-cube', {
     this._setVelocityDirectionTowardDome(rb);
     this._beginSteerCycle();
     if (typeof rb.wakeUp === 'function') rb.wakeUp();
+  },
+
+  _getWallBounceOpts: function () {
+    var prev = this._lastAppliedTimeScale;
+    return {
+      worldVelInvScale: prev > 0.001 ? 1 / prev : 1,
+      minBounceSpeed: this.cfg.minDriftSpeed !== undefined ? this.cfg.minDriftSpeed : 0.28,
+    };
+  },
+
+  _applyRoomWallBounceTick: function (rb, bodyHalf) {
+    var bounceOpts = this._getWallBounceOpts();
+    if (typeof enforceRoomDomeContainment === 'function') {
+      if (enforceRoomDomeContainment(this.el, rb, bodyHalf, bounceOpts) === 'sphere') {
+        this._lastAppliedTimeScale = 1.0;
+      }
+    }
+    if (typeof enforceRoomDomeWallBounce === 'function' &&
+        enforceRoomDomeWallBounce(this.el, rb, bodyHalf, bounceOpts)) {
+      this._lastAppliedTimeScale = 1.0;
+    }
   },
 
   /** Куб или бита в захвате — «ударная» рука. */
@@ -1021,6 +1051,8 @@ AFRAME.registerComponent('floating-cube', {
       } else {
         this._clampGravityVelocity(rb);
       }
+      var gHalf = (this.cfg.size !== undefined ? this.cfg.size : 0.1) / 2;
+      this._applyRoomWallBounceTick(rb, gHalf);
       if (this._clampStrikerDeflect(rb)) return;
       if (performance.now() >= this._strikerClampUntilMs) {
         this._preHitWorldSpeed = this._currentWorldSpeed(rb);
@@ -1035,9 +1067,7 @@ AFRAME.registerComponent('floating-cube', {
     }
 
     var half = (this.cfg.size !== undefined ? this.cfg.size : 0.1) / 2;
-    if (typeof enforceRoomDomeContainment === 'function') {
-      enforceRoomDomeContainment(this.el, rb, half);
-    }
+    this._applyRoomWallBounceTick(rb, half);
 
     this._maintainFloatDrift(rb);
     this._applyTimeScaleToVelocity(rb);
