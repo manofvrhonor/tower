@@ -44,6 +44,7 @@
   <script src="js/components/collider-debug-viz.js"></script>
   <script src="js/components/pedestal-builder.js"></script>
   <script src="js/components/ghost-tower-hint.js"></script>
+  <script src="js/components/assembly-core.js"></script>
   <script src="js/components/victory-check.js"></script>
   <script src="js/components/victory-ui.js"></script>
   <script src="js/components/game-menu.js"></script>
@@ -102,6 +103,10 @@
 
     <!-- Призрачная башня: схема победы (цвета из init-session.js). Без физики. -->
     <a-entity id="ghost-tower-hint" ghost-tower-hint position="0 0 0" visible="false"></a-entity>
+
+    <!-- Слоты сборки механизма (Фаза 1). position = верх ядра (pedestal.tableSurfaceY = 1.0);
+         slot.position в CONFIG.mechanisms — локальное смещение от этой точки. -->
+    <a-entity id="assembly-core" assembly-core position="0 1 0"></a-entity>
 
 
     <!-- ====== КУПОЛ (Этап 3, Шаг 2 v2): визуал + тайловый коллайдер ======
