@@ -26,6 +26,7 @@ const CONFIG = {
       FLOAT_CUBE:   '#33cc66',  // куб в float
       GRAVITY_CUBE: '#ffcc00',  // куб на столе
       GRABBED_CUBE: '#ff8800',  // куб в руке
+      FLOAT_INSIDE: '#aaddff',  // куб внутри сферы ядра
       BALL:         '#ff3333',  // красный шар
       BAT:          '#cc9900',  // бита-сковородка
       HAND:         '#aa44ff',  // сфера руки
@@ -109,7 +110,72 @@ const CONFIG = {
     },
   },
 
-  // === Парящий стол (центр комнаты) ===
+  // === Ядро сборки (Фаза 2.x): сфера + орбитальные кольца ===
+  assemblyZone: {
+    // Центр сферы = центр бывшего PhysX-диска (pedestal disk center).
+    hubPosition: { x: 0, y: 0.985, z: 0 },
+    radius: 0.30,
+    // assembly-core local Y — чтобы слоты остались на y=1.0 (верх бывшего стола).
+    assemblyLocalY: 0.015,
+    releaseContainment: 'lenient',
+
+    rings: [
+      {
+        id: 0,
+        tiltAxis: 'x', tiltDeg: 62,
+        spinAxis: 'y', spinSpeedDeg: 22,
+        segments: 20,
+      },
+      {
+        id: 1,
+        tiltAxis: 'z', tiltDeg: 58,
+        spinAxis: 'x', spinSpeedDeg: -17,
+        segments: 20,
+      },
+    ],
+    ringThickness: 0.02,
+    ringVisual: {
+      color: '#33e0ff',
+      emissive: '#22d4f0',
+      opacity: 0.92,
+    },
+    // Призраки слотов assembly-core (контраст с cyan-кольцами и белой сферой).
+    slotVisual: {
+      color: '#ffe066',
+      opacity: 1.0,
+      fillOpacity: 0.22,
+      renderOrder: 1100,
+    },
+
+    collider: {
+      latitudeRings: 10,
+      longitudeSegments: 16,
+      shellThickness: 0.01,
+      tileOverlap: 1.08,
+      physxMaterial: 'restitution: 0.95; staticFriction: 0.05; dynamicFriction: 0.05',
+      debugVisible: false,
+    },
+
+    // Белые «электроволны» (шейдер как room-fog-dome, полная сфера).
+    visual: {
+      color: '#e8eef5',
+      glowColor: '#ffffff',
+      coreColor: '#ffffff',
+      baseOpacity: 0.85,
+      voidOpacity: 0.06,
+      streakOpacity: 0.88,
+      fogContrast: 2.2,
+      scrollSpeed: 0.32,
+      fresnelPower: 2.0,
+      fresnelStrength: 0.55,
+      fogOverlay: 0.55,
+      widthSegments: 48,
+      heightSegments: 32,
+      renderOrder: 12,
+    },
+  },
+
+  // === Парящий стол (legacy config; коллайдер заменён orbit-rings) ===
   pedestal: {
     radius: 0.3,           // метры (диаметр 60 см)
     tableSurfaceY: 1.0,    // мир: верх стола (плоскость коллайдера)
@@ -711,7 +777,8 @@ const CONFIG = {
    *   GRABBED_CUBE — кубик, схваченный рукой.
    *   BALL         — красные шары (Этап 6).
    *   HAND         — сфера коллайдера руки.
-   *   BAT          — бита (Этап 7); всегда бьётся о WORLD/пьедestal, не DOME.
+   *   BAT          — бита (Этап 7); всегда бьётся o WORLD/кольца, не DOME.
+   *   FLOAT_INSIDE — куб внутри сферы ядра: float без g, проходит сквozь DOME.
    */
   collisionLayers: {
     WORLD:        0,
@@ -727,6 +794,7 @@ const CONFIG = {
     // это полностью отключает столкновение со стенами комнаты (шар летит сквозь туман).
     // С кубами/битой сталкивается через свою маску (collidesWithLayers ниже, в менеджере).
     WAVE_BALL:    8,
+    FLOAT_INSIDE: 9,
   },
 
   // === Меню и режимы сложности (сессия 29) ===
@@ -736,6 +804,12 @@ const CONFIG = {
       easy:   { label: 'Лёгкий',    ballCount: 1, stackHeight: 3 },
       normal: { label: 'Нормальный', ballCount: 3, stackHeight: 4 },
       hard:   { label: 'Сложный',   ballCount: 5, stackHeight: 5 },
+      hardcore: {
+        label: 'Хардкор',
+        ballCount: 5,
+        stackHeight: 5,
+        rotateAssemblyWithRing: 0,
+      },
     },
     menu: {
       worldPosition: { x: 0, y: 1.55, z: -0.65 },

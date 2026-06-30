@@ -11,8 +11,9 @@
  *   - захват рукой работает через стандартный physx-grab.
  *
  * Состояние state:
- *   - 'float'   — невесомость, слой FLOAT_CUBE;
- *   - 'gravity' — гравитация включена, слой GRAVITY_CUBE (задача 3, Шаг 4);
+ *   - 'float'        — float снаружи сферы ядра, слой FLOAT_CUBE (барьер DOME);
+ *   - 'float-inside' — float внутри сферы, слой FLOAT_INSIDE (сквozь DOME);
+ *   - 'gravity'      — legacy; в зоне ядра больше не включается при release;
  *   - 'snapped' — деталь зафиксирована в слоте сборки, тело kinematic
  *                 (Фаза 1, шаг 1.3). Поза держится из object3D, tick её не трогает.
  *
@@ -20,7 +21,7 @@
  *   - важная деталь (dataset.isTarget==='true') рядом со свободным слотом
  *     механизма → СНЕП в слот (kinematic-lock), см. _trySnapToSlot;
  *   - иначе центр кубика проверяется containment-тестом купола:
- *     внутри → gravity, снаружи → float. Серый мусор не снепится.
+ *     внутри сферы ядра → float-inside, снаружи → float-outside. Серый мусор не снепится.
  *
  * Контакт gravity-кубика с #floor → возврат в float (задача 3, Шаг 5).
  * Float: после 2–5 отскоков от стен комнаты — разворот к куполу (как red-ball).
@@ -222,9 +223,8 @@ AFRAME.registerComponent('floating-cube', {
     this._resetKinematicLatch();
 
     var pos = this._getWorldPosition();
-    var inside = this._isInsideDome(pos, true);
-    if (inside) {
-      this._enterGravityMode();
+    if (this._isInsideDome(pos, true)) {
+      this._enterFloatInsideMode(false);
     } else {
       this._enterFloatMode(false);
     }
@@ -247,7 +247,7 @@ AFRAME.registerComponent('floating-cube', {
           }, false);
           this._lastAppliedTimeScale = 1.0;
           this._applyTimeScaleToVelocity(rb);
-          if (this.state === 'float') {
+          if (this.state === 'float' || this.state === 'float-inside') {
             this._driftDir = { x: dir.x, y: dir.y, z: dir.z };
           }
         }
@@ -259,7 +259,7 @@ AFRAME.registerComponent('floating-cube', {
     console.log(
       '[floating-cube] break snap from ball',
       this.el.id || '(no id)',
-      inside ? '→ gravity' : '→ float'
+      inside ? '→ float-inside' : '→ float'
     );
   },
 
@@ -320,14 +320,14 @@ AFRAME.registerComponent('floating-cube', {
     var inside = this._isInsideDome(pos, true);
 
     if (inside) {
-      this._enterGravityMode();
+      this._enterFloatInsideMode(false);
     } else {
       this._enterFloatMode(false);
     }
 
     console.log(
       '[floating-cube] release', this.el.id || '(no id)',
-      inside ? 'inside → gravity' : 'outside → float'
+      inside ? 'inside → float-inside' : 'outside → float'
     );
   },
 
@@ -383,6 +383,16 @@ AFRAME.registerComponent('floating-cube', {
     core.occupySlot(slot.slotId, this.el);
 
     console.log('[floating-cube] snapped', this.el.id || '(no id)', '→ slot', slot.slotId);
+  },
+
+  _enterFloatInsideMode: function (applyImpulse) {
+    this.state = 'float-inside';
+    this._beginSteerCycle();
+    var rb = this._rb;
+    if (!rb) return;
+    this._applyFloatPhysics(rb, applyImpulse);
+    this._applyCubeMaterial('float-inside');
+    this._setCollisionLayer('FLOAT_INSIDE');
   },
 
   _enterGravityMode: function () {
@@ -478,13 +488,14 @@ AFRAME.registerComponent('floating-cube', {
   },
 
   /**
-   * Центр кубика внутри капсулы купола?
-   *
-   * @param {object} pos — {x, y, z} мировые координаты центра.
-   * @param {boolean} [forRelease] — true: мягкий тест (R + halfCube), для
-   *   onGrabReleased; false/omit: строгий (R - halfCube).
+   * Центр кубика внутри сферы ядра?
    */
   _isInsideDome: function (pos, forRelease) {
+    var halfCube = (this.cfg.size !== undefined ? this.cfg.size : 0.1) / 2;
+    if (typeof window.isInsideAssemblySphere === 'function') {
+      return window.isInsideAssemblySphere(pos, forRelease, halfCube);
+    }
+
     var dome = this.domeCfg;
     var halfCube = (this.cfg.size !== undefined ? this.cfg.size : 0.1) / 2;
     var R = dome.radius !== undefined ? dome.radius : 0.27;
@@ -545,6 +556,9 @@ AFRAME.registerComponent('floating-cube', {
   },
 
   _getDomeTarget: function () {
+    if (typeof window.getAssemblySphereTarget === 'function') {
+      return window.getAssemblySphereTarget();
+    }
     var dome = this.domeCfg || {};
     return {
       x: 0,
@@ -566,13 +580,14 @@ AFRAME.registerComponent('floating-cube', {
     return { x: dx / len, y: dy / len, z: dz / len };
   },
 
-  /** Отскок от стен/пола/потолка комнаты — да; пьедestal и купол — нет (как red-ball). */
+  /** Отскок от стен комнаты — да; кольца ядра и сфера DOME — нет (homing). */
   _isRoomWallContact: function (otherEl) {
     if (!otherEl) return false;
     var node = otherEl;
     while (node) {
-      if (node.id === 'pedestal') return false;
+      if (node.dataset && node.dataset.orbitRingSegment !== undefined) return false;
       if (node.id === 'dome-collider') return false;
+      if (node.id && node.id.indexOf('orbit-ring-') === 0) return false;
       node = node.parentElement;
     }
     return true;
@@ -915,11 +930,14 @@ AFRAME.registerComponent('floating-cube', {
   _getCollidesWithCsv: function (layerName) {
     var L = (typeof CONFIG !== 'undefined' && CONFIG.collisionLayers) || {
       WORLD: 0, DOME: 1, FLOAT_CUBE: 2, GRAVITY_CUBE: 3,
-      GRABBED_CUBE: 4, BALL: 5, HAND: 6, BAT: 7,
+      GRABBED_CUBE: 4, BALL: 5, HAND: 6, BAT: 7, WAVE_BALL: 8, FLOAT_INSIDE: 9,
     };
     var list = [L.WORLD, L.FLOAT_CUBE, L.GRAVITY_CUBE, L.GRABBED_CUBE, L.BALL, L.BAT];
     if (layerName === 'FLOAT_CUBE') {
       list.splice(1, 0, L.DOME);
+    }
+    if (layerName === 'FLOAT_INSIDE') {
+      list.push(L.FLOAT_INSIDE);
     }
     return list.join(', ');
   },
@@ -933,16 +951,18 @@ AFRAME.registerComponent('floating-cube', {
     var mat = (mode === 'gravity')
       ? (cfg.gravityMaterial || { restitution: 0.15, staticFriction: 0.7, dynamicFriction: 0.6 })
       : (cfg.floatMaterial || { restitution: 0.9, staticFriction: 0.05, dynamicFriction: 0.05 });
-    var layerName = (mode === 'gravity') ? 'GRAVITY_CUBE' : 'FLOAT_CUBE';
+    var layerName = 'FLOAT_CUBE';
+    if (mode === 'gravity') layerName = 'GRAVITY_CUBE';
+    if (mode === 'float-inside') layerName = 'FLOAT_INSIDE';
     var L = (typeof CONFIG !== 'undefined' && CONFIG.collisionLayers) || {
       WORLD: 0, DOME: 1, FLOAT_CUBE: 2, GRAVITY_CUBE: 3,
-      GRABBED_CUBE: 4, BALL: 5, HAND: 6, BAT: 7,
+      GRABBED_CUBE: 4, BALL: 5, HAND: 6, BAT: 7, WAVE_BALL: 8, FLOAT_INSIDE: 9,
     };
 
     // contactOffset — раннее обнаружение контакта (меньше проникновения и
     // «резинового» выброса депенетрации). Float — floatContactOffset (шары малы).
     var co = -1;
-    if (mode === 'float' && this.cfg.floatContactOffset !== undefined) {
+    if (mode !== 'gravity' && this.cfg.floatContactOffset !== undefined) {
       co = this.cfg.floatContactOffset;
     } else if (this.cfg.contactOffset !== undefined) {
       co = this.cfg.contactOffset;
@@ -975,7 +995,7 @@ AFRAME.registerComponent('floating-cube', {
 
     var L = (typeof CONFIG !== 'undefined' && CONFIG.collisionLayers) || {
       WORLD: 0, DOME: 1, FLOAT_CUBE: 2, GRAVITY_CUBE: 3,
-      GRABBED_CUBE: 4, BALL: 5, HAND: 6, BAT: 7,
+      GRABBED_CUBE: 4, BALL: 5, HAND: 6, BAT: 7, WAVE_BALL: 8, FLOAT_INSIDE: 9,
     };
     var bit = function (i) { return (1 << i) >>> 0; };
     var layerIndex = L[layerName];
@@ -985,9 +1005,8 @@ AFRAME.registerComponent('floating-cube', {
     }
 
     var newWord0 = bit(layerIndex);
-    // FLOAT_CUBE — барьер купола; GRAVITY_CUBE — проходит сквозь купол.
     var newWord1 = bit(L.WORLD) | bit(L.FLOAT_CUBE) | bit(L.GRAVITY_CUBE) |
-                   bit(L.GRABBED_CUBE) | bit(L.BALL) | bit(L.BAT);
+                   bit(L.GRABBED_CUBE) | bit(L.BALL) | bit(L.BAT) | bit(L.FLOAT_INSIDE);
     if (layerName === 'FLOAT_CUBE') {
       newWord1 = newWord1 | bit(L.DOME);
     }
@@ -1177,6 +1196,13 @@ AFRAME.registerComponent('floating-cube', {
     // Снепнутая деталь kinematic — позу держит object3D, физику не трогаем.
     if (this.state === 'snapped') return;
 
+    if (this.state === 'float-inside') {
+      var posIn = this._getWorldPosition();
+      if (!this._isInsideDome(posIn, false)) {
+        this._enterFloatMode(false);
+      }
+    }
+
     if (this.state === 'gravity') {
       if (this._useGravityTimeScale()) {
         this._tickGravityWithTimeScale(rb);
@@ -1192,20 +1218,23 @@ AFRAME.registerComponent('floating-cube', {
       return;
     }
 
-    if (typeof rb.isSleeping === 'function' && rb.isSleeping()) {
-      if (typeof rb.wakeUp === 'function') {
-        rb.wakeUp();
+    if (this.state === 'float' || this.state === 'float-inside') {
+      if (typeof rb.isSleeping === 'function' && rb.isSleeping()) {
+        if (typeof rb.wakeUp === 'function') {
+          rb.wakeUp();
+        }
       }
-    }
 
-    var half = (this.cfg.size !== undefined ? this.cfg.size : 0.1) / 2;
-    this._applyRoomWallBounceTick(rb, half);
+      var halfF = (this.cfg.size !== undefined ? this.cfg.size : 0.1) / 2;
+      this._applyRoomWallBounceTick(rb, halfF);
 
-    this._maintainFloatDrift(rb);
-    this._applyTimeScaleToVelocity(rb);
-    if (this._clampStrikerDeflect(rb)) return;
-    if (performance.now() >= this._strikerClampUntilMs) {
-      this._preHitWorldSpeed = this._currentWorldSpeed(rb);
+      this._maintainFloatDrift(rb);
+      this._applyTimeScaleToVelocity(rb);
+      if (this._clampStrikerDeflect(rb)) return;
+      if (performance.now() >= this._strikerClampUntilMs) {
+        this._preHitWorldSpeed = this._currentWorldSpeed(rb);
+      }
+      return;
     }
   },
 

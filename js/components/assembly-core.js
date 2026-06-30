@@ -27,8 +27,8 @@ AFRAME.registerComponent('assembly-core', {
     mechanism: { default: '' },
     // Ребро призрачного слота, м (равно размеру детали-куба прототипа).
     slotSize:  { default: 0.1 },
-    color:     { default: '#33e0ff' },
-    opacity:   { default: 0.6 },
+    color:     { default: '#ffe066' },
+    opacity:   { default: 1.0 },
   },
 
   init: function () {
@@ -64,10 +64,27 @@ AFRAME.registerComponent('assembly-core', {
     for (var i = 0; i < this._slotMeshes.length; i++) {
       var m = this._slotMeshes[i];
       this._group.remove(m);
-      if (m.geometry) m.geometry.dispose();
-      if (m.material) m.material.dispose();
+      m.traverse(function (child) {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) child.material.dispose();
+      });
     }
     this._slotMeshes.length = 0;
+  },
+
+  _readSlotVisual: function () {
+    var az = (typeof CONFIG !== 'undefined' && CONFIG.assemblyZone) || {};
+    var v = az.slotVisual || {};
+    return {
+      color: v.color || this.data.color || '#ffe066',
+      opacity: v.opacity !== undefined ? v.opacity : (this.data.opacity !== undefined ? this.data.opacity : 1.0),
+      renderOrder: v.renderOrder !== undefined ? v.renderOrder : 1100,
+      fillOpacity: v.fillOpacity !== undefined ? v.fillOpacity : 0.22,
+    };
+  },
+
+  ensureSlotsBuilt: function () {
+    if (!this._slotMeshes.length) this._buildSlots();
   },
 
   _buildSlots: function () {
@@ -75,35 +92,51 @@ AFRAME.registerComponent('assembly-core', {
     this._occupied = {};
     var slots = this._getSlots();
     var s = this.data.slotSize;
+    var vis = this._readSlotVisual();
 
     for (var i = 0; i < slots.length; i++) {
       var slot = slots[i];
       var boxGeo = new THREE.BoxGeometry(s, s, s);
       var edges = new THREE.EdgesGeometry(boxGeo);
-      var mat = new THREE.LineBasicMaterial({
-        color: new THREE.Color(this.data.color),
-        transparent: true,
-        opacity: this.data.opacity,
-        depthTest: false,
-        depthWrite: false,
-      });
-      var lines = new THREE.LineSegments(edges, mat);
 
       var p = slot.position || { x: 0, y: 0, z: 0 };
       var r = slot.rotation || { x: 0, y: 0, z: 0 };
-      lines.position.set(p.x, p.y, p.z);
-      lines.rotation.set(
+
+      var slotRoot = new THREE.Group();
+      slotRoot.position.set(p.x, p.y, p.z);
+      slotRoot.rotation.set(
         THREE.MathUtils.degToRad(r.x || 0),
         THREE.MathUtils.degToRad(r.y || 0),
         THREE.MathUtils.degToRad(r.z || 0)
       );
-      lines.renderOrder = 500;
-      lines.frustumCulled = false;
-      lines.userData.slotId = slot.id;
+      slotRoot.frustumCulled = false;
+      slotRoot.userData.slotId = slot.id;
 
-      this._group.add(lines);
-      this._slotMeshes.push(lines);
-      boxGeo.dispose();
+      var fillMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(vis.color),
+        transparent: true,
+        opacity: vis.fillOpacity,
+        depthTest: false,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      var fill = new THREE.Mesh(boxGeo, fillMat);
+      fill.renderOrder = vis.renderOrder - 1;
+      slotRoot.add(fill);
+
+      var lineMat = new THREE.LineBasicMaterial({
+        color: new THREE.Color(vis.color),
+        transparent: vis.opacity < 1,
+        opacity: vis.opacity,
+        depthTest: false,
+        depthWrite: false,
+      });
+      var lines = new THREE.LineSegments(edges, lineMat);
+      lines.renderOrder = vis.renderOrder;
+      slotRoot.add(lines);
+
+      this._group.add(slotRoot);
+      this._slotMeshes.push(slotRoot);
     }
 
     console.log('[assembly-core] built', this._slotMeshes.length,

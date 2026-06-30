@@ -279,6 +279,8 @@ AFRAME.registerComponent('red-ball', {
     if (!otherEl) return false;
     var node = otherEl;
     while (node) {
+      if (node.dataset && node.dataset.orbitRingSegment !== undefined) return false;
+      if (node.id && node.id.indexOf('orbit-ring-') === 0) return false;
       if (node.id === 'pedestal') return false;
       if (node.id === 'dome-collider') return false;
       node = node.parentElement;

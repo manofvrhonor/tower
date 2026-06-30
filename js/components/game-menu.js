@@ -224,7 +224,7 @@ AFRAME.registerComponent('game-menu', {
 
     var panel = document.createElement('a-plane');
     panel.setAttribute('width', 0.62);
-    panel.setAttribute('height', 0.88);
+    panel.setAttribute('height', 1.0);
     panel.setAttribute('color', this._panelColor);
     panel.setAttribute('material', 'shader: flat; opacity: 0.96; transparent: true; side: front; depthTest: false; depthWrite: false; renderOrder: 50');
 
@@ -232,11 +232,11 @@ AFRAME.registerComponent('game-menu', {
     var titleData = this._makeTextPlane(title, 0.52, 0.11, {
       fontSize: 52, color: titleColor,
     });
-    titleData.el.setAttribute('position', '0 0.36 0.006');
+    titleData.el.setAttribute('position', '0 0.40 0.006');
 
     var self = this;
-    var diffOrder = ['easy', 'normal', 'hard'];
-    var diffY = [0.16, 0.04, -0.08];
+    var diffOrder = ['easy', 'normal', 'hard', 'hardcore'];
+    var diffY = [0.22, 0.08, -0.06, -0.20];
     this._difficultyEntries = [];
 
     for (var d = 0; d < diffOrder.length; d++) {
@@ -265,7 +265,7 @@ AFRAME.registerComponent('game-menu', {
     });
     startData.fontSize = 52;
     startData.el.setAttribute('class', 'game-menu-clickable');
-    startData.el.setAttribute('position', '0 -0.22 0.01');
+    startData.el.setAttribute('position', '0 -0.34 0.01');
     this._startEntry = this._registerButton(startData, {
       kind: 'start',
       normalBg: this._btnStart,
@@ -280,7 +280,7 @@ AFRAME.registerComponent('game-menu', {
     });
     this._wireframeData.fontSize = 36;
     this._wireframeData.el.setAttribute('class', 'game-menu-clickable');
-    this._wireframeData.el.setAttribute('position', '0 -0.36 0.01');
+    this._wireframeData.el.setAttribute('position', '0 -0.48 0.01');
     this._wireframeEntry = this._registerButton(this._wireframeData, {
       kind: 'wireframe',
       onPress: function () { self._toggleWireframe(); },

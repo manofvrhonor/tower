@@ -27,6 +27,7 @@
        menu-ui-draw.js — canvas-плашки меню (до game-menu / victory-ui);
        6) main.js — диагностика. -->
   <script src="js/config.js"></script>
+  <script src="js/assembly-zone.js"></script>
   <script src="js/menu-ui-draw.js"></script>
   <script src="js/init-session.js"></script>
   <script src="js/game-lifecycle.js"></script>
@@ -44,8 +45,10 @@
   <script src="js/ball-wave-manager.js"></script>
   <script src="js/spawn-ball-bat.js"></script>
   <script src="js/components/dome-builder.js"></script>
+  <script src="js/components/orbit-ring.js"></script>
+  <script src="js/components/assembly-hub.js"></script>
+  <script src="js/components/assembly-sphere-visual.js"></script>
   <script src="js/components/collider-debug-viz.js"></script>
-  <script src="js/components/pedestal-builder.js"></script>
   <script src="js/components/ghost-tower-hint.js"></script>
   <script src="js/components/assembly-core.js"></script>
   <script src="js/components/victory-check.js"></script>
@@ -89,64 +92,19 @@
     <!-- Пол: a-box, id=#floor для contactbegin (floating-cube). Ø = 2× fogDome.radius; визуал — room-fog-dome -->
     <a-box id="floor" position="0 -0.05 0" width="4" height="0.1" depth="4" visible="false"
            physx-body="type: static"
-           physx-material="restitution: 0.15; staticFriction: 0.70; dynamicFriction: 0.60; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5, 7, 8"></a-box>
+           physx-material="restitution: 0.15; staticFriction: 0.70; dynamicFriction: 0.60; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5, 7, 8, 9"></a-box>
 
 
-    <!-- ====== ПАРЯЩИЙ СТОЛ ======
-         Визуал = коллайдер: r/th из CONFIG.pedestal (index.html дублирует). -->
-    <a-entity id="pedestal" position="0 1 0" pedestal-builder>
-      <a-cylinder
-        position="0 -0.015 0"
-        radius="0.3"
-        height="0.03"
-        color="#3a3a3a"
-        material="metalness: 0.1; roughness: 0.85">
-      </a-cylinder>
+    <!-- ====== ЯДРО СБОРКИ (Фаза 2.x): орбитальные кольца + белая сфера ====== -->
+    <a-entity id="assembly-hub" assembly-hub position="0 0.985 0">
+      <a-entity id="orbit-ring-0" orbit-ring="index: 0"></a-entity>
+      <a-entity id="orbit-ring-1" orbit-ring="index: 1"></a-entity>
+      <a-entity id="assembly-core" assembly-core position="0 0.015 0"></a-entity>
+      <a-entity id="dome-collider" dome-builder></a-entity>
+      <a-entity id="assembly-sphere-visual" assembly-sphere-visual></a-entity>
     </a-entity>
 
-    <!-- Призрачная башня (Этап 5, устарело): заменена слотами #assembly-core. -->
     <a-entity id="ghost-tower-hint" ghost-tower-hint position="0 0 0" visible="false"></a-entity>
-
-    <!-- Слоты сборки механизма (Фаза 1). position = верх ядра (pedestal.tableSurfaceY = 1.0);
-         slot.position в CONFIG.mechanisms — локальное смещение от этой точки. -->
-    <a-entity id="assembly-core" assembly-core position="0 1 0"></a-entity>
-
-
-    <!-- ====== КУПОЛ (Этап 3, Шаг 2 v2): визуал + тайловый коллайдер ======
-         Визуал — капсула (цилиндр + верхняя полусфера). Нижняя полусфера не нужна,
-         её перекрывает пьедестал (R_купола=0.27 < R_пьедестала=0.30).
-
-         ВАЖНО: physx-body на цилиндр/сферу НЕ навешиваем. Декларативный physx-body
-         строит convex hull = сплошной выпуклый объём, который выталкивает кубики
-         наружу. Вместо этого физический коллайдер строится отдельно компонентом
-         dome-builder из ~89 тонких боксов-плиток (см. js/components/dome-builder.js
-         и CONFIG.dome.collider).
-
-         Числа продублированы из CONFIG.dome намеренно: inline-атрибуты A-Frame
-         не умеют читать window.CONFIG. При смене параметров — менять в обоих местах. -->
-    <a-entity id="dome-visual">
-      <!-- Цилиндрическая стенка (только визуал). open-ended, чтобы видеть полусферу изнутри. -->
-      <a-cylinder
-        position="0 1.15 0"
-        radius="0.27"
-        height="0.30"
-        open-ended="true"
-        material="color: #88ccff; opacity: 0.18; transparent: true; side: double; metalness: 0; roughness: 0.1">
-      </a-cylinder>
-
-      <!-- Верхняя полусфера-крышка (только визуал). theta-length: 90 = верхняя половина. -->
-      <a-sphere
-        position="0 1.30 0"
-        radius="0.27"
-        theta-length="90"
-        material="color: #88ccff; opacity: 0.18; transparent: true; side: double; metalness: 0; roughness: 0.1">
-      </a-sphere>
-    </a-entity>
-
-    <!-- Физический коллайдер купола: ~89 тонких боксов-плиток.
-         Все параметры — в CONFIG.dome.collider.
-         Чтобы увидеть плитки, поставь debugVisible: true в config.js. -->
-    <a-entity id="dome-collider" dome-builder></a-entity>
 
 
     <!-- ====== ПЛАВАЮЩИЕ КУБИКИ (5 цветных + 6 серых) ======
@@ -156,7 +114,7 @@
     <!-- Красные шары (Этап 6). spawn-red-balls.js наполняет контейнер. -->
     <a-entity id="red-balls-root"></a-entity>
 
-    <!-- Бита-сковородка на пьедестале. spawn-ball-bat.js -->
+    <!-- Бита — случайный спавн в большом куполе. spawn-ball-bat.js -->
     <a-entity id="ball-bat-root"></a-entity>
 
 

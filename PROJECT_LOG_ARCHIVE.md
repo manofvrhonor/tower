@@ -397,6 +397,54 @@
 
 ---
 
+## Сессия 40 — Фаза 2.x QA + фиксы ✅ → Фаза 3
+
+### Сделано
+
+- **ПК + Quest QA ✅** по чек-листу 2.x (8 пунктов): сфера, cyan-кольца, float inside/outside,
+  снеп, hardcore-вращение слотов, бита в комнате, шары×кольца.
+- **fix:** `assembly-zone.js` — `})(window)` (красная ошибка в консоли).
+- **fix:** `orbit-ring.js` — cyan-визуал сегментов (кольца были невидимы).
+- **fix:** `assembly-hub.js` — hardcore без `appendChild` на кольцо (слоты пропадали);
+  rotation sync в `tick`.
+- **fix:** `assembly-core` — жёлтые призраки слотов (fill + wireframe), `ensureSlotsBuilt`.
+- **git commit + push** ядра 2.x.
+- **CURRENT_TASK** → план **Фазы 3** (outside-scenery → floor fog → HDR).
+
+**Следующая сессия:** микро-шаг **3.1** — `outside-scenery.js`.
+
+---
+
+## Сессия 39 — Фаза 2.x: ядро (сфера + кольца + float-inside) ⬜ QA
+
+### Сделано (код, не закоммичено на момент закрытия)
+
+- **Дизайн согласован** (чат): закрытая белая сфера вместо капсулы; два наклонных
+  вращающихся кольца вместо стола; внутри сферы — float-inside (без g, сквozь DOME);
+  снаружi — float + барьер DOME; hardcore — `#assembly-core` parent → `orbit-ring-0`.
+- **CONFIG.assemblyZone** + слой **FLOAT_INSIDE (9)**; difficulty **hardcore**.
+- **Новые:** `assembly-zone.js`, `orbit-ring.js`, `assembly-hub.js`, `assembly-sphere-visual.js`.
+- **dome-builder:** `_buildFullSphere` для коллайдера сферы ядра.
+- **floating-cube:** states `float` / `float-inside`; release inside → float-inside.
+- **index.html:** `#assembly-hub` вместо `#pedestal` + `#dome-visual`.
+- **game-menu:** 4-я кнопка «Хардкор», panel h 1.0.
+- **Бита:** `randomPositionInRoomDome` в `room-spawn-utils.js`.
+- **Сессия началась с push** коммита `7aad71c` (cyan-купол, меню, victory — с.37–38).
+
+### Не сделано / следующая сессия
+
+- **ПК QA → Quest QA** по чек-листу 2.x.
+- **git commit** изменений 2.x (после QA или по запросу).
+- Полировка: sync kinematic-колец, баланс радиусов, hardcore-снеп на вращении.
+
+**Файлы:** `config.js`, `index.html`, `assembly-zone.js`, `orbit-ring.js`, `assembly-hub.js`,
+`assembly-sphere-visual.js`, `dome-builder.js`, `floating-cube.js`, `ball-bat.js`, `red-ball.js`,
+`game-menu.js`, `room-spawn-utils.js`, `spawn-ball-bat.js`, `CURRENT_TASK.md`.
+
+**Следующая сессия:** 2.x QA → фиксы → commit; потом Фаза 3.1 или полировка ядра.
+
+---
+
 ## Сессия 38 — фикс layout victory-ui ✅
 
 ### Сделано

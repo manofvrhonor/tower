@@ -48,6 +48,40 @@
     return out;
   }
 
+  /** Случайная точка внутри room.fogDome (для спавна биты и т.п.). */
+  function randomPositionInRoomDome(bodyRadius) {
+    var dome = getRoomDome();
+    if (!dome) return { x: 0, y: 0.8, z: 0.5 };
+    var half = bodyRadius !== undefined ? bodyRadius : 0.1;
+    var cx = dome.center.x;
+    var cy = dome.center.y;
+    var cz = dome.center.z;
+    var maxR = dome.radius - half - dome.margin;
+    if (maxR <= 0.15) maxR = 0.15;
+
+    for (var attempt = 0; attempt < 24; attempt++) {
+      var u = Math.random();
+      var v = Math.random();
+      var theta = 2 * Math.PI * u;
+      var phi = Math.acos(2 * v - 1);
+      var r = maxR * Math.cbrt(Math.random());
+      var px = r * Math.sin(phi) * Math.cos(theta);
+      var py = r * Math.cos(phi);
+      var pz = r * Math.sin(phi) * Math.sin(theta);
+      var pos = clampPositionToRoomDome(
+        { x: cx + px, y: cy + py + half + 0.05, z: cz + pz },
+        half
+      );
+      if (typeof window.isInsideAssemblySphere === 'function' &&
+          window.isInsideAssemblySphere(pos, true, half)) {
+        continue;
+      }
+      return pos;
+    }
+    return clampPositionToRoomDome({ x: cx + 0.5, y: cy + 0.6, z: cz + 0.3 }, half);
+  }
+
   global.getRoomDome = getRoomDome;
   global.clampPositionToRoomDome = clampPositionToRoomDome;
+  global.randomPositionInRoomDome = randomPositionInRoomDome;
 })(window);

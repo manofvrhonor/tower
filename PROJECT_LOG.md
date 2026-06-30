@@ -487,9 +487,12 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
   `CONFIG.game.menuTheme` (cyan/чёрный/белый); `victory-ui` — поза как game-menu,
   «Заново» + «В главное меню»; убраны hint-подписи.
 - **Стильная игра (с.38 ✅):** фикс **layout victory-ui** — panel h 0.50, Y кнопок подняты;
-  Quest QA старт-меню + победа ✅.
-- **Стильная игра — следующая:** **Фаза 3.1** — `outside-scenery.js` (дома-заглушки за куполом).
-  Опционально **2.x** — судьба малого купола над ядром (по подтверждению).
+  Quest QA старт-меню + победа ✅. Коммит `7aad71c`, push на GitHub.
+- **Стильная игра (с.39–40 ✅):** Фаза **2.x — ядро сборки**: `#assembly-hub` — orbit-rings,
+  белая сфера, `FLOAT_INSIDE`, hardcore (rotation sync слотов с кольцом 0), cyan-кольца,
+  жёлтые призраки слотов. **ПК + Quest QA ✅**.
+- **Стильная игра — следующая:** **Фаза 3** — слои мира: `outside-scenery.js` → туман у пола →
+  HDR/`world-hdri-sky` (см. `CURRENT_TASK.md`).
 - **Не делаем:** VR-виньетка slo-mo (снято с бэклога). **Пропускаем:** захват VR отлёт.
 - **Закрыто:** пьедestal «запинание» (парящий диск, с.27).
 - Стек стабилен: PhysX 0.3.0 + physx-grab. **Тесты — Quest Link + localhost**; ПК не для геймплея.
@@ -512,7 +515,9 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
   (`waves.enabled=true`, WAVE_BALL, Quest QA ✅).
 - **Wireframe × grabbed-куб × купол (с.36):** ✅ закрыто — `collider-debug-viz`.
 - **VR-меню layout (с.37–38):** ✅ закрыто — Quest QA OK.
-- **Парящий стол ✅** (с.27).
+- **Ядро 2.x (с.39–40):** ✅ Quest QA — кольца, float-inside/outside, hardcore-слоты, шары×кольца.
+  Закрыто: reparent `#assembly-core` ломал слоты → rotation sync в `assembly-hub`.
+- **Парящий стол ✅** (с.27) — **заменён** orbit-rings (с.39); `pedestal-builder.js` legacy.
 - **Бэклог** — см. `CURRENT_TASK.md`.
 
 ---
@@ -525,13 +530,15 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 Tower/
 ├── index.html
 ├── js/config.js, main.js, init-session.js, game-lifecycle.js, desktop-ui-cursor.js
-├── js/menu-ui-draw.js, room-spawn-utils.js, room-containment.js
+├── js/assembly-zone.js, menu-ui-draw.js, room-spawn-utils.js, room-containment.js
 ├── js/spawn-floating-cubes.js, spawn-red-balls.js, spawn-ball-bat.js
 ├── js/components/  physx-grab, floating-cube, red-ball, ball-bat, dome-builder,
+│                   orbit-ring, assembly-hub, assembly-sphere-visual,
 │                   room-fog-dome, room-dome-collider, world-hdri-sky,
-│                   pedestal-builder, collider-debug-viz, time-scale, slowmo-vignette-3d,
+│                   collider-debug-viz, time-scale, slowmo-vignette-3d,
 │                   float-motion-trail, ghost-tower-hint, assembly-core, victory-check, victory-ui,
 │                   game-menu, ball-wave-manager
+│                   (legacy: pedestal-builder.js — не в index.html)
 ├── assets/models/  leftHandLow.glb, rightHandLow.glb
 ├── AGENTS.md, CURRENT_TASK.md, PROJECT_LOG.md, PROJECT_LOG_ARCHIVE.md
 ```

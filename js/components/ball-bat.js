@@ -203,8 +203,11 @@ AFRAME.registerComponent('ball-bat', {
   },
 
   _isInsideDome: function (pos, forRelease) {
-    var dome = this.domeCfg;
     var halfExt = this.cfg.containmentRadius !== undefined ? this.cfg.containmentRadius : 0.22;
+    if (typeof window.isInsideAssemblySphere === 'function') {
+      return window.isInsideAssemblySphere(pos, forRelease, halfExt);
+    }
+    var dome = this.domeCfg;
     var R = dome.radius !== undefined ? dome.radius : 0.27;
     var wallBottomY = dome.cylinderBottomY !== undefined ? dome.cylinderBottomY : 1.0;
     var wallTopY = dome.cylinderTopY !== undefined ? dome.cylinderTopY : 1.3;
@@ -598,7 +601,7 @@ AFRAME.registerComponent('ball-bat', {
 
     var pos = this._getWorldPosition();
     if (this._isInsideDome(pos, true)) {
-      this._enterGravityMode();
+      this._enterFloatMode(false);
     } else {
       this._enterFloatMode(false);
     }
@@ -660,8 +663,12 @@ AFRAME.registerComponent('ball-bat', {
       this._grabbed = false;
     }
     var cfg = this.cfg;
+    var panR = cfg.panRadius !== undefined ? cfg.panRadius : 0.11;
     var p = cfg.spawnPosition || { x: -0.55, y: 0.55, z: 0.15 };
-    var r = cfg.spawnRotation || { x: 15, y: 40, z: 0 };
+    if (typeof window.randomPositionInRoomDome === 'function') {
+      p = window.randomPositionInRoomDome(panR);
+    }
+    var r = cfg.spawnRotation || { x: 15, y: Math.random() * 360, z: 0 };
     this.el.setAttribute('position', p.x + ' ' + p.y + ' ' + p.z);
     this.el.setAttribute('rotation', r.x + ' ' + r.y + ' ' + r.z);
 

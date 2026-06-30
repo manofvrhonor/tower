@@ -70,31 +70,32 @@ AFRAME.registerComponent('dome-builder', {
   init() {
     if (!this.data.enabled) return;
 
-    const cfg = window.CONFIG && window.CONFIG.dome;
+    const az = window.CONFIG && window.CONFIG.assemblyZone;
+    const cfg = az || window.CONFIG && window.CONFIG.dome;
     if (!cfg) {
-      console.error('[dome-builder] CONFIG.dome не найден');
+      console.error('[dome-builder] CONFIG.assemblyZone / CONFIG.dome не найден');
       return;
     }
 
-    this.tiles = [];   // ссылки на созданные entity (для cleanup)
+    this.tiles = [];
 
-    // --- Слои коллизий ---
-    // CONFIG.collisionLayers — это ИНДЕКСЫ (0, 1, 2, ...). Биндинг
-    // physx-material сам делает (1 << index). См. JSDoc файла, секция
-    // "ВАЖНО про числа в physx-material".
     const layers = (window.CONFIG && window.CONFIG.collisionLayers) || {
       WORLD: 0, DOME: 1, FLOAT_CUBE: 2, GRAVITY_CUBE: 3,
-      GRABBED_CUBE: 4, BALL: 5, HAND: 6, BAT: 7,
+      GRABBED_CUBE: 4, BALL: 5, HAND: 6, BAT: 7, WAVE_BALL: 8, FLOAT_INSIDE: 9,
     };
-    // DOME — только FLOAT_CUBE снаружи. BALL проходит сквозь купол (Этап 6).
-    const collidesWithList = [
-      layers.FLOAT_CUBE,
-    ].join(', ');
+    const collidesWithList = [layers.FLOAT_CUBE].join(', ');
     this._layerSuffix =
       '; collisionLayers: ' + layers.DOME +
       '; collidesWithLayers: ' + collidesWithList;
 
-    this._buildAll(cfg);
+    const collider = cfg.collider || cfg;
+    const radius = cfg.radius !== undefined ? cfg.radius : 0.30;
+
+    if (az) {
+      this._buildFullSphere(radius, collider);
+    } else {
+      this._buildAll(cfg);
+    }
 
     console.log(
       '[dome-builder] построено плиток: ' + this.tiles.length +
@@ -117,6 +118,56 @@ AFRAME.registerComponent('dome-builder', {
     this._buildWall(cfg, c);
     this._buildCap(cfg, c);
     this._buildPole(cfg, c);
+  },
+
+  /**
+   * Закрытая сфера ядра (Фаза 2.x): широтные кольца −90°..+90°.
+   */
+  _buildFullSphere(R, c) {
+    const M = c.latitudeRings !== undefined ? c.latitudeRings : 10;
+    const K = c.longitudeSegments !== undefined ? c.longitudeSegments : 16;
+    const thickness = c.shellThickness !== undefined ? c.shellThickness : 0.01;
+
+    for (let j = 0; j < M; j++) {
+      const phi = -Math.PI / 2 + (j + 0.5) * (Math.PI / M);
+      const ringR = R * Math.cos(phi);
+      const yRing = R * Math.sin(phi);
+
+      const dPhi = Math.PI / M;
+      const arc = R * dPhi;
+      const height = arc * c.tileOverlap;
+
+      if (ringR < 1e-4) {
+        const capSize = height * 1.2;
+        this._createTile({
+          position: { x: 0, y: yRing, z: 0 },
+          rotation: { x: yRing > 0 ? -90 : 90, y: 0, z: 0 },
+          width: capSize, height: capSize, depth: thickness,
+          material: c.physxMaterial,
+          debug: c.debugVisible,
+        });
+        continue;
+      }
+
+      const chord = 2 * ringR * Math.sin(Math.PI / K);
+      const width = chord * c.tileOverlap;
+
+      for (let i = 0; i < K; i++) {
+        const theta = (i / K) * Math.PI * 2;
+        const x = ringR * Math.sin(theta);
+        const z = ringR * Math.cos(theta);
+        const rotY = THREE.MathUtils.radToDeg(Math.atan2(x, z));
+        const rotX = -THREE.MathUtils.radToDeg(phi);
+
+        this._createTile({
+          position: { x, y: yRing, z },
+          rotation: { x: rotX, y: rotY, z: 0 },
+          width, height, depth: thickness,
+          material: c.physxMaterial,
+          debug: c.debugVisible,
+        });
+      }
+    }
   },
 
   /**

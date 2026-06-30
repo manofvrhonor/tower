@@ -1,7 +1,7 @@
 /* global CONFIG */
 
 /**
- * spawn-ball-bat.js — бита-сковородка на пьедестале.
+ * spawn-ball-bat.js — бита в случайной точке большого купола.
  * respawnBallBat() — для «Заново» без reload.
  */
 (function () {
@@ -38,7 +38,13 @@
     };
 
     var p = cfg.spawnPosition || { x: 0.12, y: 1.011, z: 0.14 };
-    var rot = cfg.spawnRotation || { x: 0, y: -35, z: 0 };
+    if (typeof window.randomPositionInRoomDome === 'function') {
+      p = window.randomPositionInRoomDome(panR);
+    }
+    var rotY = Math.random() * 360;
+    var rot = cfg.spawnRotation
+      ? { x: cfg.spawnRotation.x, y: cfg.spawnRotation.y, z: cfg.spawnRotation.z }
+      : { x: 15, y: rotY, z: 0 };
 
     // ВАЖНО: geometry НЕ на корне. Если на корне есть geometry, physx-body
     // строит только один шейп из неё и игнорирует дочерние меши (см. createShapes
