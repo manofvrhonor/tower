@@ -50,9 +50,12 @@
     if (typeof window.clearBallBat === 'function') window.clearBallBat();
 
     var ghost = document.getElementById('ghost-tower-hint');
-    if (ghost) {
-      ghost.setAttribute('visible', false);
-      while (ghost.firstChild) ghost.removeChild(ghost.firstChild);
+    if (ghost) ghost.setAttribute('visible', false);
+
+    var core = document.getElementById('assembly-core');
+    var coreComp = core && core.components['assembly-core'];
+    if (coreComp && typeof coreComp.resetOccupancy === 'function') {
+      coreComp.resetOccupancy();
     }
   }
 
@@ -80,11 +83,12 @@
       window.respawnBallBat();
     }
 
-    var ghost = document.getElementById('ghost-tower-hint');
-    var ghostComp = ghost && ghost.components['ghost-tower-hint'];
-    if (ghostComp && typeof ghostComp.rebuild === 'function') {
-      ghostComp.rebuild();
-      ghost.setAttribute('visible', true);
+    // Подсказка победы — призраки слотов на #assembly-core (Фаза 1.5).
+    // Старая ghost-tower-hint (башня кубов) больше не показывается.
+    var core = document.getElementById('assembly-core');
+    var coreComp = core && core.components['assembly-core'];
+    if (coreComp && typeof coreComp.resetOccupancy === 'function') {
+      coreComp.resetOccupancy();
     }
 
     var scene = document.querySelector('a-scene');

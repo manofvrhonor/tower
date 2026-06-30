@@ -59,17 +59,34 @@ const CONFIG = {
     fogDome: {
       radius: 2.0,   // м, верхняя полусфера от пола (Ø 4 м; визуал = collider)
       position: { x: 0, y: 0, z: 0 },
-      color: '#e8e4dc',
-      // alpha: лёгкая дымка ↔ плотные облака (не «почти ноль»).
+      // Фаза 2.1 — cyan «поле времени»: ленты-разводы + мягкий дым поверх.
+      color: '#18b8d8',       // глубокий cyan между лентами
+      glowColor: '#66f5ff',   // яркие ленты и fresnel-обод
+      coreColor: '#d4feff',   // «горячее» ядро лент (почти белый cyan)
       baseOpacity: 1.0,
-      fogMin: 0.34,
-      fogMax: 0.94,
-      fogContrast: 1.45,
-      fogLift: 0.18,      // сдвиг шума вверх — базовый туман всегда заметен
-      noiseScale: 1.2,
-      scrollSpeed: 0.14,
-      fresnelPower: 3.0,
-      fresnelStrength: 0.06,
+      voidOpacity: 0.04,      // прозрачность между лентами (было fogMin)
+      streakOpacity: 0.92,    // плотность лент (было fogMax)
+      fogContrast: 2.4,       // резкость ridged-слоёв
+      fogLift: 0.0,
+      noiseScale: 1.1,
+      scrollSpeed: 0.28,        // скорость течения лент
+      fresnelPower: 2.0,
+      fresnelStrength: 0.48,
+      swirlArms: 4.0,         // число крупных вихревых «рукавов»
+      streakSharpness: 3.8,   // тонкость лент (↑ = тоньше)
+      flowWarp: 0.55,         // закручивание потока (domain warp)
+      ridgeMix: 0.62,         // доля ridged vs sin-рукава (0..1)
+      windowStrength: 0.12,   // «дыры» в слое лент (0 = выкл)
+      windowSpeed: 0.22,
+      energyTint: 0.72,
+      // Мягкий дым поверх лент (старый fbm-вариант, накладывается отдельным слоем).
+      fogOverlay: 0.99,       // сила дыма (0 = только ленты, 1 = макс.)
+      fogHazeMin: 0.1,       // α дыма в разреженных зонах
+      fogHazeMax: 0.9,       // α дыма в плотных «облаках»
+      fogHazeLift: 0.18,
+      fogHazeContrast: 1.45,
+      fogHazeSpeed: 0.14,     // дым плывёт медленнее лент
+      fogHazeWindowStrength: 0.38, // окна прозрачности в слое дыма
       widthSegments: 64,
       heightSegments: 32,
       renderOrder: 5,
@@ -724,10 +741,26 @@ const CONFIG = {
       worldPosition: { x: 0, y: 1.55, z: -0.65 },
       handPressRadius: 0.18,
       titleText: 'TOWER OF TIME',
-      hintText: 'Поднеси руку + grip',
       startText: 'Старт',
       wireframeOnText: 'Wireframe: ВКЛ',
       wireframeOffText: 'Wireframe: ВЫКЛ',
+    },
+    // Палитра VR-меню: cyan + чёрный + белый (game-menu, victory-ui).
+    menuTheme: {
+      panel:         '#0a1018',
+      title:         '#ffffff',
+      titleAccent:   '#66f5ff',
+      btnBg:         '#0c1820',
+      btnHover:      '#143040',
+      btnNear:       '#1e5068',
+      btnSelected:   '#1488a8',
+      btnAccent:     '#33e0ff',
+      btnAccentHover:'#66f5ff',
+      btnAccentNear: '#b8ffff',
+      border:        '#33e0ff',
+      borderDim:     '#1a5070',
+      text:          '#ffffff',
+      textOnAccent:  '#061018',
     },
   },
 
@@ -757,13 +790,12 @@ const CONFIG = {
       lineOpacity: 1.0,
     },
 
-    // Плашка победы (victory-ui.js) — в мире, лицом к игроку (старт z=1).
+    // Плашка победы (victory-ui.js). Позиция = game.menu.worldPosition (общая с меню старта).
     ui: {
-      worldPosition: { x: 0, y: 1.48, z: 0.28 },
-      handPressRadius: 0.22,
+      handPressRadius: 0.18,
       titleText:   'ПОБЕДА',
-      hintText:    'Поднеси руку + grip',
-      buttonText:  'Заново',
+      restartText: 'Заново',
+      menuText:    'В главное меню',
     },
   },
 };

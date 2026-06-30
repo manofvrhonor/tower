@@ -21,13 +21,7 @@ AFRAME.registerComponent('game-menu', {
     this._onReturnToMenu = this._onReturnToMenu.bind(this);
     this._onGameStarted = this._onGameStarted.bind(this);
 
-    this._btnNormal = '#444455';
-    this._btnHover = '#5a5a72';
-    this._btnNear = '#7a7a99';
-    this._btnSelected = '#3d6a9a';
-    this._btnStart = '#3d9a56';
-    this._btnStartHover = '#4ecf7a';
-    this._btnStartNear = '#6dff9a';
+    this._applyMenuTheme();
     this._pressRadius = this.cfg.handPressRadius !== undefined ? this.cfg.handPressRadius : 0.18;
     this._menuRenderOrder = 50;
 
@@ -92,27 +86,51 @@ AFRAME.registerComponent('game-menu', {
     if (el.hasLoaded) apply();
   },
 
+  _applyMenuTheme: function () {
+    var th = (typeof window.getMenuTheme === 'function') ? window.getMenuTheme() : {};
+    this._theme = th;
+    this._btnNormal = th.btnBg || '#0c1820';
+    this._btnHover = th.btnHover || '#143040';
+    this._btnNear = th.btnNear || '#1e5068';
+    this._btnSelected = th.btnSelected || '#1488a8';
+    this._btnStart = th.btnAccent || '#33e0ff';
+    this._btnStartHover = th.btnAccentHover || '#66f5ff';
+    this._btnStartNear = th.btnAccentNear || '#b8ffff';
+    this._panelColor = th.panel || '#0a1018';
+  },
+
+  _buttonDrawOpts: function (bgColor) {
+    var th = this._theme || {};
+    if (bgColor === th.btnAccent || bgColor === th.btnAccentHover || bgColor === th.btnAccentNear) {
+      return { borderColor: th.border, textColor: th.textOnAccent || '#061018' };
+    }
+    if (bgColor === th.btnNear || bgColor === th.btnSelected) {
+      return { borderColor: th.border, textColor: th.text || '#ffffff' };
+    }
+    return { borderColor: th.borderDim || th.border, textColor: th.text || '#ffffff' };
+  },
+
   _makeTextPlane: function (text, planeW, planeH, options) {
     var opts = options || {};
-    var canvasW = opts.canvasW || 512;
-    var canvasH = opts.canvasH || 128;
+    var sz = (typeof window.menuUiCanvasSize === 'function')
+      ? window.menuUiCanvasSize(planeW, planeH, opts.canvasW || 512)
+      : { w: opts.canvasW || 512, h: opts.canvasH || 128 };
     var canvas = document.createElement('canvas');
-    canvas.width = canvasW;
-    canvas.height = canvasH;
+    canvas.width = sz.w;
+    canvas.height = sz.h;
     var ctx = canvas.getContext('2d');
 
     if (opts.bg) {
-      ctx.fillStyle = opts.bg;
-      ctx.fillRect(0, 0, canvasW, canvasH);
+      var drawOpts = this._buttonDrawOpts(opts.bg);
+      if (typeof window.menuUiDrawButton === 'function') {
+        window.menuUiDrawButton(ctx, canvas, text, opts.fontSize || 44, opts.bg, drawOpts);
+      }
     } else {
-      ctx.clearRect(0, 0, canvasW, canvasH);
+      ctx.clearRect(0, 0, sz.w, sz.h);
+      if (typeof window.menuUiDrawCenteredText === 'function') {
+        window.menuUiDrawCenteredText(ctx, text, sz.w, sz.h, opts.fontSize || 48, opts.color || '#ffffff');
+      }
     }
-
-    ctx.fillStyle = opts.color || '#ffffff';
-    ctx.font = 'bold ' + (opts.fontSize || 48) + 'px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, canvasW / 2, canvasH / 2);
 
     var plane = document.createElement('a-plane');
     plane.setAttribute('width', planeW);
@@ -125,7 +143,7 @@ AFRAME.registerComponent('game-menu', {
     plane.addEventListener('loaded', apply);
     if (plane.hasLoaded) apply();
 
-    return { el: plane, canvas: canvas, ctx: ctx, label: text };
+    return { el: plane, canvas: canvas, ctx: ctx, label: text, fontSize: opts.fontSize || 44 };
   },
 
   _applyCanvasTexture: function (el, canvas) {
@@ -144,16 +162,13 @@ AFRAME.registerComponent('game-menu', {
   },
 
   _redrawButton: function (btnData, bgColor, label) {
-    var ctx = btnData.ctx;
-    var canvas = btnData.canvas;
     var text = label !== undefined ? label : btnData.label;
-    ctx.fillStyle = bgColor;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold ' + (btnData.fontSize || 44) + 'px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+    if (typeof window.menuUiDrawButton === 'function') {
+      window.menuUiDrawButton(
+        btnData.ctx, btnData.canvas, text, btnData.fontSize || 44, bgColor,
+        this._buttonDrawOpts(bgColor)
+      );
+    }
     var mesh = btnData.el.getObject3D('mesh');
     if (mesh && mesh.material && mesh.material.map) {
       mesh.material.map.needsUpdate = true;
@@ -200,7 +215,6 @@ AFRAME.registerComponent('game-menu', {
     var ui = this.cfg;
     var pos = ui.worldPosition || { x: 0, y: 1.55, z: 0.35 };
     var title = ui.titleText || 'TOWER OF TIME';
-    var hint = ui.hintText || 'Поднеси руку + grip';
     var startText = ui.startText || 'Старт';
     var diffs = (CONFIG.game && CONFIG.game.difficulties) || {};
 
@@ -211,18 +225,14 @@ AFRAME.registerComponent('game-menu', {
     var panel = document.createElement('a-plane');
     panel.setAttribute('width', 0.62);
     panel.setAttribute('height', 0.88);
-    panel.setAttribute('color', '#1e1e28');
+    panel.setAttribute('color', this._panelColor);
     panel.setAttribute('material', 'shader: flat; opacity: 0.96; transparent: true; side: front; depthTest: false; depthWrite: false; renderOrder: 50');
 
+    var titleColor = (this._theme && this._theme.titleAccent) || '#66f5ff';
     var titleData = this._makeTextPlane(title, 0.52, 0.11, {
-      canvasW: 512, canvasH: 96, fontSize: 52, color: '#ffffff', bg: null,
+      fontSize: 52, color: titleColor,
     });
     titleData.el.setAttribute('position', '0 0.36 0.006');
-
-    var hintData = this._makeTextPlane(hint, 0.52, 0.06, {
-      canvasW: 512, canvasH: 64, fontSize: 28, color: '#aaaaaa', bg: null,
-    });
-    hintData.el.setAttribute('position', '0 0.28 0.007');
 
     var self = this;
     var diffOrder = ['easy', 'normal', 'hard'];
@@ -235,7 +245,7 @@ AFRAME.registerComponent('game-menu', {
       if (!preset) continue;
       var label = preset.label || id;
       var btnData = this._makeTextPlane(label, 0.5, 0.1, {
-        canvasW: 512, canvasH: 96, fontSize: 44, color: '#ffffff', bg: this._btnNormal,
+        fontSize: 44, bg: this._btnNormal,
       });
       btnData.fontSize = 44;
       btnData.el.setAttribute('class', 'game-menu-clickable');
@@ -251,7 +261,7 @@ AFRAME.registerComponent('game-menu', {
     }
 
     var startData = this._makeTextPlane(startText, 0.5, 0.12, {
-      canvasW: 512, canvasH: 112, fontSize: 52, color: '#ffffff', bg: this._btnStart,
+      fontSize: 52, bg: this._btnStart,
     });
     startData.fontSize = 52;
     startData.el.setAttribute('class', 'game-menu-clickable');
@@ -266,7 +276,7 @@ AFRAME.registerComponent('game-menu', {
 
     var wireLabel = this._wireframeLabel();
     this._wireframeData = this._makeTextPlane(wireLabel, 0.5, 0.1, {
-      canvasW: 512, canvasH: 96, fontSize: 36, color: '#ffffff', bg: this._btnNormal,
+      fontSize: 36, bg: this._btnNormal,
     });
     this._wireframeData.fontSize = 36;
     this._wireframeData.el.setAttribute('class', 'game-menu-clickable');
@@ -278,7 +288,6 @@ AFRAME.registerComponent('game-menu', {
 
     this._root.appendChild(panel);
     this._root.appendChild(titleData.el);
-    this._root.appendChild(hintData.el);
     for (var di = 0; di < this._difficultyEntries.length; di++) {
       this._root.appendChild(this._difficultyEntries[di].data.el);
     }
@@ -288,7 +297,6 @@ AFRAME.registerComponent('game-menu', {
 
     this._applyMenuDrawOrder(panel);
     this._applyMenuDrawOrder(titleData.el);
-    this._applyMenuDrawOrder(hintData.el);
     for (var ti = 0; ti < this._difficultyEntries.length; ti++) {
       this._applyMenuDrawOrder(this._difficultyEntries[ti].data.el);
     }

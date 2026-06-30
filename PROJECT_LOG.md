@@ -480,14 +480,16 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 - **Стильная игра (с.33):** Фаза **1.3 ✅** (Quest QA) — снеп детали в слот при release
   (kinematic-lock, `assembly-core` учёт занятых слотов), **ручной разбор** снепа рукой
   (для деталей-обманок), фикс защёлки `setKinematic` биндинга (ADR-02 п.7).
-  Дальше: 1.4 слом при ударе → 1.5 победа по слотам.
-- **Шары в круглой комнате (с.34 ✅ по коду):** отскок от стенки комнаты
-  вынесен в общий `room-containment.js` (`CONFIG.room.wallBounce`) — **физичное отражение от
-  нормали** сферы для кубов, шаров (старый режим) и биты. Quest QA — не в фокусе с.35.
-- **Этап 6 «атомы времени» (с.35 ✅ Quest QA):** волны угроз — `ball-wave-manager.js`,
-  `CONFIG.balls.waves`, слой **WAVE_BALL**, спавн за туманом, полёт к сборке, деспавн+
-  респавн, отскок от пола/стола наружу-вверх. Коммит `1b53d51`.
-- **Стильная игра — следующая:** Фаза **1.4** (слом снепа при ударе) → **1.5** (победа по слотам).
+- **Стильная игра (с.36 ✅):** Фаза **1.4–1.5** — слом снепа, победа по слотам, wireframe fix.
+  Quest QA ✅.
+- **Стильная игра (с.37 ✅):** Фаза **2.1** — cyan-купол (`room-fog-dome.js`): ridged-ленты +
+  fbm-дым поверх; пользователь подкрутил `fogDome`. Меню: `menu-ui-draw.js`,
+  `CONFIG.game.menuTheme` (cyan/чёрный/белый); `victory-ui` — поза как game-menu,
+  «Заново» + «В главное меню»; убраны hint-подписи.
+- **Стильная игра (с.38 ✅):** фикс **layout victory-ui** — panel h 0.50, Y кнопок подняты;
+  Quest QA старт-меню + победа ✅.
+- **Стильная игра — следующая:** **Фаза 3.1** — `outside-scenery.js` (дома-заглушки за куполом).
+  Опционально **2.x** — судьба малого купола над ядром (по подтверждению).
 - **Не делаем:** VR-виньетка slo-mo (снято с бэклога). **Пропускаем:** захват VR отлёт.
 - **Закрыто:** пьедestal «запинание» (парящий диск, с.27).
 - Стек стабилен: PhysX 0.3.0 + physx-grab. **Тесты — Quest Link + localhost**; ПК не для геймплея.
@@ -508,6 +510,8 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
   `room-containment.js`. Quest QA не в фокусе с.35 (старый режим шаров заменён волнами).
 - **Шары бьют стол только снизу (с.34):** ✅ закрыто с.35 — волны «атомы времени»
   (`waves.enabled=true`, WAVE_BALL, Quest QA ✅).
+- **Wireframe × grabbed-куб × купол (с.36):** ✅ закрыто — `collider-debug-viz`.
+- **VR-меню layout (с.37–38):** ✅ закрыто — Quest QA OK.
 - **Парящий стол ✅** (с.27).
 - **Бэклог** — см. `CURRENT_TASK.md`.
 
@@ -521,13 +525,13 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 Tower/
 ├── index.html
 ├── js/config.js, main.js, init-session.js, game-lifecycle.js, desktop-ui-cursor.js
-├── js/room-spawn-utils.js, room-containment.js
+├── js/menu-ui-draw.js, room-spawn-utils.js, room-containment.js
 ├── js/spawn-floating-cubes.js, spawn-red-balls.js, spawn-ball-bat.js
 ├── js/components/  physx-grab, floating-cube, red-ball, ball-bat, dome-builder,
 │                   room-fog-dome, room-dome-collider, world-hdri-sky,
 │                   pedestal-builder, collider-debug-viz, time-scale, slowmo-vignette-3d,
-│                   float-motion-trail, ghost-tower-hint, victory-check, victory-ui,
-│                   game-menu
+│                   float-motion-trail, ghost-tower-hint, assembly-core, victory-check, victory-ui,
+│                   game-menu, ball-wave-manager
 ├── assets/models/  leftHandLow.glb, rightHandLow.glb
 ├── AGENTS.md, CURRENT_TASK.md, PROJECT_LOG.md, PROJECT_LOG_ARCHIVE.md
 ```

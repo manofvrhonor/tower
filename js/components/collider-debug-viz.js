@@ -15,6 +15,7 @@
   };
 
   var _vec = new THREE.Vector3();
+  var _quat = new THREE.Quaternion();
   var _mat4 = new THREE.Matrix4();
 
   function isEnabled() {
@@ -230,6 +231,62 @@
     );
   }
 
+  /**
+   * Kinematic / grabbed: поза из object3D (ADR-02), не PhysX — getGlobalPose на таких
+   * телах при overlap с куполом может ронять WASM (RuntimeError: null function).
+   */
+  function preferObject3DPose(el) {
+    if (!el) return true;
+    if (el.is && el.is('grabbed-dynamic')) return true;
+    var fc = el.components['floating-cube'];
+    if (fc && fc.state === 'snapped') return true;
+    if (parseBodyType(el) === 'kinematic') return true;
+    return false;
+  }
+
+  function poseFromObject3D(el) {
+    if (!el || !el.object3D) return null;
+    el.object3D.updateMatrixWorld(true);
+    el.object3D.getWorldPosition(_vec);
+    el.object3D.getWorldQuaternion(_quat);
+    return {
+      translation: { x: _vec.x, y: _vec.y, z: _vec.z },
+      rotation: { x: _quat.x, y: _quat.y, z: _quat.z, w: _quat.w },
+    };
+  }
+
+  /** Безопасное чтение позы для wireframe: object3D или getGlobalPose + fallback. */
+  function readEntryPose(entry) {
+    var el = entry.el;
+    if (!el || !el.isConnected) return null;
+
+    if (preferObject3DPose(el)) {
+      return poseFromObject3D(el);
+    }
+
+    var rb = entry.bodyComp && entry.bodyComp.rigidBody;
+    if (rb && typeof rb.getGlobalPose === 'function') {
+      try {
+        var pose = rb.getGlobalPose();
+        if (pose && pose.translation && pose.rotation) return pose;
+      } catch (e) {
+        if (!readEntryPose._warned) {
+          console.warn('[collider-debug-viz] getGlobalPose failed, object3D fallback:', e.message);
+          readEntryPose._warned = true;
+        }
+      }
+    }
+
+    return poseFromObject3D(el);
+  }
+
+  function applyPoseToEntry(entry, pose) {
+    if (!pose) return;
+    for (var i = 0; i < entry.shapeGroups.length; i++) {
+      applyPhysXPose(entry.shapeGroups[i], pose);
+    }
+  }
+
   function disposeEntry(entry) {
     if (!entry) return;
     for (var i = 0; i < entry.shapeGroups.length; i++) {
@@ -336,15 +393,20 @@
     tick: function () {
       if (!isEnabled()) return;
 
-      var self = this;
-      this._entries.forEach(function (entry) {
-        var rb = entry.bodyComp && entry.bodyComp.rigidBody;
-        if (!rb || typeof rb.getGlobalPose !== 'function') return;
-        var pose = rb.getGlobalPose();
-        for (var i = 0; i < entry.shapeGroups.length; i++) {
-          applyPhysXPose(entry.shapeGroups[i], pose);
+      var stale = [];
+      this._entries.forEach(function (entry, el) {
+        if (!el || !el.isConnected) {
+          stale.push(el);
+          return;
         }
+        applyPoseToEntry(entry, readEntryPose(entry));
       });
+
+      for (var s = 0; s < stale.length; s++) {
+        var rm = this._entries.get(stale[s]);
+        if (rm) disposeEntry(rm);
+        this._entries.delete(stale[s]);
+      }
     },
 
     _scan: function (forceRebuild) {
@@ -379,13 +441,7 @@
         var entry = buildEntry(el, PX, this.debugRoot);
         if (entry) {
           this._entries.set(el, entry);
-          var rb = entry.bodyComp.rigidBody;
-          if (rb && rb.getGlobalPose) {
-            var pose = rb.getGlobalPose();
-            for (var g = 0; g < entry.shapeGroups.length; g++) {
-              applyPhysXPose(entry.shapeGroups[g], pose);
-            }
-          }
+          applyPoseToEntry(entry, readEntryPose(entry));
           built++;
         }
       }

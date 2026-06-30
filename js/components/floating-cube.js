@@ -25,6 +25,9 @@
  * Контакт gravity-кубика с #floor → возврат в float (задача 3, Шаг 5).
  * Float: после 2–5 отскоков от стен комнаты — разворот к куполу (как red-ball).
  *
+ * Снепнутая деталь (state 'snapped'): удар red-ball (BALL / WAVE_BALL) → слом
+ * сборки (Фаза 1.4): releaseSlot, dynamic + breakImpulse, float/gravity по куполу.
+ *
  * ТЕХНИЧЕСКИЕ ЗАМЕТКИ ПО БИНДИНГУ @c-frame/physx@v0.3.0
  * (проверено в Сессиях 6–7, см. CURRENT_TASK.md):
  *
@@ -63,6 +66,7 @@ AFRAME.registerComponent('floating-cube', {
     this.state = 'float';
     this.cfg = (typeof CONFIG !== 'undefined' && CONFIG.floatingCubes) || {};
     this.domeCfg = (typeof CONFIG !== 'undefined' && CONFIG.dome) || {};
+    this._assemblyCfg = (typeof CONFIG !== 'undefined' && CONFIG.assembly) || {};
     this._physicsApplied = false;
     this._worldPos = new THREE.Vector3();
     // Какой timeScale уже «вшит» в текущую velocity PhysX (см. _applyTimeScaleToVelocity).
@@ -135,6 +139,128 @@ AFRAME.registerComponent('floating-cube', {
     this.el.setAttribute('physx-body', 'type: dynamic');
     this._resetKinematicLatch();
     console.log('[floating-cube] un-snapped by hand', this.el.id || '(no id)');
+  },
+
+  /** red-ball (обычный или волна WAVE_BALL) — опасный объект для слома снепа. */
+  _isDangerBall: function (otherEl) {
+    return !!(otherEl && otherEl.components && otherEl.components['red-ball']);
+  },
+
+  /**
+   * Направление разлёта детали при сломе: курс шара (world-space) или
+   * вектор шар→куб, если шар почти стоит.
+   */
+  _getBallBreakDir: function (otherEl) {
+    var ball = otherEl && otherEl.components && otherEl.components['red-ball'];
+    var ballRb = ball && ball._rb;
+    if (ballRb && typeof ballRb.getLinearVelocity === 'function') {
+      var prev = ball._lastAppliedTimeScale;
+      if (!prev || prev < 0.001) prev = 1.0;
+      var invPrev = 1 / prev;
+      try {
+        var lv = ballRb.getLinearVelocity();
+        if (lv) {
+          var fx = lv.x * invPrev;
+          var fy = lv.y * invPrev;
+          var fz = lv.z * invPrev;
+          var speed = Math.sqrt(fx * fx + fy * fy + fz * fz);
+          if (speed > 0.05) {
+            return { x: fx / speed, y: fy / speed, z: fz / speed };
+          }
+        }
+      } catch (e) { /* fallback below */ }
+    }
+
+    if (!otherEl || !otherEl.object3D) return { x: 0, y: 0, z: -1 };
+    otherEl.object3D.getWorldPosition(this._worldPos);
+    var bx = this._worldPos.x;
+    var by = this._worldPos.y;
+    var bz = this._worldPos.z;
+    this.el.object3D.getWorldPosition(this._worldPos);
+    var dx = this._worldPos.x - bx;
+    var dy = this._worldPos.y - by;
+    var dz = this._worldPos.z - bz;
+    var len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (len < 1e-5) return { x: 0, y: 0, z: -1 };
+    return { x: dx / len, y: dy / len, z: dz / len };
+  },
+
+  /** Мировая скорость шара (до timeScale) для усиления импульса слома. */
+  _getBallWorldSpeed: function (otherEl) {
+    var ball = otherEl && otherEl.components && otherEl.components['red-ball'];
+    var ballRb = ball && ball._rb;
+    if (!ballRb || typeof ballRb.getLinearVelocity !== 'function') return 0;
+    var prev = ball._lastAppliedTimeScale;
+    if (!prev || prev < 0.001) prev = 1.0;
+    var invPrev = 1 / prev;
+    try {
+      var lv = ballRb.getLinearVelocity();
+      if (!lv) return 0;
+      var fx = lv.x * invPrev;
+      var fy = lv.y * invPrev;
+      var fz = lv.z * invPrev;
+      return Math.sqrt(fx * fx + fy * fy + fz * fz);
+    } catch (e) {
+      return 0;
+    }
+  },
+
+  /**
+   * Шар сбил снепнутую деталь: освободить слот, dynamic, импульс breakImpulse,
+   * state float/gravity по containment (как onGrabReleased без снепа).
+   */
+  _breakSnapFromHit: function (otherEl) {
+    if (this.state !== 'snapped') return;
+
+    var core = this._getAssemblyCore();
+    if (core && this._snappedSlotId && typeof core.releaseSlot === 'function') {
+      core.releaseSlot(this._snappedSlotId);
+    }
+    this._snappedSlotId = null;
+
+    this.el.setAttribute('physx-body', 'type: dynamic');
+    this._resetKinematicLatch();
+
+    var pos = this._getWorldPosition();
+    var inside = this._isInsideDome(pos, true);
+    if (inside) {
+      this._enterGravityMode();
+    } else {
+      this._enterFloatMode(false);
+    }
+
+    var rb = this._rb;
+    if (rb) {
+      var dir = this._getBallBreakDir(otherEl);
+      var asm = this._assemblyCfg;
+      var base = asm.breakImpulse !== undefined ? asm.breakImpulse : 1.5;
+      var ballSp = this._getBallWorldSpeed(otherEl);
+      var impulse = Math.max(base, base + ballSp * 0.35);
+
+      try {
+        if (typeof rb.wakeUp === 'function') rb.wakeUp();
+        if (typeof rb.setLinearVelocity === 'function') {
+          rb.setLinearVelocity({
+            x: dir.x * impulse,
+            y: dir.y * impulse,
+            z: dir.z * impulse,
+          }, false);
+          this._lastAppliedTimeScale = 1.0;
+          this._applyTimeScaleToVelocity(rb);
+          if (this.state === 'float') {
+            this._driftDir = { x: dir.x, y: dir.y, z: dir.z };
+          }
+        }
+      } catch (e) {
+        console.warn('[floating-cube] break snap impulse failed:', e.message);
+      }
+    }
+
+    console.log(
+      '[floating-cube] break snap from ball',
+      this.el.id || '(no id)',
+      inside ? '→ gravity' : '→ float'
+    );
   },
 
   /**
@@ -279,6 +405,12 @@ AFRAME.registerComponent('floating-cube', {
   _onContactBegin: function (evt) {
     var otherComp = evt.detail.otherComponent;
     var otherEl = otherComp && otherComp.el;
+
+    // Фаза 1.4: шар (BALL / WAVE_BALL) сбивает снепнутую деталь со слота.
+    if (this.state === 'snapped' && this._isDangerBall(otherEl)) {
+      this._breakSnapFromHit(otherEl);
+      return;
+    }
 
     // Striker в руке — обрабатываем жертву здесь (надёжнее victim-side).
     if (this.el.is && this.el.is('grabbed-dynamic')) {

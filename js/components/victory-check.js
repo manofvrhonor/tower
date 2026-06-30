@@ -1,13 +1,13 @@
-/* global AFRAME, CONFIG, THREE */
+/* global AFRAME, CONFIG */
 
 /**
- * victory-check — проверка условия победы (Этап 5).
+ * victory-check — проверка условия победы (Фаза 1.5).
  *
- * Победа: N цветных кубов (data-is-target) в gravity, не в руке, стоят башней
- * на пьедестале; N = CONFIG.victory.stackHeight; цвета = stackColors (shuffle при старте).
+ * Победа: все слоты активного механизма (#assembly-core) заняты снепнутыми
+ * деталями (state 'snapped', не в руке). Удержание stableDurationMs →
+ * 'mechanism-complete' и 'victory' на сцене (victory-ui слушает victory).
  *
- * При успехе и удержании stableDurationMs → событие 'victory' на сцене
- * (feedback — отдельный шаг 3).
+ * Старая геометрия «башни кубов» (Этап 5) заменена на слоты assembly-core.
  */
 AFRAME.registerComponent('victory-check', {
   schema: {},
@@ -16,6 +16,7 @@ AFRAME.registerComponent('victory-check', {
     this.cfg = (typeof CONFIG !== 'undefined' && CONFIG.victory) || {};
     this._won = false;
     this._stableSince = null;
+    this._assemblyCore = null;
     this._tick = this._tick.bind(this);
   },
 
@@ -37,6 +38,14 @@ AFRAME.registerComponent('victory-check', {
     this._stableSince = null;
   },
 
+  _getAssemblyCore: function () {
+    var c = this._assemblyCore;
+    if (c && c.el && c.el.isConnected) return c;
+    var el = document.getElementById('assembly-core');
+    this._assemblyCore = (el && el.components && el.components['assembly-core']) || null;
+    return this._assemblyCore;
+  },
+
   _tick: function () {
     if (this._won) return;
 
@@ -56,180 +65,61 @@ AFRAME.registerComponent('victory-check', {
     if (now - this._stableSince < hold) return;
 
     this._won = true;
-    console.log('[victory-check] VICTORY — stack colors (bottom→top):',
-      result.colors.join(' → '));
-    this.el.sceneEl.emit('victory', { stack: result.stack }, false);
+    var mechId = result.mechanismId || '(unknown)';
+    console.log('[victory-check] MECHANISM COMPLETE:', mechId,
+      '— slots:', result.slotCount);
+
+    var detail = {
+      mechanismId: mechId,
+      slotCount: result.slotCount,
+    };
+    this.el.sceneEl.emit('mechanism-complete', detail, false);
+    this.el.sceneEl.emit('victory', detail, false);
   },
 
   _evaluate: function () {
-    var cfg = (typeof CONFIG !== 'undefined' && CONFIG.victory) || this.cfg;
-    var need = cfg.stackHeight || 4;
-    var expected = cfg.stackColors || [];
-    if (expected.length < need) {
+    var core = this._getAssemblyCore();
+    if (!core || typeof core.areAllSlotsOccupied !== 'function') {
       return { ok: false };
     }
 
-    var candidates = this._collectCandidates(cfg);
-    if (candidates.length < need) {
+    var slotCount = typeof core.getSlotCount === 'function'
+      ? core.getSlotCount() : 0;
+    if (slotCount < 1) return { ok: false };
+
+    if (!core.areAllSlotsOccupied()) {
       return { ok: false };
     }
 
-    var chain = this._findLongestStack(candidates, cfg);
-    if (chain.length < need) {
+    if (!this._verifySnappedOccupancy(core)) {
       return { ok: false };
     }
 
-    var stack = chain.slice(0, need);
-    var colors = stack.map(function (c) { return c.color; });
-
-    for (var i = 0; i < need; i++) {
-      if (!this._colorsMatch(colors[i], expected[i])) {
-        return { ok: false };
-      }
-    }
-
-    for (var j = 0; j < stack.length; j++) {
-      if (!this._isStable(stack[j].el, cfg)) {
-        return { ok: false };
-      }
-    }
-
-    return { ok: true, stack: stack, colors: colors };
+    return {
+      ok: true,
+      mechanismId: typeof core.getMechanismId === 'function'
+        ? core.getMechanismId() : null,
+      slotCount: slotCount,
+    };
   },
 
-  _collectCandidates: function (cfg) {
-    var cubes = this.el.sceneEl.querySelectorAll('[data-is-target="true"]');
-    var half = ((CONFIG.floatingCubes && CONFIG.floatingCubes.size) || 0.1) / 2;
-    var topY = cfg.pedestalTopY !== undefined ? cfg.pedestalTopY : 1.0;
-    var maxR = cfg.pedestalRadiusXZ !== undefined ? cfg.pedestalRadiusXZ : 0.25;
-    var minY = topY - half - 0.02;
-    var list = [];
+  /**
+   * Каждая занятая деталь всё ещё снепнута и не схвачена рукой.
+   */
+  _verifySnappedOccupancy: function (core) {
+    var entries = typeof core.getOccupiedSlots === 'function'
+      ? core.getOccupiedSlots() : [];
 
-    for (var i = 0; i < cubes.length; i++) {
-      var el = cubes[i];
+    for (var i = 0; i < entries.length; i++) {
+      var el = entries[i].el;
+      if (!el || el === true) return false;
+      if (!el.parentNode || !el.isConnected) return false;
+      if (el.is && el.is('grabbed-dynamic')) return false;
+
       var fc = el.components['floating-cube'];
-      if (!fc || fc.state !== 'gravity') continue;
-      if (el.is('grabbed-dynamic')) continue;
-
-      var pos = new THREE.Vector3();
-      el.object3D.getWorldPosition(pos);
-      var r2 = pos.x * pos.x + pos.z * pos.z;
-      if (r2 > maxR * maxR || pos.y < minY) continue;
-
-      list.push({
-        el: el,
-        x: pos.x,
-        y: pos.y,
-        z: pos.z,
-        color: this._getColor(el),
-      });
-    }
-
-    return list;
-  },
-
-  _findLongestStack: function (candidates, cfg) {
-    var cubeSize = (CONFIG.floatingCubes && CONFIG.floatingCubes.size) || 0.1;
-    var maxXZ = cfg.stackMaxHorizontalOffset !== undefined
-      ? cfg.stackMaxHorizontalOffset : 0.07;
-    var minDy = cfg.stackMinVerticalStep !== undefined
-      ? cfg.stackMinVerticalStep : 0.07;
-    var maxDy = cfg.stackMaxVerticalStep !== undefined
-      ? cfg.stackMaxVerticalStep : 0.13;
-
-    candidates.sort(function (a, b) { return a.y - b.y; });
-
-    var best = [];
-
-    for (var s = 0; s < candidates.length; s++) {
-      var chain = [candidates[s]];
-      var top = candidates[s];
-
-      while (true) {
-        var next = this._findCubeAbove(candidates, top, chain, maxXZ, minDy, maxDy);
-        if (!next) break;
-        chain.push(next);
-        top = next;
-      }
-
-      if (chain.length > best.length) {
-        best = chain;
-      }
-    }
-
-    return best;
-  },
-
-  _findCubeAbove: function (all, base, used, maxXZ, minDy, maxDy) {
-    var best = null;
-    var bestDy = Infinity;
-
-    for (var i = 0; i < all.length; i++) {
-      var c = all[i];
-      if (used.indexOf(c) !== -1) continue;
-
-      var dy = c.y - base.y;
-      if (dy < minDy || dy > maxDy) continue;
-
-      var dx = c.x - base.x;
-      var dz = c.z - base.z;
-      if (dx * dx + dz * dz > maxXZ * maxXZ) continue;
-
-      if (dy < bestDy) {
-        bestDy = dy;
-        best = c;
-      }
-    }
-
-    return best;
-  },
-
-  _isStable: function (el, cfg) {
-    var bodyComp = el.components['physx-body'];
-    var rb = bodyComp && bodyComp.rigidBody;
-    if (!rb) return false;
-
-    var maxLin = cfg.maxLinearSpeed !== undefined ? cfg.maxLinearSpeed : 0.08;
-    var maxAng = cfg.maxAngularSpeed !== undefined ? cfg.maxAngularSpeed : 0.6;
-
-    try {
-      if (typeof rb.getLinearVelocity === 'function') {
-        var lv = rb.getLinearVelocity();
-        if (!lv) return false;
-        var speed = Math.sqrt(lv.x * lv.x + lv.y * lv.y + lv.z * lv.z);
-        if (speed > maxLin) return false;
-      }
-      if (typeof rb.getAngularVelocity === 'function') {
-        var av = rb.getAngularVelocity();
-        if (av) {
-          var ang = Math.sqrt(av.x * av.x + av.y * av.y + av.z * av.z);
-          if (ang > maxAng) return false;
-        }
-      }
-    } catch (e) {
-      return false;
+      if (!fc || fc.state !== 'snapped') return false;
     }
 
     return true;
-  },
-
-  _getColor: function (el) {
-    var comp = el.components.material;
-    if (comp && comp.data && comp.data.color) {
-      return String(comp.data.color).toLowerCase();
-    }
-    var attr = el.getAttribute('material');
-    if (attr && typeof attr === 'object' && attr.color) {
-      return String(attr.color).toLowerCase();
-    }
-    if (typeof attr === 'string') {
-      var m = attr.match(/color:\s*(#[0-9a-fA-F]{3,8})/);
-      if (m) return m[1].toLowerCase();
-    }
-    return '';
-  },
-
-  _colorsMatch: function (a, b) {
-    return String(a).toLowerCase() === String(b).toLowerCase();
   },
 });

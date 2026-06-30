@@ -393,6 +393,76 @@
 
 ---
 
+---
+
+---
+
+## Сессия 38 — фикс layout victory-ui ✅
+
+### Сделано
+
+- **victory-ui:** panel height 0.46 → **0.50**; кнопки подняты («Заново» y −0.03,
+  «В главное меню» y −0.16) — нижняя плашка не выходит за чёрную панель; запас под scale 1.08.
+- **Quest QA ✅** (пользователь): старт-меню + меню победы — ровно, без обрезки.
+
+**Файлы:** `victory-ui.js`.
+
+**Следующая сессия:** Фаза 3.1 — `outside-scenery.js` (или 2.x малый купол по выбору).
+
+---
+
+## Сессия 37 — Фаза 2.1 cyan-купол + меню cyan-theme + victory-ui ✅ (UI layout — баг)
+
+### Сделано
+
+- **2.1 cyan-купол:** `room-fog-dome.js` — ridged-ленты + sin-вихри + слой fbm-дыма
+  (`fogOverlay`); параметры в `CONFIG.room.fogDome`. Пользователь подкрутил визуал ✅.
+- **victory-ui:** позиция = `game.menu.worldPosition`; кнопки «Заново» (`startGame`) и
+  «В главное меню» (`returnToMenu`); убран hint «Поднеси руку + grip».
+- **game-menu:** hint убран.
+- **Палитра меню:** `CONFIG.game.menuTheme`, `js/menu-ui-draw.js` — cyan/чёрный/белый,
+  обводка кнопок, центрирование текста по метрикам шрифта.
+- **Wireframe fix (с.36, QA ✅):** `collider-debug-viz` — без WASM crash при grab×купол.
+
+### Баг (→ следующая сессия)
+
+- **VR-меню layout:** на скрине победы плашки смещены влево, «В главное меню» выходит за
+  нижний край панели. Вероятно: размер панели vs позиции кнопок / pivot canvas-текстур.
+
+**Файлы:** `room-fog-dome.js`, `config.js`, `victory-ui.js`, `game-menu.js`,
+`menu-ui-draw.js`, `index.html`, `floating-cube.js`, `assembly-core.js`, `victory-check.js`,
+`game-lifecycle.js`, `collider-debug-viz.js`, логи.
+
+**Следующая сессия:** фикс layout VR-меню (game-menu + victory-ui).
+
+---
+
+## Сессия 36 — Фаза 1.4–1.5: слом снепа, победа по слотам, wireframe fix ✅
+
+### Сделано
+
+- **1.4 — слом снепа шаром:** `floating-cube._breakSnapFromHit` — `releaseSlot`, dynamic,
+  `_resetKinematicLatch`, импульс `CONFIG.assembly.breakImpulse` (+ доля скорости шара),
+  state float/gravity по containment. Точка входа: `_onContactBegin` + `_isDangerBall`.
+- **1.5 — победа по слотам:** `victory-check.js` переписан — все слоты `assembly-core`
+  заняты снепнутыми деталями → `mechanism-complete` + `victory` (устойчивость 1 с).
+  `assembly-core`: `areAllSlotsOccupied`, `resetOccupancy`, `getOccupiedSlots`.
+  `game-lifecycle`: ghost-tower-hint не показывается; сброс слотов при старте/меню.
+- **Фикс wireframe:** `collider-debug-viz` — grabbed/snapped/kinematic читают позу из
+  `object3D`; `getGlobalPose` в try/catch с fallback. Устранён WASM crash при проносе
+  куба сквозь купол (Quest зависал — чёрный экран).
+
+### QA
+
+- **Quest QA ✅** (пользователь): 1.4 слом, 1.5 победа, wireframe без зависания.
+
+**Файлы:** `floating-cube.js`, `assembly-core.js`, `victory-check.js`, `game-lifecycle.js`,
+`collider-debug-viz.js`, `index.html`, `CURRENT_TASK.md`.
+
+**Следующая сессия:** Фаза **2.1** — cyan-шейдер купола (`room-fog-dome.js`).
+
+---
+
 ## Сессия 33 — Фаза 1.3: снеп детали + ручной разбор ✅
 
 ### Сделано

@@ -24,8 +24,10 @@
        3) floating-cube.js — компонент до парсинга <a-scene>;
        4) spawn-*.js — спавн по startGame() из game-lifecycle.js;
        5) dome-builder.js, ghost-tower-hint.js, victory-check.js — до <a-scene>;
+       menu-ui-draw.js — canvas-плашки меню (до game-menu / victory-ui);
        6) main.js — диагностика. -->
   <script src="js/config.js"></script>
+  <script src="js/menu-ui-draw.js"></script>
   <script src="js/init-session.js"></script>
   <script src="js/game-lifecycle.js"></script>
   <script src="js/desktop-ui-cursor.js"></script>
@@ -102,7 +104,7 @@
       </a-cylinder>
     </a-entity>
 
-    <!-- Призрачная башня: схема победы (цвета из init-session.js). Без физики. -->
+    <!-- Призрачная башня (Этап 5, устарело): заменена слотами #assembly-core. -->
     <a-entity id="ghost-tower-hint" ghost-tower-hint position="0 0 0" visible="false"></a-entity>
 
     <!-- Слоты сборки механизма (Фаза 1). position = верх ядра (pedestal.tableSurfaceY = 1.0);

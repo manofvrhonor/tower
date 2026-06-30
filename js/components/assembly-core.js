@@ -14,7 +14,8 @@
  *   - occupySlot(slotId, el)  — пометить слот занятым (призрак скрывается)
  *   - releaseSlot(slotId)     — освободить слот (для слома, шаг 1.4)
  *   - isSlotOccupied(slotId)
- * Слом при ударе и проверка победы — следующие микро-шаги (1.4–1.5).
+ *   - areAllSlotsOccupied() — все слоты заняты (victory-check, шаг 1.5)
+ *   - getMechanismId() / getOccupiedSlots() / resetOccupancy()
  *
  * Слоты в CONFIG заданы локально к верху ядра. Entity ставится в позицию
  * верха стола (см. index.html: position = pedestal.tableSurfaceY), поэтому
@@ -166,5 +167,45 @@ AFRAME.registerComponent('assembly-core', {
     delete this._occupied[slotId];
     var m = this._meshById(slotId);
     if (m) m.visible = true;
+  },
+
+  /** id активного механизма из CONFIG (после _getSlots). */
+  getMechanismId: function () {
+    if (!this._mechanismId) this._getSlots();
+    return this._mechanismId;
+  },
+
+  /** Число слотов механизма. */
+  getSlotCount: function () {
+    return this._slotMeshes.length;
+  },
+
+  /** true — каждый слот занят (проверка победы, шаг 1.5). */
+  areAllSlotsOccupied: function () {
+    if (!this._slotMeshes.length) return false;
+    for (var i = 0; i < this._slotMeshes.length; i++) {
+      if (!this._occupied[this._slotMeshes[i].userData.slotId]) return false;
+    }
+    return true;
+  },
+
+  /**
+   * Занятые слоты: [{ slotId, el }]. el — entity детали или true (legacy).
+   */
+  getOccupiedSlots: function () {
+    var out = [];
+    for (var sid in this._occupied) {
+      if (!Object.prototype.hasOwnProperty.call(this._occupied, sid)) continue;
+      out.push({ slotId: sid, el: this._occupied[sid] });
+    }
+    return out;
+  },
+
+  /** Сброс занятости (рестарт / «Заново»): все призраки слотов снова видны. */
+  resetOccupancy: function () {
+    var ids = Object.keys(this._occupied);
+    for (var i = 0; i < ids.length; i++) {
+      this.releaseSlot(ids[i]);
+    }
   },
 });
