@@ -408,7 +408,7 @@
 - **fix:** `assembly-hub.js` — hardcore без `appendChild` на кольцо (слоты пропадали);
   rotation sync в `tick`.
 - **fix:** `assembly-core` — жёлтые призраки слотов (fill + wireframe), `ensureSlotsBuilt`.
-- **git commit + push** ядра 2.x.
+- **git commit + push** ядра 2.x — `9205f2c`.
 - **CURRENT_TASK** → план **Фазы 3** (outside-scenery → floor fog → HDR).
 
 **Следующая сессия:** микро-шаг **3.1** — `outside-scenery.js`.
