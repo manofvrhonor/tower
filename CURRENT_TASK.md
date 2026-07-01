@@ -20,7 +20,7 @@ HDR не конфликтует с `room-fog-dome`; без регрессий я
 ### Микро-шаги
 
 - ✅ **3.1 — outside-scenery.js** — дома за куполом (desktop ✅, Quest — при следующем прогоне).
-- ⬜ **3.2 — туман у пола** — плоскость/объём снаружи купола (отдельный компонент или расширение fog).
+- 🔄 **3.2 — туман у пола** — `room-floor-fog.js` (код готов → F5 desktop QA).
 - ⬜ **3.3 — HDR / небо** — довести `world-hdri-sky` под локации (CONFIG, тон с cyan-куполом).
 - ⬜ **3.x QA** — ПК → Quest (визуал, FPS, нет красных в консоли).
 - ⬜ **git commit** (по запросу, один микро-шаг = один коммит).
@@ -68,18 +68,41 @@ HDR не конфликтует с `room-fog-dome`; без регрессий я
 
 ## Working Context
 
-### ИЗВЕСТНО (с.42)
+### ИЗВЕСТНО (с.43)
 
-- **3.1 ✅:** `outside-scenery.js` — 4 primary (диагонали, `textureOnly`) + 3 background
-  (оси, серый tint); `axisDistanceOffset` / `positionOffset`; wall-JPG без roof;
-  `floorRadius: 50`; текстуры в `assets/textures/outside-buildings/*-wall.jpg`.
+- **3.2 (код):** #14 depth-prepass, 14 слоёв, depthTest:false, user config.
+- **3.1 ✅:** `outside-scenery.js` — 4 primary + 3 background; `floorRadius: 50`.
 - Фаза **2.x ✅**; меню adaptive (с.41); кольца 72 seg.
 - `room-fog-dome` — cyan R=2.0; collider без изменений в с.42.
 
 ### НЕИЗВЕСТНО
 
-- FPS Quest с 7 домами + большими background-боксами.
-- Отдельный mesh тумана vs шейдер на полу (3.2).
+- Desktop/Quest QA тумана 3.2 после **#9** (depthTest:true + opacitySpread).
+- FPS Quest с 7 домами + floorFog.
+
+### Журнал попыток — объём vs объекты (3.2)
+
+| # | Что пробовали | Объём | Кубы чистые | Почему не финал |
+|---|---------------|-------|-------------|-----------------|
+| 1 | 14 mesh, `depthTest: false` | ✅ | ❌ | transparent рисуется поверх opaque без z-test |
+| 2 | `depthTest: true`, 14 mesh | ❌ плоский | ✅ | `layerSpread:0.08` — видимы только 2–3 нижних слоя |
+| 3 | `renderOrder` gameplay=4 | ✅ | ❌ | opaque всегда до transparent, не помогает |
+| 4 | merged mesh + `depthTest: true` | ❌ мягко плоский | ✅ | то же + один mesh |
+| 5 | пол `depthWrite: false` + 14 mesh + depthTest | ❌ | ✅ | плоскость = узкий layerSpread, не пол |
+| 6 | merged + polygonOffset | ❌ | ✅ | не решает spread |
+| 7 | stencil-диск купола + depthTest:false | ✅ | ❌ | stencil только xz<2 m; кубы снаружи/в воздухе не маскируются |
+| 8 | opacitySpread (отдельно от layerSpread) + depthTest:false | ✅ | ❌ | объём есть, объекты снова в тумане |
+| **12–13** | откаты, single ring, ridged — снова «или/или» | — | — | **повтор цикла, не трогать** |
+| **14** | **depth-prepass + depthTest:false + discard в шейдере** | **?** | **?** | **текущий — не возвращаться к #2/#12** |
+
+**⛔ Не повторять:** просто переключать `depthTest true/false` или крутить opacity — это шаги #1/#2, они уже закрыты.
+
+**Корень:** GPU z-test на transparent не даёт и объём (слои), и чистые кубы одновременно. Решение — **свой depth-sampler**, не `depthTest:true` на материале.
+
+### РЕШЕНО (с.43)
+
+- Туман 3.2 — **отдельный компонент** `room-floor-fog.js` (не трогаем шейдер купола).
+- Геометрия — **annulus × height** (дыра = радиус купола); внутри игровой зоны mesh нет.
 
 ### РЕШЕНО (с.42)
 
@@ -93,4 +116,5 @@ HDR не конфликтует с `room-fog-dome`; без регрессий я
 
 ## Следующее действие
 
-Микро-шаг **3.2** — туман у пола снаружи купола → F5 → чек «дымка у пола, ядро читается».
+F5 → desktop QA **#14**: объём + кубы без налёта.
+Подкрутка: `depthBias` (0.0002–0.0006), если остаются артефакты на краях кубов.

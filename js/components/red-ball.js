@@ -56,6 +56,10 @@ AFRAME.registerComponent('red-ball', {
     this.el.addEventListener('body-loaded', onReady);
     this.el.addEventListener('physx-body-loaded', onReady);
     this._pollIntervalId = setInterval(this._tryApply.bind(this), 100);
+
+    if (typeof window.applyGameplayRenderOrder === 'function') {
+      window.applyGameplayRenderOrder(this.el);
+    }
   },
 
   play: function () {

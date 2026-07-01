@@ -57,6 +57,8 @@ const CONFIG = {
         bottomColor: '#1a2230',
       },
     },
+    // renderOrder: scenery 1 < floorFog 2 < gameplay 4 < fogDome 5 < sphere 12
+    gameplayRenderOrder: 4,
     fogDome: {
       radius: 2.0,   // м, верхняя полусфера от пола (Ø 4 м; визуал = collider)
       position: { x: 0, y: 0, z: 0 },
@@ -91,7 +93,7 @@ const CONFIG = {
       widthSegments: 64,
       heightSegments: 32,
       renderOrder: 5,
-      floorRadius: 50,      // м, визуальный пол (≈ room.sky.radius; дома ~10 м — хватает)
+      floorRadius: 50,
       spawnMargin: 0.12,
       collider: {
         latitudeRings: 10,
@@ -100,6 +102,33 @@ const CONFIG = {
         tileOverlap: 1.08,
         debugVisible: false,
       },
+    },
+    // Фаза 3.2 — низкий туман у пола снаружи cyan-купола (room-floor-fog.js).
+    floorFog: {
+      enabled: true,
+      innerRadius: 2.0,
+      outerRadius: 30,
+      height: 0.6,
+      autoLayers: true,
+      layerCount: 20,
+      layerSpread: 0.08,
+      verticalBias: 0.02,
+      verticalFalloffPower: 2.4,
+      position: { x: 0, y: 0, z: 0 },
+      color: '#ffffff',
+      glowColor: '#f8f8f8',
+      opacity: 1.0,
+      baseOpacity: 0.52,
+      peakOpacity: 1.0,
+      noiseScale: 0.28,
+      puffScale: 0.09,
+      scrollSpeed: 0.0028125,
+      edgeSoftness: 4.5,
+      billowAmplitude: 0.21,
+      billowSpeed: 0.003125,
+      thetaSegments: 72,
+      radialSegments: 10,
+      renderOrder: 4,
     },
     // Фаза 3.1 — схема (вид сверху): серые на (±d,±d), зелёные на осях (±R,0)/(0,±R).
     outsideScenery: {

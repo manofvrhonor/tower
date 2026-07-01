@@ -84,4 +84,17 @@
   global.getRoomDome = getRoomDome;
   global.clampPositionToRoomDome = clampPositionToRoomDome;
   global.randomPositionInRoomDome = randomPositionInRoomDome;
+
+  /** renderOrder для объектов внутри купола: выше floorFog, ниже fogDome (5). */
+  global.applyGameplayRenderOrder = function (el) {
+    var room = global.CONFIG && global.CONFIG.room;
+    var order = room && room.gameplayRenderOrder !== undefined ? room.gameplayRenderOrder : 4;
+    var apply = function () {
+      el.object3D.traverse(function (node) {
+        if (node.isMesh) node.renderOrder = order;
+      });
+    };
+    if (el.hasLoaded) apply();
+    else el.addEventListener('loaded', apply);
+  };
 })(window);

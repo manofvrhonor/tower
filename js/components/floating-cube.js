@@ -97,6 +97,10 @@ AFRAME.registerComponent('floating-cube', {
     // Поллинг rigidBody (план Б, основной — см. JSDoc, п. 1).
     this._pollStartTime = performance.now();
     this._pollIntervalId = setInterval(this._tryApply.bind(this), 100);
+
+    if (typeof window.applyGameplayRenderOrder === 'function') {
+      window.applyGameplayRenderOrder(this.el);
+    }
   },
 
   play: function () {

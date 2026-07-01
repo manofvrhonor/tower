@@ -312,6 +312,8 @@ AFRAME.registerComponent('room-fog-dome', {
       metalness: 0.05,
       transparent: false,
       opacity: 1,
+      // Не пишем depth — иначе floor-fog с depthTest:true схлопывается в плоский слой на полу.
+      depthWrite: false,
     });
 
     this._floorMesh = new THREE.Mesh(geo, mat);

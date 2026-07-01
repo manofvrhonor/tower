@@ -161,6 +161,9 @@ AFRAME.registerComponent('orbit-ring', {
       );
       this.el.appendChild(vis);
       this._visuals.push(vis);
+      if (typeof window.applyGameplayRenderOrder === 'function') {
+        window.applyGameplayRenderOrder(vis);
+      }
     }
 
     console.log('[orbit-ring]', this.data.index, '— сегментов:', N, 'R=' + R);
