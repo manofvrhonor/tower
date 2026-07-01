@@ -18,25 +18,29 @@ alwaysApply: true
 
 
 
-## Задача: Фаза 3.5B — сборка и детали
+## Задача: 3.5A.5 — GLB магнит на руке, затем Фаза 3.5B
 
 
 
-**Мастер-план:** `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md` → Фаза 3.5B.
+**Мастер-план:** `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md` → 3.5A.5, потом 3.5B.
 
 
 
-**Цель:** GLB-детали вместо кубов, призраки под форму, слоты от центра сферы/колец; состояния snapped/active/broken.
+**Цель 3.5A.5:** видимый магнит на кулаке (`magnet.glb`), grab/VFX без регрессий; Quest QA.
 
 
 
-**Критерий завершения:** магнитом поднёс → release → snap; призраки читаемы на cyan-кольце; Quest FPS OK.
+**Цель 3.5B:** GLB-детали вместо кубов, призраки под форму, слоты от центра сферы/колец; состояния snapped/active/broken.
 
 
 
-### Микро-шаги
+### Микро-шаги (3.5A.5)
 
 
+
+- ✅ **3.5A.5.0** — `hand-magnet-mesh.js` + `magnet.glb` на `#*Magnet`; scale 0.0075.
+
+- ⏸ **3.5A.5.1** — калибровка в `config.js` (ручная, пауза): `magnetMesh.position.y: 0.03`, rotation left `z:90` / right `z:270`.
 
 - ⬜ **3.5B.0** — пересчёт `CONFIG.mechanisms.slots` от центра сферы/колец.
 
@@ -84,5 +88,5 @@ alwaysApply: true
 
 
 
-**3.5B.0** — слоты от центра сферы/колец (`CONFIG.mechanisms.slots`).
+**Пауза 3.5A.5** — визуал магнита OK на сейчас. Дальше: Quest QA collider/VFX или **3.5B.0**.
 
