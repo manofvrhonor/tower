@@ -4,7 +4,7 @@
  * room-floor-fog — низкий туман у пола снаружи cyan-купола (Фаза 3.2).
  *
  * 14 волнистых колец, depthTest:false (объём). Depth-prepass: шейдер отсекает
- * фрагменты за opaque-объектами (кубы). Wall-clock, не slo-mo.
+ * фрагменты за opaque-объектами (кубы). Анимация × time-scale (slo-mo мира).
  */
 AFRAME.registerComponent('room-floor-fog', {
   schema: {},
@@ -16,6 +16,7 @@ AFRAME.registerComponent('room-floor-fog', {
     this._depthTarget = null;
     this._origRender = null;
     this._depthPassReady = false;
+    this._worldAnimTime = 0;
     this._cfg = this._readCfg();
     if (!this._cfg.enabled) return;
 
@@ -53,12 +54,21 @@ AFRAME.registerComponent('room-floor-fog', {
     this._uniformSets = [];
   },
 
-  tick: function (time) {
-    var t = time * 0.001;
+  tick: function (time, dt) {
+    var dtSec = Math.min((dt || 16) / 1000, 0.1);
+    this._worldAnimTime += dtSec * this._getTimeScale();
     var i;
     for (i = 0; i < this._uniformSets.length; i++) {
-      this._uniformSets[i].uTime.value = t;
+      this._uniformSets[i].uTime.value = this._worldAnimTime;
     }
+  },
+
+  /** Мировое время тумана: × getScale(), не wall-clock (ADR-12). */
+  _getTimeScale: function () {
+    if (this._cfg.useTimeScale === false) return 1;
+    var sys = this.el.sceneEl.systems['time-scale'];
+    if (!sys || typeof sys.getScale !== 'function') return 1;
+    return sys.getScale();
   },
 
   _maybeResizeDepthTarget: function (renderer) {
@@ -169,6 +179,7 @@ AFRAME.registerComponent('room-floor-fog', {
 
     return {
       enabled: ff.enabled !== false,
+      useTimeScale: ff.useTimeScale !== false,
       innerRadius: ff.innerRadius !== undefined ? ff.innerRadius : domeR,
       outerRadius: ff.outerRadius !== undefined ? ff.outerRadius : floorR,
       height: height,

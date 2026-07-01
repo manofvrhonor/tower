@@ -370,14 +370,31 @@ inline: A-Frame-атрибуты не читают `window.CONFIG` (как и у
 ### ADR-20: Комната — туманный купол + плиточный collider (сессия 30)
 
 **Решение:** визуал — `room-fog-dome` (shader, CONFIG.room.fogDome). Небо — `world-hdri-sky`
-(сфера в корне сцены, не на камере; HDR random из `assets/hdri/`). Физика стен/потолка —
+(сфера в корне сцены, не на камере). **HDR (с.44):** `manifest.json` → файл
+`assets/hdri/{locationId}.*` (приоритет ext: hdr, jpg…); если нет — `base.*`;
+`room.hdri` — только отладка. `sky.tint` + `exposure` согласуют тон с cyan-куполом.
+Физика стен/потолка —
 `room-dome-collider`: ~281 тонких `a-box` по внутренней полусфере (слой WORLD), R =
 `fogDome.radius`. Пол — один `a-box` `#floor` (5×5 m, ADR-09). Spawn/clamp/containment
 (`room-spawn-utils`, `room-containment`) — float-тела внутри купола.
 
 **Причина:** куб 3×3×3 не совпадал с визуалом; `physx-body` на сфере = convex hull (ADR-05).
 
-**Не делать:** один `physx-body` на полусферу комнаты; спавн без проверки R купола.
+**Не делать:** один `physx-body` на полусферу комнаты; спавн без проверки R купола;
+перебор URL неба в рантайме (404 в консоли) — только через manifest/listing.
+
+---
+
+### ADR-21: Туман у пола снаружи купола (сессия 43–44, Фаза 3.2)
+
+**Решение:** `room-floor-fog.js` — кольца annulus снаружи R купола; `depthTest: false`.
+Depth-prepass + discard в шейдере (кубы без налёта). Анимация × `time-scale.getScale()`.
+`gameplayRenderOrder: 4`; пол купола `depthWrite: false`.
+
+**Причина:** transparent + `depthTest:true` = плоский слой; без prepass + `depthTest:false`
+= туман на кубах.
+
+**Не делать:** «фикс» только переключением depthTest/opacity; stencil xz-диск.
 
 ---
 
@@ -499,12 +516,13 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
   диагоналях ±d, background на осях ±R); `floorRadius: 50` — визуальный пол под застройкой;
   `axisDistanceOffset` / `positionOffset` в CONFIG; fix `floating-cube` (`inside` в
   `_breakSnapFromHit`); `menuUiButtonDrawOpts` — общие кнопки game-menu/victory-ui.
-  **Дома ✅** (пользователь, desktop). Текстуры: 7× `*-wall.jpg` в `assets/textures/outside-buildings/`.
-- **Стильная игра — следующая:** **Фаза 3.2** — туман у пола снаружи купола (см. `CURRENT_TASK.md`).
-- **Стильная игра — после Фазы 3:** **Фаза 3.5** — взаимодействие с деталями:
-  - **3.5A (первым)** — магнитные руки: якорь tip, GLB, VFX grip, physx-grab/bat на магнит;
-  - **3.5B (вторым)** — сборка: поза слотов у сферы/колец, GLB-детали, призраки, состояния.
-  Снеп-схему art-pass делаем **после** рук, чтобы не перегонять хват/release.
+  **Дома ✅** (desktop + Quest). Текстуры: 7× `*-wall.jpg` в `assets/textures/outside-buildings/`.
+- **Стильная игра (с.43–44 ✅):** Фаза **3.2** — `room-floor-fog.js` (depth-prepass, 20 слоёв,
+  slo-mo × time-scale, Quest QA ✅). Коммит `dfeb141`.
+- **Стильная игра (с.44 ✅):** Фаза **3.3** — HDR: `{locationId}.*` → `base.*` через manifest,
+  `sky.tint`, без 404-перебора; `assets/hdri/base.jpg`. **Фаза 3 закрыта** (Quest QA ✅).
+- **Стильная игра — следующая:** **Фаза 3.5A** — магнитные руки (см. `CURRENT_TASK.md`).
+- **Стильная игра — после 3.5A:** **3.5B** — GLB-детали, позы слотов, призраки.
 - **Дальше:** Фаза 4 (локации) → 5 (опасности + таймер) → 6 (комикс-меню) → 7 (intro-comic).
 - **Не делаем:** VR-виньетка slo-mo (снято с бэклога). **Пропускаем:** захват VR отлёт.
 - **Закрыто:** пьедestal «запинание» (парящий диск, с.27).
@@ -551,13 +569,14 @@ Tower/
 ├── js/spawn-floating-cubes.js, spawn-red-balls.js, spawn-ball-bat.js
 ├── js/components/  physx-grab, floating-cube, red-ball, ball-bat, dome-builder,
 │                   orbit-ring, assembly-hub, assembly-sphere-visual,
-│                   room-fog-dome, room-dome-collider, world-hdri-sky, outside-scenery,
+│                   room-fog-dome, room-floor-fog, room-dome-collider, world-hdri-sky, outside-scenery,
 │                   collider-debug-viz, time-scale, slowmo-vignette-3d,
 │                   float-motion-trail, ghost-tower-hint, assembly-core, victory-check, victory-ui,
 │                   game-menu, ball-wave-manager
 │                   (legacy: pedestal-builder.js — не в index.html)
 ├── assets/models/  leftHandLow.glb, rightHandLow.glb
 ├── assets/textures/outside-buildings/  *-wall.jpg (7 прототипов домов)
+├── assets/hdri/  base.jpg, manifest.json (небо по id локации → base)
 ├── AGENTS.md, CURRENT_TASK.md, PROJECT_LOG.md, PROJECT_LOG_ARCHIVE.md
 ```
 
@@ -588,7 +607,9 @@ Tower/
   дорожная карта Фазы 3.5 (руки → art-pass сборки).
 - **Стильная (с.42):** Фаза **3.1** — `outside-scenery.js` (7 домов за куполом, wall-JPG,
   `floorRadius: 50`); общие кнопки меню/victory-ui; fix snap-break в `floating-cube`.
-  Desktop QA домов ✅.
+  Desktop + Quest QA домов ✅.
+- **Стильная (с.43–44):** Фаза **3.2** — `room-floor-fog.js` (ADR-21); **3.3** — HDR
+  `{id}→base`, manifest; **Фаза 3 ✅** Quest QA.
 
 **QA купола (уточнение теста 1):** float-кубики сталкиваются с куполом **снаружи**
 (слой FLOAT_CUBE × DOME). Внутри на пьедестале кубики в gravity и **не** бьются о

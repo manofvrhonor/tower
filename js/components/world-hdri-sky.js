@@ -3,8 +3,8 @@
 /**
  * world-hdri-sky — мировое небо (не на камере / не на #player).
  *
- * Большая сфера в центре комнаты (CONFIG.room.sky). CONFIG.room.hdriAuto —
- * случайный .hdr / .jpg / .png из assets/hdri/ (manifest.json или listing npx serve).
+ * Большая сфера в центре комнаты (CONFIG.room.sky).
+ * HDR: room.hdri (отладка) → manifest/listing → {id}.* → base.* (без 404 в консоли).
  */
 AFRAME.registerComponent('world-hdri-sky', {
   schema: {},
@@ -40,10 +40,13 @@ AFRAME.registerComponent('world-hdri-sky', {
         z: pos.z !== undefined ? pos.z : 0,
       },
       exposure: sky.exposure !== undefined ? sky.exposure : 1.0,
+      tint: new THREE.Color(sky.tint || '#ffffff'),
       fallback: sky.fallback || {},
       hdri: room.hdri || null,
-      hdriAuto: room.hdriAuto !== false,
+      hdriAuto: room.hdriAuto === true,
       hdriDir: room.hdriDir || 'assets/hdri/',
+      hdriBase: room.hdriBase !== undefined ? room.hdriBase : 'base',
+      hdriExtensions: room.hdriExtensions || ['.hdr', '.jpg', '.jpeg', '.png'],
     };
   },
 
@@ -60,6 +63,7 @@ AFRAME.registerComponent('world-hdri-sky', {
     var geo = new THREE.SphereGeometry(this._cfg.radius, 64, 32);
     var mat = new THREE.MeshBasicMaterial({
       map: texture,
+      color: this._cfg.tint,
       side: THREE.BackSide,
       depthWrite: false,
       fog: false,
@@ -119,28 +123,88 @@ AFRAME.registerComponent('world-hdri-sky', {
     return tex;
   },
 
+  _findStartLocation: function () {
+    var locs = (typeof CONFIG !== 'undefined' && CONFIG.locations) || [];
+    var i;
+    for (i = 0; i < locs.length; i++) {
+      if (locs[i].start) return locs[i];
+    }
+    return locs.length ? locs[0] : null;
+  },
+
+  _locationSkyId: function (loc) {
+    if (!loc) return null;
+    if (loc.sky) return loc.sky;
+    return loc.id || null;
+  },
+
+  _stemsForLocation: function (loc) {
+    var skyId = this._locationSkyId(loc);
+    var baseStem = this._cfg.hdriBase || 'base';
+    var stems = [];
+    if (skyId) stems.push(skyId);
+    if (!skyId || skyId !== baseStem) stems.push(baseStem);
+    return stems;
+  },
+
+  /** По manifest/listing: {id}.* → base.* без сетевых 404. */
+  _pickSkyFile: function (names, loc) {
+    var stems = this._stemsForLocation(loc);
+    var exts = this._cfg.hdriExtensions;
+    var lowerMap = {};
+    var i;
+    var s;
+    var e;
+
+    for (i = 0; i < names.length; i++) {
+      lowerMap[names[i].toLowerCase()] = names[i];
+    }
+
+    for (s = 0; s < stems.length; s++) {
+      for (e = 0; e < exts.length; e++) {
+        var key = (stems[s] + exts[e]).toLowerCase();
+        if (lowerMap[key]) return lowerMap[key];
+      }
+    }
+    return null;
+  },
+
   _tryLoadHdri: function () {
     var self = this;
+    var dir = this._normalizeDir(this._cfg.hdriDir);
 
     if (this._cfg.hdri) {
-      this._loadSkyUrl(this._cfg.hdri);
+      var debugUrl = this._normalizeHdriUrl(this._cfg.hdri, dir);
+      if (debugUrl) this._loadSkyUrl(debugUrl);
       return;
     }
 
-    if (!this._cfg.hdriAuto) return;
+    this._fetchHdriFileNames(function (names) {
+      var loc = self._findStartLocation();
+      var skyId = self._locationSkyId(loc);
+      var file = self._pickSkyFile(names, loc);
 
-    this._discoverHdriUrls(function (urls) {
-      if (!urls.length) {
-        console.log('[world-hdri-sky] assets/hdri/ пуст — fallback-градиент');
+      if (file) {
+        var url = dir + file;
+        var stem = file.replace(/\.[^.]+$/, '');
+        var via = stem === skyId ? skyId : (self._cfg.hdriBase || 'base');
+        console.log('[world-hdri-sky] location:', skyId || '?', '→', via + ' (' + file + ')');
+        self._loadSkyUrl(url);
         return;
       }
-      var pick = urls[Math.floor(Math.random() * urls.length)];
-      console.log('[world-hdri-sky] random:', pick, '(' + urls.length + ' in folder)');
-      self._loadSkyUrl(pick);
+
+      if (self._cfg.hdriAuto && names.length) {
+        var pick = names[Math.floor(Math.random() * names.length)];
+        console.log('[world-hdri-sky] random:', pick);
+        self._loadSkyUrl(dir + pick);
+        return;
+      }
+
+      console.log('[world-hdri-sky] файл неба не найден — fallback-градиент');
     });
   },
 
-  _discoverHdriUrls: function (done) {
+  _fetchHdriFileNames: function (done) {
     var dir = this._normalizeDir(this._cfg.hdriDir);
     var self = this;
 
@@ -152,11 +216,11 @@ AFRAME.registerComponent('world-hdri-sky', {
       .catch(function () { return null; })
       .then(function (manifest) {
         if (manifest && Array.isArray(manifest) && manifest.length > 0) {
-          return self._urlsFromNames(manifest, dir);
+          return manifest;
         }
-        return self._parseDirectoryListing(dir);
+        return self._parseDirectoryListingNames(dir);
       })
-      .then(function (urls) { done(urls || []); })
+      .then(function (names) { done(names || []); })
       .catch(function () { done([]); });
   },
 
@@ -177,22 +241,7 @@ AFRAME.registerComponent('world-hdri-sky', {
     return dir + name;
   },
 
-  _urlsFromNames: function (names, dir) {
-    var urls = [];
-    var seen = {};
-    for (var i = 0; i < names.length; i++) {
-      var url = this._normalizeHdriUrl(names[i], dir);
-      if (!url) continue;
-      var key = url.split('/').pop().toLowerCase();
-      if (seen[key]) continue;
-      seen[key] = true;
-      urls.push(url);
-    }
-    return urls;
-  },
-
-  _parseDirectoryListing: function (dir) {
-    var self = this;
+  _parseDirectoryListingNames: function (dir) {
     return fetch(dir)
       .then(function (r) { return r.ok ? r.text() : ''; })
       .then(function (html) {
@@ -215,22 +264,23 @@ AFRAME.registerComponent('world-hdri-sky', {
           names.push(base);
         }
 
-        return self._urlsFromNames(names, dir);
+        return names;
       });
   },
 
-  _loadSkyUrl: function (url) {
+  _loadSkyUrl: function (url, onFail) {
     var lower = url.toLowerCase().split('?')[0].split('#')[0];
     if (lower.endsWith('.hdr')) {
-      this._loadHdr(url);
+      this._loadHdr(url, onFail);
     } else if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png')) {
-      this._loadLdr(url);
+      this._loadLdr(url, onFail);
     } else {
       console.warn('[world-hdri-sky] unsupported extension:', url);
+      if (onFail) onFail();
     }
   },
 
-  _loadLdr: function (url) {
+  _loadLdr: function (url, onFail) {
     var loader = new THREE.TextureLoader();
     var self = this;
     loader.load(
@@ -242,19 +292,21 @@ AFRAME.registerComponent('world-hdri-sky', {
       },
       undefined,
       function () {
-        console.warn('[world-hdri-sky] LDR not found, using fallback:', url);
+        if (onFail) onFail();
+        else console.warn('[world-hdri-sky] LDR not found, using fallback:', url);
       }
     );
   },
 
-  _loadHdr: function (url) {
+  _loadHdr: function (url, onFail) {
     var self = this;
     var xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
     xhr.responseType = 'arraybuffer';
     xhr.onload = function () {
       if (xhr.status !== 200) {
-        console.warn('[world-hdri-sky] HDR not found, using fallback:', url);
+        if (onFail) onFail();
+        else console.warn('[world-hdri-sky] HDR not found, using fallback:', url);
         return;
       }
       try {
@@ -272,10 +324,12 @@ AFRAME.registerComponent('world-hdri-sky', {
         console.log('[world-hdri-sky] loaded HDR sky:', url);
       } catch (e) {
         console.warn('[world-hdri-sky] HDR parse failed:', e.message);
+        if (onFail) onFail();
       }
     };
     xhr.onerror = function () {
-      console.warn('[world-hdri-sky] HDR fetch failed:', url);
+      if (onFail) onFail();
+      else console.warn('[world-hdri-sky] HDR fetch failed:', url);
     };
     xhr.send();
   },

@@ -399,6 +399,32 @@
 
 ---
 
+---
+
+## Сессия 43–44 — Фаза 3.2 floor-fog + 3.3 HDR ✅ → Фаза 3.5A
+
+### Сделано
+
+- **3.2 `room-floor-fog.js`:** низкий туман annulus снаружи купола; 20 слоёв, depth-prepass +
+  discard (объём + чистые кубы); `useTimeScale` (slo-mo мира); `gameplayRenderOrder: 4`;
+  пол купола `depthWrite: false`. Коммит **`dfeb141`**, push.
+- **3.3 `world-hdri-sky`:** небо `{locationId}.*` → `base.*` по `manifest.json` (без 404-перебора);
+  `sky.tint` / `exposure` под cyan-купол; `assets/hdri/base.jpg`; удалены черновики city/ignore.
+- **Quest QA ✅** (пользователь): дома, туман, slo-mo, HDR — без блокеров.
+
+### Решения
+
+- Туман на кубах: **depth-prepass**, не `depthTest:true` (ADR-21).
+- HDR: локация не хранит имя файла; `id` → файл на диске или `base.*`.
+
+**Файлы:** `room-floor-fog.js`, `world-hdri-sky.js`, `config.js`, `index.html`,
+`room-fog-dome.js`, `room-spawn-utils.js`, gameplay renderOrder, `assets/hdri/*`,
+`CURRENT_TASK.md`, `PROJECT_LOG.md`.
+
+**Следующая сессия:** **Фаза 3.5A** — магнитные руки (tip anchor).
+
+---
+
 ## Сессия 42 — Фаза 3.1 outside-scenery + пол ✅ → Фаза 3.2
 
 ### Сделано

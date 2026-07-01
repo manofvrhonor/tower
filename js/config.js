@@ -42,19 +42,25 @@ const CONFIG = {
     floorColor:   '#8a8580',
     wallColor:    '#d4cfc0',
     ceilingColor: '#f0ede5',
-    // null + hdriAuto → случайный файл из assets/hdri/ при каждой перезагрузке
-    // строка → только этот файл (отладка)
+    // === HDR / небо (Фаза 3.3) — world-hdri-sky.js ===
+    // Конвенция: assets/hdri/{id локации}.* → если нет, assets/hdri/base.* (hdriBase).
+    // room.hdri — прямой путь, только отладка. hdriAuto: true — random из папки (dev).
+    // manifest.json — список файлов (без перебора 404). refresh-hdri-manifest.ps1 после добавления HDR.
     hdri: null,
-    hdriAuto: true,
+    hdriAuto: false,
     hdriDir: 'assets/hdri/',
+    hdriBase: 'base',
+    hdriExtensions: ['.hdr', '.jpg', '.jpeg', '.png'],
     sky: {
       radius: 50,
       position: { x: 0, y: 1.5, z: 0 },
-      exposure: 1.0,
+      exposure: 0.88,
+      // Холодный тон неба под cyan-купол (fogDome.color #18b8d8); умножает текстуру HDR.
+      tint: '#7a90a8',
       fallback: {
-        topColor:    '#0d1525',
-        horizonColor: '#5a7088',
-        bottomColor: '#1a2230',
+        topColor:    '#0a1220',
+        horizonColor: '#3d5a72',
+        bottomColor: '#1a2838',
       },
     },
     // renderOrder: scenery 1 < floorFog 2 < gameplay 4 < fogDome 5 < sphere 12
@@ -110,6 +116,7 @@ const CONFIG = {
       outerRadius: 30,
       height: 0.6,
       autoLayers: true,
+      useTimeScale: true,
       layerCount: 20,
       layerSpread: 0.08,
       verticalBias: 0.02,
@@ -774,21 +781,21 @@ const CONFIG = {
   // Локации-комнаты. Массив произвольной длины. start: true — стартовая комната.
   // partIds — какие детали спавнятся здесь изначально (источник истины — part.homeLocation;
   // дублируем для удобства спавнера). fogTint — оттенок поля времени/тумана этой эпохи.
-  // hazardLevel — базовый уровень угрозы (число опасных объектов масштабируется в Фазе 5).
+  // fogTint — оттенок поля времени/тумана. Небо: assets/hdri/{id}.* или base.*.
   locations: [
     {
       id: 'future', label: 'Будущее', start: true,
-      hdri: null, fogTint: '#33e0ff', hazardLevel: 1,
+      fogTint: '#33e0ff', hazardLevel: 1,
       partIds: ['fa_core', 'fa_coil', 'pa_future_gear', 'junk_f1', 'junk_f2'],
     },
     {
       id: 'past', label: 'Прошлое',
-      hdri: null, fogTint: '#ffb066', hazardLevel: 2,
+      fogTint: '#ffb066', hazardLevel: 2,
       partIds: ['pa_past_rod', 'pa_past_plate', 'fin_past_lens', 'junk_p1', 'junk_p2'],
     },
     {
       id: 'present', label: 'Настоящее',
-      hdri: null, fogTint: '#66ff99', hazardLevel: 3,
+      fogTint: '#66ff99', hazardLevel: 3,
       partIds: ['fin_pres_frame', 'fin_pres_crystal', 'junk_n1', 'junk_n2'],
     },
   ],

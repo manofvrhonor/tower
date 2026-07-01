@@ -8,113 +8,57 @@ alwaysApply: true
 
 # CURRENT_TASK.md — Текущая задача
 
-## Задача: Фаза 3 — слои мира (глубина VR)
+## Задача: Фаза 3.5A — магнитные руки
 
-**Мастер-план:** `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md` → Фаза 3.
+**Мастер-план:** `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md` → Фаза 3.5A.
 
-**Цель:** три визуальных слоя за cyan-куполом — застройка, туман у пола, согласованный HDR-фон.
+**Цель:** хват «магнитом» на кончиках рук — деталь/бита липнут к tip, не к origin collider.
 
-**Критерий завершения фазы:** в Quest видны дома за куполом, туман у пола снаружи,
-HDR не конфликтует с `room-fog-dome`; без регрессий ядра 2.x и меню.
+**Критерий завершения:** в Quest захват куба/биты визуально на кончике пальцев/магнита;
+release без регрессий physx-grab; slo-mo без изменений.
 
 ### Микро-шаги
 
-- ✅ **3.1 — outside-scenery.js** — дома за куполом (desktop ✅, Quest — при следующем прогоне).
-- 🔄 **3.2 — туман у пола** — `room-floor-fog.js` (код готов → F5 desktop QA).
-- ⬜ **3.3 — HDR / небо** — довести `world-hdri-sky` под локации (CONFIG, тон с cyan-куполом).
-- ⬜ **3.x QA** — ПК → Quest (визуал, FPS, нет красных в консоли).
+- ⬜ **3.5A.1** — якорь магнита (tip offset на руке, CONFIG).
+- ⬜ **3.5A.2** — joint / grab point на tip (не `#leftHandCollider` origin).
+- ⬜ **3.5A.3** — VFX grip (заряд магнита, опционально).
+- ⬜ **3.5A.4** — Quest QA хват + бита.
 - ⬜ **git commit** (по запросу, один микро-шаг = один коммит).
 
----
-
-### 3.2 — туман у пола (первый шаг следующей сессии)
-
-**Сделать:**
-
-1. Комponent или блок в `room-fog-dome` / отдельный файл — туман **вне** верхней полусферы, у `#floor`.
-2. Параметры в `CONFIG.room.floorFog` (цвет, opacity, радиус, высота).
-3. `depthWrite: false`, renderOrder ниже ядра, выше HDR.
-
-**Критерий 3.2:** у пола за куполом мягкая дымка, не перекрывает ядро и меню.
-
-**Не трогаем:** `outside-scenery` (расстановка домов зафиксирована в config), ядро 2.x.
+**Не делаем в 3.5A:** GLB-детали, смена слотов (→ 3.5B). **Не трогаем:** floor-fog, outside-scenery, ядро 2.x.
 
 ---
 
-### 3.3 — HDR / world-hdri-sky (после 3.2)
+## Закрыто: Фаза 3 — слои мира ✅ (с.43–44)
 
-**Сделать:**
-
-1. Поля в `CONFIG.room.sky` / `CONFIG.locations[*].hdri` (пока одна локация — future).
-2. Согласовать яркость/тон с `room.fogDome` (не «два разных мира»).
-3. Документировать в config, какой файл класть в `assets/hdri/`.
-
-**Критерий 3.3:** смена HDR через config без правки компонента; Quest без мерцания.
-
-**Не делаем в Фазе 3:** `location-manager` (Фаза 4), таймер, intro-comic.
-
----
-
-## После Фазы 3 — Фаза 3.5 (мастер-план)
-
-**Порядок: 3.5A → 3.5B** (буквы = порядок работ).
-
-| Шаг | Название | Суть |
-|-----|----------|------|
-| **3.5A** | Магнитные руки | якорь магнита, GLB, VFX grip, joint на tip, бита, Quest QA |
-| **3.5B** | Сборка и детали | поза слотов, GLB вместо кубов, призраки, состояния snapped/active/broken |
+| Шаг | Статус |
+|-----|--------|
+| 3.1 outside-scenery | ✅ desktop + Quest |
+| 3.2 room-floor-fog | ✅ depth-prepass, slo-mo, Quest |
+| 3.3 world-hdri-sky | ✅ {id}→base, manifest, tint, Quest |
+| 3.x QA | ✅ Quest (пользователь) |
 
 ---
 
 ## Working Context
 
-### ИЗВЕСТНО (с.43)
+### ИЗВЕСТНО (с.44)
 
-- **3.2 (код):** #14 depth-prepass, 14 слоёв, depthTest:false, user config.
-- **3.1 ✅:** `outside-scenery.js` — 4 primary + 3 background; `floorRadius: 50`.
-- Фаза **2.x ✅**; меню adaptive (с.41); кольца 72 seg.
-- `room-fog-dome` — cyan R=2.0; collider без изменений в с.42.
+- **3.2:** `room-floor-fog.js` — 20 слоёв, depth-prepass + discard, `useTimeScale: true`.
+- **3.3:** небо — `assets/hdri/{locationId}.*` → `base.*`; список в `manifest.json`; без 404-перебора.
+- **3.1:** 7 домов, `floorRadius: 50`. Фаза **2.x ✅**, меню adaptive.
+- Коммит floor-fog: `dfeb141`. Следующий — 3.5A.
 
 ### НЕИЗВЕСТНО
 
-- Desktop/Quest QA тумана 3.2 после **#9** (depthTest:true + opacitySpread).
-- FPS Quest с 7 домами + floorFog.
+- Оптимальный offset tip для Quest GLB рук (нужен QA после 3.5A.1).
 
-### Журнал попыток — объём vs объекты (3.2)
+### РЕШЕНО (с.44)
 
-| # | Что пробовали | Объём | Кубы чистые | Почему не финал |
-|---|---------------|-------|-------------|-----------------|
-| 1 | 14 mesh, `depthTest: false` | ✅ | ❌ | transparent рисуется поверх opaque без z-test |
-| 2 | `depthTest: true`, 14 mesh | ❌ плоский | ✅ | `layerSpread:0.08` — видимы только 2–3 нижних слоя |
-| 3 | `renderOrder` gameplay=4 | ✅ | ❌ | opaque всегда до transparent, не помогает |
-| 4 | merged mesh + `depthTest: true` | ❌ мягко плоский | ✅ | то же + один mesh |
-| 5 | пол `depthWrite: false` + 14 mesh + depthTest | ❌ | ✅ | плоскость = узкий layerSpread, не пол |
-| 6 | merged + polygonOffset | ❌ | ✅ | не решает spread |
-| 7 | stencil-диск купола + depthTest:false | ✅ | ❌ | stencil только xz<2 m; кубы снаружи/в воздухе не маскируются |
-| 8 | opacitySpread (отдельно от layerSpread) + depthTest:false | ✅ | ❌ | объём есть, объекты снова в тумане |
-| **12–13** | откаты, single ring, ridged — снова «или/или» | — | — | **повтор цикла, не трогать** |
-| **14** | **depth-prepass + depthTest:false + discard в шейдере** | **?** | **?** | **текущий — не возвращаться к #2/#12** |
-
-**⛔ Не повторять:** просто переключать `depthTest true/false` или крутить opacity — это шаги #1/#2, они уже закрыты.
-
-**Корень:** GPU z-test на transparent не даёт и объём (слои), и чистые кубы одновременно. Решение — **свой depth-sampler**, не `depthTest:true` на материале.
-
-### РЕШЕНО (с.43)
-
-- Туман 3.2 — **отдельный компонент** `room-floor-fog.js` (не трогаем шейдер купола).
-- Геометрия — **annulus × height** (дыра = радиус купола); внутри игровой зоны mesh нет.
-
-### РЕШЕНО (с.42)
-
-- Расстановка домов — **схема перекрёстка**, rotation Y=0; правки только через CONFIG.
-- Roof-текстуры **не нужны**; только `wall` на 4 стенах.
-
-## Файлы задачи
-
-- **Трогаем (3.2):** новый компонент или `room-fog-dome.js`, `config.js`, возможно `index.html`.
-- **Не трогаем без нужды:** `outside-scenery.js`, ядро 2.x, `orbit-ring` (72).
+- Туман на кубах: **depth-prepass**, не `depthTest:true` (см. журнал 3.2 в ARCHIVE).
+- HDR: локация не хранит имя файла — только `id`; файлы `future.jpg` / `base.jpg` в `assets/hdri/`.
+- `hdriAuto: false` по умолчанию; random только для dev.
 
 ## Следующее действие
 
-F5 → desktop QA **#14**: объём + кубы без налёта.
-Подкрутка: `depthBias` (0.0002–0.0006), если остаются артефакты на краях кубов.
+Микро-шаг **3.5A.1** — CONFIG + якорь tip на `#leftHand` / `#rightHand`.
