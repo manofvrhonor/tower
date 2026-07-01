@@ -58,6 +58,7 @@
   <script src="js/components/game-menu.js"></script>
   <script src="js/components/world-hdri-sky.js"></script>
   <script src="js/components/room-fog-dome.js"></script>
+  <script src="js/components/outside-scenery.js"></script>
   <script src="js/components/room-dome-collider.js"></script>
   <script src="js/main.js" defer></script>
 </head>
@@ -87,6 +88,8 @@
 
     <!-- Туманный купол комнаты (визуал) + room-dome-collider (PhysX). -->
     <a-entity id="room-fog-dome" room-fog-dome></a-entity>
+    <!-- Застройка за куполом (Фаза 3.1) — renderOrder ниже fogDome -->
+    <a-entity id="outside-scenery" outside-scenery></a-entity>
     <a-entity id="room-collider" room-dome-collider></a-entity>
 
     <!-- ====== КОМНАТА — пол (PhysX). Стены/потолок = room-dome-collider ====== -->

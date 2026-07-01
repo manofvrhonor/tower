@@ -494,7 +494,13 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 - **Стильная игра (с.41 ✅):** **Меню** — `menu-ui-layout.js`, широкий adaptive layout
   (`contentWidth` 1.45 m), единый `btnFontSize`, подписи EN; заголовок убран.
   **Кольца** — 72 сегмента. **План** — Фаза **3.5** (3.5A магнитные руки → 3.5B сборка/GLB).
-- **Стильная игра — следующая:** **Фаза 3** — слои мира (см. `CURRENT_TASK.md`).
+- **Стильная игра (с.42 ✅):** Фаза **3.1** — `outside-scenery.js`: 4 ближних + 3 дальних
+  прототипа домов (боксы, wall-JPG, чёрная обводка); расстановка по схеме (primary на
+  диагоналях ±d, background на осях ±R); `floorRadius: 50` — визуальный пол под застройкой;
+  `axisDistanceOffset` / `positionOffset` в CONFIG; fix `floating-cube` (`inside` в
+  `_breakSnapFromHit`); `menuUiButtonDrawOpts` — общие кнопки game-menu/victory-ui.
+  **Дома ✅** (пользователь, desktop). Текстуры: 7× `*-wall.jpg` в `assets/textures/outside-buildings/`.
+- **Стильная игра — следующая:** **Фаза 3.2** — туман у пола снаружи купола (см. `CURRENT_TASK.md`).
 - **Стильная игра — после Фазы 3:** **Фаза 3.5** — взаимодействие с деталями:
   - **3.5A (первым)** — магнитные руки: якорь tip, GLB, VFX grip, physx-grab/bat на магнит;
   - **3.5B (вторым)** — сборка: поза слотов у сферы/колец, GLB-детали, призраки, состояния.
@@ -545,12 +551,13 @@ Tower/
 ├── js/spawn-floating-cubes.js, spawn-red-balls.js, spawn-ball-bat.js
 ├── js/components/  physx-grab, floating-cube, red-ball, ball-bat, dome-builder,
 │                   orbit-ring, assembly-hub, assembly-sphere-visual,
-│                   room-fog-dome, room-dome-collider, world-hdri-sky,
+│                   room-fog-dome, room-dome-collider, world-hdri-sky, outside-scenery,
 │                   collider-debug-viz, time-scale, slowmo-vignette-3d,
 │                   float-motion-trail, ghost-tower-hint, assembly-core, victory-check, victory-ui,
 │                   game-menu, ball-wave-manager
 │                   (legacy: pedestal-builder.js — не в index.html)
 ├── assets/models/  leftHandLow.glb, rightHandLow.glb
+├── assets/textures/outside-buildings/  *-wall.jpg (7 прототипов домов)
 ├── AGENTS.md, CURRENT_TASK.md, PROJECT_LOG.md, PROJECT_LOG_ARCHIVE.md
 ```
 
@@ -579,6 +586,9 @@ Tower/
   видимость за игровым куполом; прицел поверх меню. Quest QA ✅.
 - **Стильная (с.41):** adaptive VR-меню (`menu-ui-layout.js`), EN labels, orbit-rings 72 seg;
   дорожная карта Фазы 3.5 (руки → art-pass сборки).
+- **Стильная (с.42):** Фаза **3.1** — `outside-scenery.js` (7 домов за куполом, wall-JPG,
+  `floorRadius: 50`); общие кнопки меню/victory-ui; fix snap-break в `floating-cube`.
+  Desktop QA домов ✅.
 
 **QA купола (уточнение теста 1):** float-кубики сталкиваются с куполом **снаружи**
 (слой FLOAT_CUBE × DOME). Внутри на пьедестале кубики в gravity и **не** бьются о

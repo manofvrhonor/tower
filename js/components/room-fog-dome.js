@@ -4,6 +4,7 @@
  * room-fog-dome — cyan «поле времени» комнаты (верхняя полусфера, Фаза 2.1).
  *
  * Ленты (ridged + sin) + мягкий fbm-дым поверх (fogOverlay). CONFIG.room.fogDome.
+ * Визуальный пол — диск floorRadius (по умолчанию = radius купола; 80 м — «бесконечная» площадка).
  */
 AFRAME.registerComponent('room-fog-dome', {
   schema: {},
@@ -48,7 +49,7 @@ AFRAME.registerComponent('room-fog-dome', {
       : (fd.fogMax !== undefined ? fd.fogMax : 0.92);
     return {
       radius: fd.radius !== undefined ? fd.radius : room.height || 3,
-      floorColor: room.floorColor || '#8a8580',
+      floorColor: fd.floorColor || room.floorColor || '#8a8580',
       position: {
         x: pos.x !== undefined ? pos.x : 0,
         y: pos.y !== undefined ? pos.y : 0,
@@ -84,6 +85,8 @@ AFRAME.registerComponent('room-fog-dome', {
       widthSegments: fd.widthSegments !== undefined ? fd.widthSegments : 64,
       heightSegments: fd.heightSegments !== undefined ? fd.heightSegments : 32,
       renderOrder: fd.renderOrder !== undefined ? fd.renderOrder : 5,
+      floorRadius: fd.floorRadius !== undefined ? fd.floorRadius : null,
+      floorRenderOrder: fd.floorRenderOrder !== undefined ? fd.floorRenderOrder : -2,
     };
   },
 
@@ -295,11 +298,14 @@ AFRAME.registerComponent('room-fog-dome', {
     this.el.object3D.add(this._mesh);
   },
 
-  /** Непрозрачный круглый пол по диаметру купола (y=0). */
+  /** Круглый пол на y=0; floorRadius >> radius купола — площадка под домами снаружи. */
   _buildFloor: function () {
     var c = this._cfg;
+    var floorR = c.floorRadius !== null && c.floorRadius !== undefined
+      ? c.floorRadius
+      : c.radius;
     var thickness = 0.02;
-    var geo = new THREE.CylinderGeometry(c.radius, c.radius, thickness, 64);
+    var geo = new THREE.CylinderGeometry(floorR, floorR, thickness, 64);
     var mat = new THREE.MeshStandardMaterial({
       color: new THREE.Color(c.floorColor),
       roughness: 0.88,
@@ -312,7 +318,7 @@ AFRAME.registerComponent('room-fog-dome', {
     this._floorMesh.name = 'room-fog-dome-floor';
     this._floorMesh.position.y = thickness * 0.5;
     this._floorMesh.receiveShadow = true;
-    this._floorMesh.renderOrder = 0;
+    this._floorMesh.renderOrder = c.floorRenderOrder;
     this.el.object3D.add(this._floorMesh);
   },
 });

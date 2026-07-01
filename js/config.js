@@ -91,6 +91,7 @@ const CONFIG = {
       widthSegments: 64,
       heightSegments: 32,
       renderOrder: 5,
+      floorRadius: 50,      // м, визуальный пол (≈ room.sky.radius; дома ~10 м — хватает)
       spawnMargin: 0.12,
       collider: {
         latitudeRings: 10,
@@ -99,6 +100,81 @@ const CONFIG = {
         tileOverlap: 1.08,
         debugVisible: false,
       },
+    },
+    // Фаза 3.1 — схема (вид сверху): серые на (±d,±d), зелёные на осях (±R,0)/(0,±R).
+    outsideScenery: {
+      clearance: 0.8,
+      buildingGap: 0.9,
+      position: { x: 0, y: 0, z: 0 },
+      renderOrder: 1,
+      edges: {
+        enabled: true,
+        color: '#000000',
+        opacity: 1.0,
+      },
+      textures: {
+        enabled: true,
+        dir: 'assets/textures/outside-buildings/',
+        tint: '#ffffff',
+      },
+      primaryRing: {
+        axisDistance: 7.0,    // d → (±d, ±d); было 14 — диаметр расстановки ÷2
+        rotationY: 0,           // грани ‖ осям X/Z
+      },
+      backgroundRing: {
+        axisDistance: 26.0,     // R → (0,±R) и (±R,0); auto не ближе primary+gap
+        prototypeStep: 1,
+        rotationY: 0,
+      },
+      primaryPrototypes: [
+        {
+          id: 'slim-tower',
+          width: 6.0, depth: 6.0, height: 25.0,
+          textureOnly: true,
+          wall: 'slim-tower-wall.jpg',
+        },
+        {
+          id: 'wide-low',
+          width: 12.0, depth: 10.0, height: 10.0,
+          textureOnly: true,
+          wall: 'wide-low-wall.jpg',
+        },
+        {
+          id: 'mid-block',
+          width: 9.0, depth: 8.0, height: 17.5,
+          textureOnly: true,
+          wall: 'mid-block-wall.jpg',
+        },
+        {
+          id: 'narrow-mid',
+          width: 7.0, depth: 11.0, height: 15.0,
+          textureOnly: true,
+          wall: 'narrow-mid-wall.jpg',
+        },
+      ],
+      backgroundPrototypes: [
+        {
+          id: 'bg-tower',
+          width: 30.0, depth: 30.0, height: 22.5,
+          color: '#9aa5b5',
+          wall: 'bg-tower-wall.jpg',
+        },
+        {
+          id: 'bg-block',
+          width: 15.0, depth: 15.0, height: 12.5,
+          color: '#a0aab8',
+          axisDistanceOffset: -1.0,
+          positionOffset: { x: -6, z: 0 },  // -4 м по оси X (вправо)
+          wall: 'bg-block-wall.jpg',
+        },
+        {
+          id: 'bg-slim',
+          width: 27.0, depth: 27.0, height: 17.5,
+          color: '#8898a8',
+          axisDistanceOffset: -2.0,  // ближе к центру на 2 м (R 26 → 21)
+          wall: 'bg-slim-wall.jpg',
+        },
+      ],
     },
     // Отскок от room-dome-collider: отражение v' = v − (1+e)(v·n)n (все float-тела).
     wallBounce: {

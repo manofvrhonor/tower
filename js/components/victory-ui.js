@@ -103,14 +103,10 @@ AFRAME.registerComponent('victory-ui', {
   },
 
   _buttonDrawOpts: function (bgColor) {
-    var th = this._theme || {};
-    if (bgColor === th.btnAccent || bgColor === th.btnAccentHover || bgColor === th.btnAccentNear) {
-      return { borderColor: th.border, textColor: th.textOnAccent || '#061018' };
+    if (typeof window.menuUiButtonDrawOpts === 'function') {
+      return window.menuUiButtonDrawOpts(bgColor, this._theme);
     }
-    if (bgColor === th.btnNear) {
-      return { borderColor: th.border, textColor: th.text || '#ffffff' };
-    }
-    return { borderColor: th.borderDim || th.border, textColor: th.text || '#ffffff' };
+    return { borderColor: '#1a5070', textColor: '#ffffff' };
   },
 
   _makeTextPlane: function (text, planeW, planeH, options) {
@@ -124,9 +120,10 @@ AFRAME.registerComponent('victory-ui', {
     var ctx = canvas.getContext('2d');
 
     if (opts.bg) {
+      var drawOpts = this._buttonDrawOpts(opts.bg);
       if (typeof window.menuUiDrawButton === 'function') {
         window.menuUiDrawButton(
-          ctx, canvas, text, opts.fontSize || 44, opts.bg, this._buttonDrawOpts(opts.bg)
+          ctx, canvas, text, opts.fontSize || 44, opts.bg, drawOpts
         );
       }
     } else {
@@ -208,16 +205,33 @@ AFRAME.registerComponent('victory-ui', {
 
   _buildUI: function () {
     var ui = this.cfg;
+    var menuLay = (typeof CONFIG !== 'undefined' && CONFIG.game && CONFIG.game.menu && CONFIG.game.menu.layout) || {};
     var lay = ui.layout || {};
-    var contentW = lay.contentWidth !== undefined ? lay.contentWidth : 1.45;
-    var btnH = lay.btnHeight !== undefined ? lay.btnHeight : 0.165;
-    var btnFs = lay.btnFontSize !== undefined ? lay.btnFontSize : 60;
+    var contentW = lay.contentWidth !== undefined ? lay.contentWidth : menuLay.contentWidth || 1.45;
+    var btnH = lay.btnHeight !== undefined ? lay.btnHeight : menuLay.btnHeight || 0.165;
+    var btnFs = lay.btnFontSize !== undefined ? lay.btnFontSize : menuLay.btnFontSize || 60;
     var titleLay = lay.title || { height: 0.12, fontSize: 72 };
     var pos = this._getMenuPosition();
     this._pressRadius = this._getPressRadius();
     var title = ui.titleText || 'VICTORY';
     var restartText = ui.restartText || ui.buttonText || 'Restart';
     var menuText = ui.menuText || 'Main Menu';
+
+    var buttonSpecs = [
+      { text: restartText, width: contentW, height: btnH },
+      { text: menuText, width: contentW, height: btnH },
+    ];
+    var fontScale = (typeof window.menuUiUniformFontScale === 'function')
+      ? window.menuUiUniformFontScale(buttonSpecs, contentW, btnH, btnFs)
+      : 1;
+    var effectiveFs = Math.round(btnFs * fontScale);
+
+    var self = this;
+    this._menuBtnFont = function (planeW) {
+      return (typeof window.menuUiFontSizeOnPlane === 'function')
+        ? window.menuUiFontSizeOnPlane(effectiveFs, planeW, btnH, contentW, btnH)
+        : effectiveFs;
+    };
 
     var layout = (typeof window.menuUiComputeLayout === 'function')
       ? window.menuUiComputeLayout({
@@ -239,51 +253,51 @@ AFRAME.registerComponent('victory-ui', {
     panel.setAttribute('height', layout ? layout.panel.height : 0.45);
     panel.setAttribute('color', this._panelColor);
     panel.setAttribute('material', 'shader: flat; opacity: 0.96; transparent: true; side: front; depthTest: false; depthWrite: false; renderOrder: 50');
-    panel.setAttribute('position', '0 0 0');
 
     var titleColor = (this._theme && this._theme.titleAccent) || '#66f5ff';
+    var titleFs = (typeof window.menuUiFontSizeForButton === 'function')
+      ? window.menuUiFontSizeForButton(title, contentW, titleLay.height, {
+        maxSize: titleLay.fontSize, heightRatio: 0.55,
+      })
+      : titleLay.fontSize;
     var titleData = this._makeTextPlane(title, contentW, titleLay.height, {
-      fontSize: titleLay.fontSize, color: titleColor,
+      fontSize: titleFs, color: titleColor,
     });
     if (layout && layout.title) {
       var tp = layout.title;
       titleData.el.setAttribute('position', tp.x + ' ' + tp.y + ' ' + tp.z);
     }
 
-    var self = this;
-    var menuBtnFs = (typeof window.menuUiFontSizeOnPlane === 'function')
-      ? window.menuUiFontSizeOnPlane(btnFs, contentW, btnH, contentW, btnH)
-      : btnFs;
-
+    var restartFs = this._menuBtnFont(contentW);
     var restartData = this._makeTextPlane(restartText, contentW, btnH, {
-      fontSize: menuBtnFs, bg: this._btnStart,
+      fontSize: restartFs, bg: this._btnStart,
     });
-    restartData.fontSize = menuBtnFs;
+    restartData.fontSize = restartFs;
     restartData.el.setAttribute('class', 'victory-ui-clickable');
     if (layout && layout.rows[0] && layout.rows[0].buttons[0]) {
       var rp = layout.rows[0].buttons[0];
       restartData.el.setAttribute('position', rp.x + ' ' + rp.y + ' ' + rp.z);
     }
     this._registerButton(restartData, {
+      kind: 'restart',
       normalBg: this._btnStart,
       hoverBg: this._btnStartHover,
       nearBg: this._btnStartNear,
       onPress: function () { self._doRestart(); },
     });
 
+    var menuFs = this._menuBtnFont(contentW);
     var menuBtnData = this._makeTextPlane(menuText, contentW, btnH, {
-      fontSize: menuBtnFs, bg: this._btnNormal,
+      fontSize: menuFs, bg: this._btnNormal,
     });
-    menuBtnData.fontSize = menuBtnFs;
+    menuBtnData.fontSize = menuFs;
     menuBtnData.el.setAttribute('class', 'victory-ui-clickable');
     if (layout && layout.rows[1] && layout.rows[1].buttons[0]) {
       var mp = layout.rows[1].buttons[0];
       menuBtnData.el.setAttribute('position', mp.x + ' ' + mp.y + ' ' + mp.z);
     }
     this._registerButton(menuBtnData, {
-      normalBg: this._btnNormal,
-      hoverBg: this._btnHover,
-      nearBg: this._btnNear,
+      kind: 'menu',
       onPress: function () { self._doMainMenu(); },
     });
 

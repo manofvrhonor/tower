@@ -399,6 +399,37 @@
 
 ---
 
+## Сессия 42 — Фаза 3.1 outside-scenery + пол ✅ → Фаза 3.2
+
+### Сделано
+
+- **`outside-scenery.js` (new):** застройка за cyan-куполом — 4 **primary** (диагонали
+  `(±d,±d)`, `textureOnly` + wall-JPG) + 3 **background** (оси N/E/S/W, серый tint + JPG).
+  Чёрная обводка (`EdgesGeometry`). Смещения: `axisDistanceOffset`, `positionOffset` per prototype.
+- **`CONFIG.room.outsideScenery`:** прототипы с размерами; `primaryRing.axisDistance` 7;
+  `backgroundRing.axisDistance` 26; без roof-текстур (только `wall`).
+- **`room-fog-dome`:** `floorRadius: 50` — «бесконечный» пол на y=0 под домами.
+- **`menu-ui-draw.js`:** `menuUiButtonDrawOpts` — accent-кнопки с видимой рамкой (`borderDim`).
+- **`victory-ui.js`:** те же `uniformFontScale` / `_menuBtnFont`, что у `game-menu`.
+- **fix:** `floating-cube.js` — `inside is not defined` в `_breakSnapFromHit` (шар сбивает снеп).
+- **Текстуры:** папка `assets/textures/outside-buildings/` — 7 файлов `*-wall.jpg`
+  (пользователь подготовил часть; остальные — warn 404 до добавления).
+
+### Решения
+
+- Крыша/низ бокса — **без текстуры** (снизу не видно); только `wall` на 4 стенах.
+- Ближние дома — чистая текстура; дальние — лёгкий серый multiply (`color` + JPG).
+- Расстановка **не** по полному кругу, а по **схеме перекрёстка** (rotation Y = 0).
+
+**Файлы:** `outside-scenery.js`, `config.js`, `index.html`, `room-fog-dome.js`,
+`menu-ui-draw.js`, `victory-ui.js`, `game-menu.js`, `floating-cube.js`.
+
+**Quest QA 3.1:** не в фокусе сессии (desktop ✅ по домам).
+
+**Следующая сессия:** микро-шаг **3.2** — туман у пола снаружи купола.
+
+---
+
 ## Сессия 41 — меню adaptive + кольца 72 + план Фазы 3.5 ✅ → Фаза 3
 
 ### Сделано

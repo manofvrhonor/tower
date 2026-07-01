@@ -124,9 +124,21 @@
     if (opts.borderColor) {
       ctx.strokeStyle = opts.borderColor;
       ctx.lineWidth = pad;
-      ctx.strokeRect(pad, pad, w - pad * 2, h - pad * 2);
+      ctx.strokeRect(pad * 0.5, pad * 0.5, w - pad, h - pad);
     }
     drawCenteredText(ctx, text, w, h, fontSize, opts.textColor || '#ffffff');
+  }
+
+  /** Рамка и цвет текста для canvas-кнопки (game-menu, victory-ui). */
+  function buttonDrawOpts(bgColor, theme) {
+    var th = theme || getMenuTheme();
+    if (bgColor === th.btnAccent || bgColor === th.btnAccentHover || bgColor === th.btnAccentNear) {
+      return { borderColor: th.borderDim || th.border, textColor: th.textOnAccent || '#061018' };
+    }
+    if (bgColor === th.btnNear || bgColor === th.btnSelected) {
+      return { borderColor: th.border, textColor: th.text || '#ffffff' };
+    }
+    return { borderColor: th.borderDim || th.border, textColor: th.text || '#ffffff' };
   }
 
   window.getMenuTheme = getMenuTheme;
@@ -137,4 +149,5 @@
   window.menuUiFontSizeForButton = fontSizeForButton;
   window.menuUiDrawButton = drawButtonCanvas;
   window.menuUiDrawCenteredText = drawCenteredText;
+  window.menuUiButtonDrawOpts = buttonDrawOpts;
 })();

@@ -100,14 +100,10 @@ AFRAME.registerComponent('game-menu', {
   },
 
   _buttonDrawOpts: function (bgColor) {
-    var th = this._theme || {};
-    if (bgColor === th.btnAccent || bgColor === th.btnAccentHover || bgColor === th.btnAccentNear) {
-      return { borderColor: th.border, textColor: th.textOnAccent || '#061018' };
+    if (typeof window.menuUiButtonDrawOpts === 'function') {
+      return window.menuUiButtonDrawOpts(bgColor, this._theme);
     }
-    if (bgColor === th.btnNear || bgColor === th.btnSelected) {
-      return { borderColor: th.border, textColor: th.text || '#ffffff' };
-    }
-    return { borderColor: th.borderDim || th.border, textColor: th.text || '#ffffff' };
+    return { borderColor: '#1a5070', textColor: '#ffffff' };
   },
 
   _makeTextPlane: function (text, planeW, planeH, options) {

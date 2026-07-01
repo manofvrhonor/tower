@@ -19,7 +19,7 @@ HDR не конфликтует с `room-fog-dome`; без регрессий я
 
 ### Микро-шаги
 
-- ⬜ **3.1 — outside-scenery.js** — дома-заглушки по кругу **за** `room.fogDome`.
+- ✅ **3.1 — outside-scenery.js** — дома за куполом (desktop ✅, Quest — при следующем прогоне).
 - ⬜ **3.2 — туман у пола** — плоскость/объём снаружи купола (отдельный компонент или расширение fog).
 - ⬜ **3.3 — HDR / небо** — довести `world-hdri-sky` под локации (CONFIG, тон с cyan-куполом).
 - ⬜ **3.x QA** — ПК → Quest (визуал, FPS, нет красных в консоли).
@@ -27,31 +27,17 @@ HDR не конфликтует с `room-fog-dome`; без регрессий я
 
 ---
 
-### 3.1 — outside-scenery.js (первый шаг следующей сессии)
+### 3.2 — туман у пола (первый шаг следующей сессии)
 
 **Сделать:**
 
-1. Новый компонент `js/components/outside-scenery.js`.
-2. Секция `CONFIG.room.outsideScenery` — count, radius, box sizes/colors, опционально `model` (null = бокс).
-3. Расстановка по окружности **снаружи** `room.fogDome.radius + margin`.
-4. Только визуал (без PhysX на первом шаге).
-5. Подключить в `index.html` до `<a-scene>`.
-
-**Критерий 3.1:** из центра комнаты видны силуэты домов за cyan-куполом; F5 без ошибок.
-
-**Не трогаем:** `assembly-hub`, `orbit-ring`, `room-fog-dome` shader, victory-ui.
-
----
-
-### 3.2 — туман у пола (после 3.1)
-
-**Сделать:**
-
-1. Компонент или блок в `room-fog-dome` / отдельный файл — туман **вне** верхней полусферы, у `#floor`.
+1. Комponent или блок в `room-fog-dome` / отдельный файл — туман **вне** верхней полусферы, у `#floor`.
 2. Параметры в `CONFIG.room.floorFog` (цвет, opacity, радиус, высота).
 3. `depthWrite: false`, renderOrder ниже ядра, выше HDR.
 
 **Критерий 3.2:** у пола за куполом мягкая дымка, не перекрывает ядро и меню.
+
+**Не трогаем:** `outside-scenery` (расстановка домов зафиксирована в config), ядро 2.x.
 
 ---
 
@@ -78,39 +64,33 @@ HDR не конфликтует с `room-fog-dome`; без регрессий я
 | **3.5A** | Магнитные руки | якорь магнита, GLB, VFX grip, joint на tip, бита, Quest QA |
 | **3.5B** | Сборка и детали | поза слотов, GLB вместо кубов, призраки, состояния snapped/active/broken |
 
-**Почему A раньше B:** снеп и release тестируем на финальном хвате; иначе смена рук ломает отладку схемы.
-
-**Следующая задача после закрытия Фазы 3:** микро-шаг **3.5A.1** — якорь магнита + `CONFIG.player.hands` (см. `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md`).
-
 ---
 
 ## Working Context
 
-### ИЗВЕСТНО
+### ИЗВЕСТНО (с.42)
 
-- Фаза **2.x ✅** (с.40): сфера, cyan-кольца (72 seg.), float-inside, hardcore-слоты, ПК + Quest QA.
-- **С.41 ✅:** adaptive VR-меню (`menu-ui-layout.js`), EN, без заголовка; план **3.5A→3.5B**.
-- Коммит **`9205f2c`** — ядро 2.x; с.41 — см. git log.
-- `world-hdri-sky.js` уже есть; random HDR из `assets/hdri/`.
-- `room-fog-dome` — cyan полусфера + пол; radius 2.0 м.
+- **3.1 ✅:** `outside-scenery.js` — 4 primary (диагонали, `textureOnly`) + 3 background
+  (оси, серый tint); `axisDistanceOffset` / `positionOffset`; wall-JPG без roof;
+  `floorRadius: 50`; текстуры в `assets/textures/outside-buildings/*-wall.jpg`.
+- Фаза **2.x ✅**; меню adaptive (с.41); кольца 72 seg.
+- `room-fog-dome` — cyan R=2.0; collider без изменений в с.42.
 
 ### НЕИЗВЕСТНО
 
-- Сколько домов без просадки FPS на Quest 3.
-- Отдельный mesh тумана vs шейдер на полу.
+- FPS Quest с 7 домами + большими background-боксами.
+- Отдельный mesh тумана vs шейдер на полу (3.2).
 
-### РЕШЕНО (дизайн)
+### РЕШЕНО (с.42)
 
-- Фаза 3 — **только визуал слоёв**; геймплей локаций — Фаза 4.
-- Дома v1 — **примитивы**; GLB через `CONFIG` позже.
-- **После Фазы 3:** 3.5A магнитные руки → 3.5B art-pass сборки (порядок зафиксирован).
+- Расстановка домов — **схема перекрёстка**, rotation Y=0; правки только через CONFIG.
+- Roof-текстуры **не нужны**; только `wall` на 4 стенах.
 
 ## Файлы задачи
 
-- **Трогаем:** новый `outside-scenery.js`, `config.js`, `index.html`; возможно `world-hdri-sky.js`, `room-fog-dome.js`.
-- **Не трогаем без нужды:** ядро 2.x, `physx-grab`, orbit-ring segments (72 зафиксировано).
+- **Трогаем (3.2):** новый компонент или `room-fog-dome.js`, `config.js`, возможно `index.html`.
+- **Не трогаем без нужды:** `outside-scenery.js`, ядро 2.x, `orbit-ring` (72).
 
 ## Следующее действие
 
-Микро-шаг **3.1** — `outside-scenery.js` + CONFIG + index.html → F5 → чек «дома за куполом».
-
+Микро-шаг **3.2** — туман у пола снаружи купола → F5 → чек «дымка у пола, ядро читается».

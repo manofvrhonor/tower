@@ -223,7 +223,8 @@ AFRAME.registerComponent('floating-cube', {
     this._resetKinematicLatch();
 
     var pos = this._getWorldPosition();
-    if (this._isInsideDome(pos, true)) {
+    var inside = this._isInsideDome(pos, true);
+    if (inside) {
       this._enterFloatInsideMode(false);
     } else {
       this._enterFloatMode(false);
