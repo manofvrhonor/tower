@@ -31,6 +31,74 @@
     return { w: bw, h: Math.max(16, Math.round(bw * (planeH / planeW))) };
   }
 
+  /** Одинаковая физическая высота текста: ref-размер → fontSize для конкретной плашки. */
+  function fontSizeOnPlane(uniformRefSize, planeW, planeH, refW, refH, baseW) {
+    var bw = baseW || 512;
+    var refPx = canvasSizeForPlane(refW, refH, bw).h;
+    var planePx = canvasSizeForPlane(planeW, planeH, bw).h;
+    return Math.round(uniformRefSize * (planePx / refPx));
+  }
+
+  /**
+   * Общий множитель для btnFontSize: все подписи влезают, физический размер одинаковый.
+   * При увеличении btnFontSize без btnHeight результат не меняется — нужны оба.
+   */
+  function uniformFontScaleForButtons(buttons, refW, refH, btnFontSize, baseW) {
+    var bw = baseW || 512;
+    var refPx = canvasSizeForPlane(refW, refH, bw).h;
+    var scale = 1.0;
+    var probe = document.createElement('canvas').getContext('2d');
+    if (!probe) return 1;
+
+    while (scale > 0.25) {
+      var fits = true;
+      for (var i = 0; i < buttons.length; i++) {
+        var b = buttons[i];
+        var sz = canvasSizeForPlane(b.width, b.height, bw);
+        var fs = Math.max(12, Math.round(btnFontSize * scale * sz.h / refPx));
+        probe.font = 'bold ' + fs + 'px Arial, Helvetica, sans-serif';
+        if (probe.measureText(b.text || '').width > sz.w * 0.88) {
+          fits = false;
+          break;
+        }
+      }
+      if (fits) return scale;
+      scale -= 0.02;
+    }
+    return 0.25;
+  }
+
+  /**
+   * Максимальный uniformRefSize (относительно refW×refH), при котором все подписи влезают.
+   * @deprecated используйте uniformFontScaleForButtons + fontSizeOnPlane
+   */
+  function uniformFontSizeForButtons(buttons, refW, refH, targetMax, baseW) {
+    var scale = uniformFontScaleForButtons(buttons, refW, refH, targetMax, baseW);
+    return Math.max(12, Math.round(targetMax * scale));
+  }
+
+  /** Подбор fontSize под размер плашки: ~42% высоты canvas, сжатие если текст шире кнопки. */
+  function fontSizeForButton(text, planeW, planeH, opts) {
+    opts = opts || {};
+    var sz = canvasSizeForPlane(planeW, planeH, opts.canvasW || 512);
+    var heightRatio = opts.heightRatio !== undefined ? opts.heightRatio : 0.42;
+    var widthPad = opts.widthPad !== undefined ? opts.widthPad : 0.88;
+    var minSize = opts.minSize !== undefined ? opts.minSize : 14;
+    var fontSize = Math.round(sz.h * heightRatio);
+    if (opts.maxSize !== undefined && fontSize > opts.maxSize) fontSize = opts.maxSize;
+
+    var probe = document.createElement('canvas').getContext('2d');
+    if (!probe) return fontSize;
+    probe.textAlign = 'left';
+
+    while (fontSize > minSize) {
+      probe.font = 'bold ' + fontSize + 'px Arial, Helvetica, sans-serif';
+      if (probe.measureText(text || '').width <= sz.w * widthPad) break;
+      fontSize -= 2;
+    }
+    return fontSize;
+  }
+
   function drawCenteredText(ctx, text, w, h, fontSize, color) {
     ctx.fillStyle = color || '#ffffff';
     ctx.font = 'bold ' + fontSize + 'px Arial, Helvetica, sans-serif';
@@ -63,6 +131,10 @@
 
   window.getMenuTheme = getMenuTheme;
   window.menuUiCanvasSize = canvasSizeForPlane;
+  window.menuUiFontSizeOnPlane = fontSizeOnPlane;
+  window.menuUiUniformFontScale = uniformFontScaleForButtons;
+  window.menuUiUniformFontSize = uniformFontSizeForButtons;
+  window.menuUiFontSizeForButton = fontSizeForButton;
   window.menuUiDrawButton = drawButtonCanvas;
   window.menuUiDrawCenteredText = drawCenteredText;
 })();

@@ -208,11 +208,26 @@ AFRAME.registerComponent('victory-ui', {
 
   _buildUI: function () {
     var ui = this.cfg;
+    var lay = ui.layout || {};
+    var contentW = lay.contentWidth !== undefined ? lay.contentWidth : 1.45;
+    var btnH = lay.btnHeight !== undefined ? lay.btnHeight : 0.165;
+    var btnFs = lay.btnFontSize !== undefined ? lay.btnFontSize : 60;
+    var titleLay = lay.title || { height: 0.12, fontSize: 72 };
     var pos = this._getMenuPosition();
     this._pressRadius = this._getPressRadius();
-    var title = ui.titleText || 'ПОБЕДА';
-    var restartText = ui.restartText || ui.buttonText || 'Заново';
-    var menuText = ui.menuText || 'В главное меню';
+    var title = ui.titleText || 'VICTORY';
+    var restartText = ui.restartText || ui.buttonText || 'Restart';
+    var menuText = ui.menuText || 'Main Menu';
+
+    var layout = (typeof window.menuUiComputeLayout === 'function')
+      ? window.menuUiComputeLayout({
+        title: { width: contentW, height: titleLay.height },
+        rows: [
+          { buttons: [{ width: contentW, height: btnH }] },
+          { buttons: [{ width: contentW, height: btnH }] },
+        ],
+      })
+      : null;
 
     this._root = document.createElement('a-entity');
     this._root.setAttribute('id', 'victory-ui-root');
@@ -220,27 +235,35 @@ AFRAME.registerComponent('victory-ui', {
     this._root.setAttribute('visible', false);
 
     var panel = document.createElement('a-plane');
-    panel.setAttribute('width', 0.62);
-    // 0.50 — две кнопки + заголовок; запас снизу под scale 1.08 при наведении рукой.
-    panel.setAttribute('height', 0.50);
+    panel.setAttribute('width', layout ? layout.panel.width : contentW + 0.1);
+    panel.setAttribute('height', layout ? layout.panel.height : 0.45);
     panel.setAttribute('color', this._panelColor);
     panel.setAttribute('material', 'shader: flat; opacity: 0.96; transparent: true; side: front; depthTest: false; depthWrite: false; renderOrder: 50');
     panel.setAttribute('position', '0 0 0');
 
     var titleColor = (this._theme && this._theme.titleAccent) || '#66f5ff';
-    var titleData = this._makeTextPlane(title, 0.52, 0.12, {
-      fontSize: 72, color: titleColor,
+    var titleData = this._makeTextPlane(title, contentW, titleLay.height, {
+      fontSize: titleLay.fontSize, color: titleColor,
     });
-    titleData.el.setAttribute('position', '0 0.15 0.006');
+    if (layout && layout.title) {
+      var tp = layout.title;
+      titleData.el.setAttribute('position', tp.x + ' ' + tp.y + ' ' + tp.z);
+    }
 
     var self = this;
+    var menuBtnFs = (typeof window.menuUiFontSizeOnPlane === 'function')
+      ? window.menuUiFontSizeOnPlane(btnFs, contentW, btnH, contentW, btnH)
+      : btnFs;
 
-    var restartData = this._makeTextPlane(restartText, 0.5, 0.11, {
-      fontSize: 52, bg: this._btnStart,
+    var restartData = this._makeTextPlane(restartText, contentW, btnH, {
+      fontSize: menuBtnFs, bg: this._btnStart,
     });
-    restartData.fontSize = 52;
+    restartData.fontSize = menuBtnFs;
     restartData.el.setAttribute('class', 'victory-ui-clickable');
-    restartData.el.setAttribute('position', '0 -0.03 0.01');
+    if (layout && layout.rows[0] && layout.rows[0].buttons[0]) {
+      var rp = layout.rows[0].buttons[0];
+      restartData.el.setAttribute('position', rp.x + ' ' + rp.y + ' ' + rp.z);
+    }
     this._registerButton(restartData, {
       normalBg: this._btnStart,
       hoverBg: this._btnStartHover,
@@ -248,12 +271,15 @@ AFRAME.registerComponent('victory-ui', {
       onPress: function () { self._doRestart(); },
     });
 
-    var menuBtnData = this._makeTextPlane(menuText, 0.5, 0.10, {
-      fontSize: 40, bg: this._btnNormal,
+    var menuBtnData = this._makeTextPlane(menuText, contentW, btnH, {
+      fontSize: menuBtnFs, bg: this._btnNormal,
     });
-    menuBtnData.fontSize = 40;
+    menuBtnData.fontSize = menuBtnFs;
     menuBtnData.el.setAttribute('class', 'victory-ui-clickable');
-    menuBtnData.el.setAttribute('position', '0 -0.16 0.01');
+    if (layout && layout.rows[1] && layout.rows[1].buttons[0]) {
+      var mp = layout.rows[1].buttons[0];
+      menuBtnData.el.setAttribute('position', mp.x + ' ' + mp.y + ' ' + mp.z);
+    }
     this._registerButton(menuBtnData, {
       normalBg: this._btnNormal,
       hoverBg: this._btnHover,

@@ -60,7 +60,7 @@ AFRAME.registerComponent('orbit-ring', {
     return {
       radius: R,
       thickness: az.ringThickness !== undefined ? az.ringThickness : 0.02,
-      segments: r.segments !== undefined ? r.segments : 20,
+      segments: r.segments !== undefined ? r.segments : 72,
       tiltAxis: r.tiltAxis || 'x',
       tiltDeg: r.tiltDeg !== undefined ? r.tiltDeg : 60,
       spinAxis: r.spinAxis || 'y',

@@ -213,43 +213,98 @@ AFRAME.registerComponent('game-menu', {
 
   _buildUI: function () {
     var ui = this.cfg;
+    var lay = ui.layout || {};
+    var contentW = lay.contentWidth !== undefined ? lay.contentWidth : 1.45;
+    var btnH = lay.btnHeight !== undefined ? lay.btnHeight : 0.165;
+    var btnFs = lay.btnFontSize !== undefined ? lay.btnFontSize : 60;
+    var wireW = (lay.wireframeBtn && lay.wireframeBtn.width) || 0.55;
+    var layoutDefaults = (typeof window.menuUiLayoutDefaults === 'function')
+      ? window.menuUiLayoutDefaults()
+      : { colGap: 0.03 };
+    var colGap = layoutDefaults.colGap;
     var pos = ui.worldPosition || { x: 0, y: 1.55, z: 0.35 };
-    var title = ui.titleText || 'TOWER OF TIME';
-    var startText = ui.startText || 'Старт';
+    var startText = ui.startText || 'Start';
     var diffs = (CONFIG.game && CONFIG.game.difficulties) || {};
+
+    var diffOrder = ['easy', 'normal', 'hard', 'hardcore'];
+    var diffCount = 0;
+    for (var dc = 0; dc < diffOrder.length; dc++) {
+      if (diffs[diffOrder[dc]]) diffCount++;
+    }
+
+    var diffSizes = (typeof window.menuUiEqualRowButtons === 'function')
+      ? window.menuUiEqualRowButtons(diffCount, contentW, btnH, colGap)
+      : [];
+
+    var wireLabel = this._wireframeLabel();
+    var buttonSpecs = [];
+    var specDiffCol = 0;
+    for (var sp = 0; sp < diffOrder.length; sp++) {
+      var spId = diffOrder[sp];
+      var spPreset = diffs[spId];
+      if (!spPreset) continue;
+      var spSize = diffSizes[specDiffCol] || { width: contentW / Math.max(1, diffCount), height: btnH };
+      buttonSpecs.push({
+        text: spPreset.label || spId,
+        width: spSize.width,
+        height: btnH,
+      });
+      specDiffCol++;
+    }
+    buttonSpecs.push({ text: startText, width: contentW, height: btnH });
+    buttonSpecs.push({ text: wireLabel, width: wireW, height: btnH });
+
+    var fontScale = (typeof window.menuUiUniformFontScale === 'function')
+      ? window.menuUiUniformFontScale(buttonSpecs, contentW, btnH, btnFs)
+      : 1;
+    var effectiveFs = Math.round(btnFs * fontScale);
+
+    var self = this;
+    this._menuBtnFont = function (planeW) {
+      return (typeof window.menuUiFontSizeOnPlane === 'function')
+        ? window.menuUiFontSizeOnPlane(effectiveFs, planeW, btnH, contentW, btnH)
+        : effectiveFs;
+    };
+
+    var layout = (typeof window.menuUiComputeLayout === 'function')
+      ? window.menuUiComputeLayout({
+        rows: [
+          { buttons: diffSizes },
+          { buttons: [{ width: contentW, height: btnH }] },
+          { buttons: [{ width: wireW, height: btnH }] },
+        ],
+      })
+      : null;
 
     this._root = document.createElement('a-entity');
     this._root.setAttribute('id', 'game-menu-root');
     this._root.setAttribute('position', pos.x + ' ' + pos.y + ' ' + pos.z);
 
     var panel = document.createElement('a-plane');
-    panel.setAttribute('width', 0.62);
-    panel.setAttribute('height', 1.0);
+    panel.setAttribute('width', layout ? layout.panel.width : contentW + 0.1);
+    panel.setAttribute('height', layout ? layout.panel.height : 0.55);
     panel.setAttribute('color', this._panelColor);
     panel.setAttribute('material', 'shader: flat; opacity: 0.96; transparent: true; side: front; depthTest: false; depthWrite: false; renderOrder: 50');
 
-    var titleColor = (this._theme && this._theme.titleAccent) || '#66f5ff';
-    var titleData = this._makeTextPlane(title, 0.52, 0.11, {
-      fontSize: 52, color: titleColor,
-    });
-    titleData.el.setAttribute('position', '0 0.40 0.006');
-
-    var self = this;
-    var diffOrder = ['easy', 'normal', 'hard', 'hardcore'];
-    var diffY = [0.22, 0.08, -0.06, -0.20];
     this._difficultyEntries = [];
+    var diffCol = 0;
 
     for (var d = 0; d < diffOrder.length; d++) {
       var id = diffOrder[d];
       var preset = diffs[id];
       if (!preset) continue;
       var label = preset.label || id;
-      var btnData = this._makeTextPlane(label, 0.5, 0.1, {
-        fontSize: 44, bg: this._btnNormal,
+      var diffSize = diffSizes[diffCol] || { width: contentW / diffCount, height: btnH };
+      var diffFs = this._menuBtnFont(diffSize.width);
+      var btnData = this._makeTextPlane(label, diffSize.width, diffSize.height, {
+        fontSize: diffFs, bg: this._btnNormal,
       });
-      btnData.fontSize = 44;
+      btnData.fontSize = diffFs;
       btnData.el.setAttribute('class', 'game-menu-clickable');
-      btnData.el.setAttribute('position', '0 ' + diffY[d] + ' 0.01');
+      if (layout && layout.rows[0] && layout.rows[0].buttons[diffCol]) {
+        var dp = layout.rows[0].buttons[diffCol];
+        btnData.el.setAttribute('position', dp.x + ' ' + dp.y + ' ' + dp.z);
+      }
       this._registerButton(btnData, {
         kind: 'difficulty',
         difficultyId: id,
@@ -258,14 +313,19 @@ AFRAME.registerComponent('game-menu', {
         })(id),
       });
       this._difficultyEntries.push({ id: id, data: btnData });
+      diffCol++;
     }
 
-    var startData = this._makeTextPlane(startText, 0.5, 0.12, {
-      fontSize: 52, bg: this._btnStart,
+    var startFs = this._menuBtnFont(contentW);
+    var startData = this._makeTextPlane(startText, contentW, btnH, {
+      fontSize: startFs, bg: this._btnStart,
     });
-    startData.fontSize = 52;
+    startData.fontSize = startFs;
     startData.el.setAttribute('class', 'game-menu-clickable');
-    startData.el.setAttribute('position', '0 -0.34 0.01');
+    if (layout && layout.rows[1] && layout.rows[1].buttons[0]) {
+      var sp = layout.rows[1].buttons[0];
+      startData.el.setAttribute('position', sp.x + ' ' + sp.y + ' ' + sp.z);
+    }
     this._startEntry = this._registerButton(startData, {
       kind: 'start',
       normalBg: this._btnStart,
@@ -274,20 +334,22 @@ AFRAME.registerComponent('game-menu', {
       onPress: function () { self._onStart(); },
     });
 
-    var wireLabel = this._wireframeLabel();
-    this._wireframeData = this._makeTextPlane(wireLabel, 0.5, 0.1, {
-      fontSize: 36, bg: this._btnNormal,
+    var wireFs = this._menuBtnFont(wireW);
+    this._wireframeData = this._makeTextPlane(wireLabel, wireW, btnH, {
+      fontSize: wireFs, bg: this._btnNormal,
     });
-    this._wireframeData.fontSize = 36;
+    this._wireframeData.fontSize = wireFs;
     this._wireframeData.el.setAttribute('class', 'game-menu-clickable');
-    this._wireframeData.el.setAttribute('position', '0 -0.48 0.01');
+    if (layout && layout.rows[2] && layout.rows[2].buttons[0]) {
+      var wp = layout.rows[2].buttons[0];
+      this._wireframeData.el.setAttribute('position', wp.x + ' ' + wp.y + ' ' + wp.z);
+    }
     this._wireframeEntry = this._registerButton(this._wireframeData, {
       kind: 'wireframe',
       onPress: function () { self._toggleWireframe(); },
     });
 
     this._root.appendChild(panel);
-    this._root.appendChild(titleData.el);
     for (var di = 0; di < this._difficultyEntries.length; di++) {
       this._root.appendChild(this._difficultyEntries[di].data.el);
     }
@@ -296,7 +358,6 @@ AFRAME.registerComponent('game-menu', {
     this.el.sceneEl.appendChild(this._root);
 
     this._applyMenuDrawOrder(panel);
-    this._applyMenuDrawOrder(titleData.el);
     for (var ti = 0; ti < this._difficultyEntries.length; ti++) {
       this._applyMenuDrawOrder(this._difficultyEntries[ti].data.el);
     }
@@ -310,7 +371,7 @@ AFRAME.registerComponent('game-menu', {
   _wireframeLabel: function () {
     var ui = this.cfg;
     var on = !!(CONFIG.debug && CONFIG.debug.showColliders);
-    return on ? (ui.wireframeOnText || 'Wireframe: ВКЛ') : (ui.wireframeOffText || 'Wireframe: ВЫКЛ');
+    return on ? (ui.wireframeOnText || 'Wireframe: ON') : (ui.wireframeOffText || 'Wireframe: OFF');
   },
 
   _wireframeBg: function () {

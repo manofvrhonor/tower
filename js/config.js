@@ -124,13 +124,13 @@ const CONFIG = {
         id: 0,
         tiltAxis: 'x', tiltDeg: 62,
         spinAxis: 'y', spinSpeedDeg: 22,
-        segments: 20,
+        segments: 72,
       },
       {
         id: 1,
         tiltAxis: 'z', tiltDeg: 58,
         spinAxis: 'x', spinSpeedDeg: -17,
-        segments: 20,
+        segments: 72,
       },
     ],
     ringThickness: 0.02,
@@ -801,23 +801,40 @@ const CONFIG = {
   game: {
     defaultDifficulty: 'normal',
     difficulties: {
-      easy:   { label: 'Лёгкий',    ballCount: 1, stackHeight: 3 },
-      normal: { label: 'Нормальный', ballCount: 3, stackHeight: 4 },
-      hard:   { label: 'Сложный',   ballCount: 5, stackHeight: 5 },
+      easy:   { label: 'Easy',     ballCount: 1, stackHeight: 3 },
+      normal: { label: 'Normal',   ballCount: 3, stackHeight: 4 },
+      hard:   { label: 'Hard',     ballCount: 5, stackHeight: 5 },
       hardcore: {
-        label: 'Хардкор',
+        label: 'Hardcore',
         ballCount: 5,
         stackHeight: 5,
         rotateAssemblyWithRing: 0,
       },
     },
+    // Общие отступы VR-плашек (game-menu, victory-ui) — menu-ui-layout.js.
+    menuLayout: {
+      paddingTop:    0.06,
+      paddingBottom: 0.06,
+      paddingH:      0.05,
+      rowGap:        0.04,
+      colGap:        0.03,
+      titleGap:      0.05,
+      hoverPad:      0.04,
+      minPanelWidth: 0,
+    },
     menu: {
       worldPosition: { x: 0, y: 1.55, z: -0.65 },
       handPressRadius: 0.18,
-      titleText: 'TOWER OF TIME',
-      startText: 'Старт',
-      wireframeOnText: 'Wireframe: ВКЛ',
-      wireframeOffText: 'Wireframe: ВЫКЛ',
+      startText: 'Start',
+      wireframeOnText: 'Wireframe: ON',
+      wireframeOffText: 'Wireframe: OFF',
+      // Широкое меню: contentWidth задаёт ширину строк; кнопки — один fontSize.
+      layout: {
+        contentWidth: 1.45,
+        btnHeight:    0.165,
+        btnFontSize:  60,
+        wireframeBtn: { width: 0.55 },
+      },
     },
     // Палитра VR-меню: cyan + чёрный + белый (game-menu, victory-ui).
     menuTheme: {
@@ -867,9 +884,15 @@ const CONFIG = {
     // Плашка победы (victory-ui.js). Позиция = game.menu.worldPosition (общая с меню старта).
     ui: {
       handPressRadius: 0.18,
-      titleText:   'ПОБЕДА',
-      restartText: 'Заново',
-      menuText:    'В главное меню',
+      titleText:   'VICTORY',
+      restartText: 'Restart',
+      menuText:    'Main Menu',
+      layout: {
+        contentWidth: 1.45,
+        btnHeight:    0.165,
+        btnFontSize:  60,
+        title:        { height: 0.12, fontSize: 72 },
+      },
     },
   },
 };

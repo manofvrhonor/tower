@@ -490,9 +490,16 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
   Quest QA старт-меню + победа ✅. Коммит `7aad71c`, push на GitHub.
 - **Стильная игра (с.39–40 ✅):** Фаза **2.x — ядро сборки**: `#assembly-hub` — orbit-rings,
   белая сфера, `FLOAT_INSIDE`, hardcore (rotation sync слотов с кольцом 0), cyan-кольца,
-  жёлтые призраки слотов. **ПК + Quest QA ✅**.
-- **Стильная игра — следующая:** **Фаза 3** — слои мира: `outside-scenery.js` → туман у пола →
-  HDR/`world-hdri-sky` (см. `CURRENT_TASK.md`).
+  жёлтые призраки слотов. **ПК + Quest QA ✅**. Коммит **`9205f2c`**.
+- **Стильная игра (с.41 ✅):** **Меню** — `menu-ui-layout.js`, широкий adaptive layout
+  (`contentWidth` 1.45 m), единый `btnFontSize`, подписи EN; заголовок убран.
+  **Кольца** — 72 сегмента. **План** — Фаза **3.5** (3.5A магнитные руки → 3.5B сборка/GLB).
+- **Стильная игра — следующая:** **Фаза 3** — слои мира (см. `CURRENT_TASK.md`).
+- **Стильная игра — после Фазы 3:** **Фаза 3.5** — взаимодействие с деталями:
+  - **3.5A (первым)** — магнитные руки: якорь tip, GLB, VFX grip, physx-grab/bat на магнит;
+  - **3.5B (вторым)** — сборка: поза слотов у сферы/колец, GLB-детали, призраки, состояния.
+  Снеп-схему art-pass делаем **после** рук, чтобы не перегонять хват/release.
+- **Дальше:** Фаза 4 (локации) → 5 (опасности + таймер) → 6 (комикс-меню) → 7 (intro-comic).
 - **Не делаем:** VR-виньетка slo-mo (снято с бэклога). **Пропускаем:** захват VR отлёт.
 - **Закрыто:** пьедestal «запинание» (парящий диск, с.27).
 - Стек стабилен: PhysX 0.3.0 + physx-grab. **Тесты — Quest Link + localhost**; ПК не для геймплея.
@@ -517,6 +524,10 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 - **VR-меню layout (с.37–38):** ✅ закрыто — Quest QA OK.
 - **Ядро 2.x (с.39–40):** ✅ Quest QA — кольца, float-inside/outside, hardcore-слоты, шары×кольца.
   Закрыто: reparent `#assembly-core` ломал слоты → rotation sync в `assembly-hub`.
+- **Руки / хват (бэклог → Фаза 3.5A):** GLB рук есть, joint на `#leftHandCollider` в origin
+  entity — деталь «липнет» не к визуальной точке. Лор: магниты на концах, grip = заряд.
+- **Слоты сборки (бэклог → Фаза 3.5B):** wireframe-кубы 0.1 m, позы от «верха стола» —
+  смещены относительно центра сферы/колец; детали — кубы-заглушки (`parts.model: null`).
 - **Парящий стол ✅** (с.27) — **заменён** orbit-rings (с.39); `pedestal-builder.js` legacy.
 - **Бэклог** — см. `CURRENT_TASK.md`.
 
@@ -530,7 +541,7 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 Tower/
 ├── index.html
 ├── js/config.js, main.js, init-session.js, game-lifecycle.js, desktop-ui-cursor.js
-├── js/assembly-zone.js, menu-ui-draw.js, room-spawn-utils.js, room-containment.js
+├── js/assembly-zone.js, menu-ui-draw.js, menu-ui-layout.js, room-spawn-utils.js, room-containment.js
 ├── js/spawn-floating-cubes.js, spawn-red-balls.js, spawn-ball-bat.js
 ├── js/components/  physx-grab, floating-cube, red-ball, ball-bat, dome-builder,
 │                   orbit-ring, assembly-hub, assembly-sphere-visual,
@@ -566,6 +577,8 @@ Tower/
   внутри купола. ПК QA ✅ (ADR-20).
 - **8 (с.31):** `fogDome.radius` 2 m, пол-диск, туман (fogLift/contrast); меню дальше +
   видимость за игровым куполом; прицел поверх меню. Quest QA ✅.
+- **Стильная (с.41):** adaptive VR-меню (`menu-ui-layout.js`), EN labels, orbit-rings 72 seg;
+  дорожная карта Фазы 3.5 (руки → art-pass сборки).
 
 **QA купола (уточнение теста 1):** float-кубики сталкиваются с куполом **снаружи**
 (слой FLOAT_CUBE × DOME). Внутри на пьедестале кубики в gravity и **не** бьются о

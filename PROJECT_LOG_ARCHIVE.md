@@ -397,6 +397,34 @@
 
 ---
 
+---
+
+## Сессия 41 — меню adaptive + кольца 72 + план Фазы 3.5 ✅ → Фаза 3
+
+### Сделано
+
+- **VR-меню:** `menu-ui-layout.js` — строковый layout, плашка растёт с числом кнопок;
+  `contentWidth` 1.45 m, `btnFontSize` 60, `uniformFontScale`; сложность в один ряд.
+- **Меню EN:** Easy/Normal/Hard/Hardcore, Start, Wireframe ON/OFF; victory — VICTORY/Restart/Main Menu.
+- Убран заголовок «TOWER OF TIME» из стартового меню.
+- **`menu-ui-draw.js`:** `menuUiUniformFontScale`, `menuUiFontSizeOnPlane`.
+- **Кольца:** `CONFIG.assemblyZone.rings[*].segments` **72** (округлее контур).
+- **План:** Фаза **3.5** между 3 и 4 — **3.5A** магнитные руки (первым),
+  **3.5B** сборка/GLB (вторым). Обновлены `PROJECT_LOG.md`, `CURRENT_TASK.md`,
+  `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md`.
+
+### Решения
+
+- Снеп-схему и GLB-детали **не** трогаем до **3.5A** (руки) — иначе перегонять release/снеп.
+- Фаза 3 (outside-scenery, туман, HDR) — **следующая**; 3.5 — после неё.
+
+**Файлы:** `menu-ui-layout.js` (new), `menu-ui-draw.js`, `game-menu.js`, `victory-ui.js`,
+`config.js`, `orbit-ring.js`, `index.html`, `PROJECT_LOG.md`, `CURRENT_TASK.md`, plan.
+
+**Следующая сессия:** микро-шаг **3.1** — `outside-scenery.js`.
+
+---
+
 ## Сессия 40 — Фаза 2.x QA + фиксы ✅ → Фаза 3
 
 ### Сделано
