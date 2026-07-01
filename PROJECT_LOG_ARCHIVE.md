@@ -1,7 +1,43 @@
 # PROJECT LOG — АРХИВ СЕССИЙ
 
-> Хронология работ. Архитектурные «почему» — в `PROJECT_LOG.md` → **ADR**.
-> Не прикладывать целиком при старте сессии; читать по необходимости.
+> Архитектурные «почему» — в `PROJECT_LOG.md` → **ADR**.
+> **Не прикладывать целиком** при старте. Навигация: `PROJECT_START.md` → ARCHIVE-индекс → grep/read нужную сессию.
+
+---
+
+## Оглавление — быстрый grep
+
+| grep / тема | Сессия | Примечание |
+|---|---|---|
+| Cannon, super-hands | 1–4 | отменены |
+| physx-grab, enum, rigidBody | 5–6 | ADR-02 |
+| dome-builder, collisionLayers | 8–12 | ADR-05–07 |
+| time-scale, float-motion-trail | 13–16 | ADR-12 |
+| victory-ui, red-ball | 17–21 | Этапы 5–7 |
+| _touchEl, early-grab | 20 | **откат** — ломает кубы |
+| kinematic grab, setKinematicTarget, бита | 26 | **откат** — прошивает пьедestal |
+| isWorldSlowMo, in-hand удары | 28 | ADR-18 |
+| game-menu, HTML overlay | 29 | overlay отменён |
+| room-fog-dome, world-hdri-sky | 30–31 | ADR-20 |
+| assembly-core, setKinematic latch | 32–36 | snap, ADR-02 п.7 |
+| menu-ui-layout, orbit-ring | 37–41 | cyan-купол, меню |
+| outside-scenery | 42 | 7 домов, floorRadius 50 |
+| room-floor-fog, depth-prepass | 43–44 | ADR-21, HDR manifest |
+| PROJECT_START, DECISIONS LOCK | 45 | старт сессии, grep ARCHIVE |
+
+## Хронология (одной строкой)
+
+| Сессии | Статус | Тема |
+|---|---|---|
+| 1–4 | ✅/отмена | A-Frame, Cannon→PhysX |
+| 5–12 | ✅ | PhysX, float, купол, layers |
+| 13–16 | ✅ | slo-mo, trail, gravity fix |
+| 17–28 | ✅ | победа, шары, бита, in-hand |
+| 29–31 | ✅ | меню, купол R=2, MVP-прогон |
+| 32–41 | ✅ | стильная игра, snap, cyan, кольца |
+| 42–44 | ✅ | outside-scenery, floor-fog, HDR |
+| 45 | ✅ | PROJECT_START, DECISIONS LOCK, slim docs |
+| → | в работе | 3.5A.1 tip offset (`CURRENT_TASK.md`) |
 
 ---
 
@@ -398,6 +434,23 @@
 ---
 
 ---
+
+---
+
+## Сессия 45 — оптимизация контекста агента ✅
+
+### Сделано
+
+- **`PROJECT_START.md`** (`alwaysApply`): стартовый бандл вместо полного `PROJECT_LOG` при старте;
+  DECISIONS LOCK, ADR/ARCHIVE-индексы, триггеры «когда grep/read ARCHIVE».
+- **`AGENTS.md`:** slim ~130 строк; § «Работа с ARCHIVE и DECISIONS LOCK».
+- **`PROJECT_LOG.md`:** сжат (все ADR сохранены); убраны дубли «Что сделано» / длинная хроника.
+- **`CURRENT_TASK.md`:** только активная задача 3.5A.
+- **`PROJECT_LOG_ARCHIVE.md`:** оглавление grep в шапке (тела сессий без изменений).
+
+**Workflow старта:** `AGENTS.md` + `PROJECT_START.md` + `CURRENT_TASK.md`.
+
+**Следующая сессия:** микро-шаг **3.5A.1** — CONFIG + tip offset на `#leftHand` / `#rightHand`.
 
 ---
 

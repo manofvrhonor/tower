@@ -25,40 +25,25 @@ release без регрессий physx-grab; slo-mo без изменений.
 - ⬜ **3.5A.4** — Quest QA хват + бита.
 - ⬜ **git commit** (по запросу, один микро-шаг = один коммит).
 
-**Не делаем в 3.5A:** GLB-детали, смена слотов (→ 3.5B). **Не трогаем:** floor-fog, outside-scenery, ядро 2.x.
-
----
-
-## Закрыто: Фаза 3 — слои мира ✅ (с.43–44)
-
-| Шаг | Статус |
-|-----|--------|
-| 3.1 outside-scenery | ✅ desktop + Quest |
-| 3.2 room-floor-fog | ✅ depth-prepass, slo-mo, Quest |
-| 3.3 world-hdri-sky | ✅ {id}→base, manifest, tint, Quest |
-| 3.x QA | ✅ Quest (пользователь) |
+**Не делаем в 3.5A:** GLB-детали, смена слотов (→ 3.5B).
+**Не трогаем:** `room-floor-fog.js`, `outside-scenery.js`, `assembly-hub` / ядро 2.x.
+**Закрытое (Фаза 3):** см. ARCHIVE с.43–44, `PROJECT_START.md` → ARCHIVE-индекс.
 
 ---
 
 ## Working Context
 
-### ИЗВЕСТНО (с.44)
+### ИЗВЕСТНО
 
-- **3.2:** `room-floor-fog.js` — 20 слоёв, depth-prepass + discard, `useTimeScale: true`.
-- **3.3:** небо — `assets/hdri/{locationId}.*` → `base.*`; список в `manifest.json`; без 404-перебора.
-- **3.1:** 7 домов, `floorRadius: 50`. Фаза **2.x ✅**, меню adaptive.
-- Коммиты: `dfeb141` (3.2), `ab3c4ce` (3.3 + закрытие фазы). **Сессия 44 закрыта ✅**
+- Joint сейчас на `#leftHandCollider` / `#rightHandCollider` в **origin** entity — визуально не tip.
+- GLB рук: `assets/models/leftHandLow.glb`, `rightHandLow.glb`; kinematic sphere r=0.05.
+- Захват: `physx-grab.js`, D6 softFixed (ADR-03, ADR-14). Бита: dynamic + BAT (ADR-16).
+- Фазы 0–3 ✅. DECISIONS LOCK: не kinematic grab биты, не `_touchEl` (ARCHIVE с.20, с.26).
 
 ### НЕИЗВЕСТНО
 
-- Оптимальный offset tip для Quest GLB рук (нужен QA после 3.5A.1).
+- Оптимальный offset tip для Quest GLB рук (QA после 3.5A.1).
 
-### РЕШЕНО (с.44)
-
-- Туман на кубах: **depth-prepass**, не `depthTest:true` (см. журнал 3.2 в ARCHIVE).
-- HDR: локация не хранит имя файла — только `id`; файлы `future.jpg` / `base.jpg` в `assets/hdri/`.
-- `hdriAuto: false` по умолчанию; random только для dev.
-
-## Следующее действие
+### Следующее действие
 
 Микро-шаг **3.5A.1** — CONFIG + якорь tip на `#leftHand` / `#rightHand`.

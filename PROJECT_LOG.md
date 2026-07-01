@@ -1,8 +1,7 @@
 # PROJECT LOG — TOWER OF TIME
 
-> Долгая память проекта. **ADR** — архитектурные решения и «почему так» (читать перед правками физики).
-> История сессий — `PROJECT_LOG_ARCHIVE.md`.
-> При старте: `AGENTS.md` + этот файл (разделы ADR и «Где мы») + `CURRENT_TASK.md`.
+> **Полный справочник ADR.** Не прикладывать при старте — используй `PROJECT_START.md` (индекс ADR + DECISIONS LOCK).
+> История сессий — `PROJECT_LOG_ARCHIVE.md`. Текущая задача — `CURRENT_TASK.md`.
 
 ---
 
@@ -443,178 +442,33 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 
 ## ДОРОЖНАЯ КАРТА
 
-| Этап | Название | Статус |
-|---|---|---|
-| 0 | Каркас + деплой | ✅ |
-| 1 | Стол и хватание | ✅ |
-| 2 | Плавающие кубики | ✅ |
-| 3 | Купол над столом | ✅ |
-| 4 | Замедление времени (SUPERHOT) | ✅ |
-| 5 | Цель и победа | ✅ |
-| 6 | Красные шары | ✅ (Quest QA с.28) |
-| 7 | Предмет для отбивания (бита) | ✅ in-hand удары с.28 |
-| 8 | Полировка (меню, skybox, …) | ✅ Quest QA + MVP-прогон (с.29–31) |
+Этапы **0–8 ✅** (MVP). Стильная игра: Фазы **0–3 ✅**, **3.5A** в работе. Детали — `PROJECT_LOG_ARCHIVE.md`, `PROJECT_START.md`.
 
 ---
 
 ## ГДЕ МЫ СЕЙЧАС
 
-- Этапы 0–5 ✅.
-- **Этап 5 (сессии 17–18):** `victory-check`, рандом-схема (`init-session.js`),
-  призрачная башня, `victory-ui` (canvas-текст, рестарт без reload, Quest OK).
-- **Этап 6 (сессии 18–19):** шары, trail, homing-циклы, слои WORLD×BALL, импульс по кубам.
-  Десктоп QA: центр/стены OK; пьедестал/башня/Quest — в процессе.
-- **Этап 7 (сессии 19–21):** бита-сковородка; захват **починен** (state `grabbed`,
-  коллайдер на блине и ручке). Отбивание шара **починено** (сессия 21): clamp-окно
-  скорости (`_clampBatDeflect`), шар отлетает с обычной скоростью. Quest QA ✅.
-- **Полировка (сессия 22):** коллайдеры комнаты `a-plane → a-box` (ADR-17) — отскоки
-  теперь ровно по видимым стенам/полу/потолку. Десктоп QA ✅.
-- **Полировка (сессия 23):** шары Ø7→Ø4 см (`balls.radius` 0.04), хвост — та же абсолютная
-  ширина (`trail.sizeScale` 0.91), длиннее (`trailSpacingM` 0.045). Визуал ✅.
-- **Полировка (сессия 24):** физика контактов — частичные фиксы; редизайн пространства.
-- **Полировка (сессия 25):** `collider-debug-viz` — контуры **PhysX PxShape**; слой **BAT**;
-  крышка пьедestala — один диск; плитки купola скрыты.
-- **Полировка (сессия 26):** бита × пьедestal **в руке ✅** — dynamic + D6 softFixed (слой BAT).
-  Бэклог захвата: отлёт при тряске; естественный хват — VR-калибровка.
-- **Полировка (сессия 27):** **парящий стол** — визуал-диск + PhysX-диск (r=0.3, h=0.03,
-  `wallSegments: 0`). **Gravity-кубы × timeScale** (ADR-12 v2): velocity-scale + manual g×ts;
-  шар→куб world-space; куб в руке отбивает шар (`_deflectOffBat`). **Бита:** float вне купола /
-  gravity внутри (как кубы), старт y=0.55. Десктоп QA timeScale ✅ (пользователь).
-- **Полировка (сессия 28):** **in-hand удары** (ADR-18): `isWorldSlowMo()`, deflect+clamp
-  кубов/биты в slo-mo; realtime boost шара; Quest QA ✅. **Сессия закрыта.**
-- **Следующая (с.29):** **меню входа + сложность** + wireframe DOME — ✅ Quest QA (ADR-19).
-- **Следующая (с.30):** **комната-купол + HDR skybox** — ✅ ПК QA (ADR-20).
-- **Полировка (с.31):** R=2 m, непрозрачный пол Ø4 m, контрастный туман; меню `z:-0.65`
-  (depthTest + прицел renderOrder 100). **Quest QA ✅** (пользователь).
-- **MVP-прогон Quest ✅** (пользователь): меню → башня → шары → победа, без блокеров.
-- **Критерий MVP из лога — выполнен.**
-- **Стильная игра (с.32, в работе):** новый мастер-план (machine-time, снеп-сборка,
-  cyan-поле, слои мира, N-локаций, комикс) — `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md`
-  (точное имя с хэшем; папка `.cursor/` скрытая — поиск по маске её может не находить,
-  открывать по полному пути).
-  Сделано: Фаза 0 (модель данных в config: parts/locations/mechanisms/progression/assembly),
-  диагностика kinematic (ADR-02 п.7), Фаза 1.2 (`assembly-core` — призрачные слоты).
-- **Стильная игра (с.33):** Фаза **1.3 ✅** (Quest QA) — снеп детали в слот при release
-  (kinematic-lock, `assembly-core` учёт занятых слотов), **ручной разбор** снепа рукой
-  (для деталей-обманок), фикс защёлки `setKinematic` биндинга (ADR-02 п.7).
-- **Стильная игра (с.36 ✅):** Фаза **1.4–1.5** — слом снепа, победа по слотам, wireframe fix.
-  Quest QA ✅.
-- **Стильная игра (с.37 ✅):** Фаза **2.1** — cyan-купол (`room-fog-dome.js`): ridged-ленты +
-  fbm-дым поверх; пользователь подкрутил `fogDome`. Меню: `menu-ui-draw.js`,
-  `CONFIG.game.menuTheme` (cyan/чёрный/белый); `victory-ui` — поза как game-menu,
-  «Заново» + «В главное меню»; убраны hint-подписи.
-- **Стильная игра (с.38 ✅):** фикс **layout victory-ui** — panel h 0.50, Y кнопок подняты;
-  Quest QA старт-меню + победа ✅. Коммит `7aad71c`, push на GitHub.
-- **Стильная игра (с.39–40 ✅):** Фаза **2.x — ядро сборки**: `#assembly-hub` — orbit-rings,
-  белая сфера, `FLOAT_INSIDE`, hardcore (rotation sync слотов с кольцом 0), cyan-кольца,
-  жёлтые призраки слотов. **ПК + Quest QA ✅**. Коммит **`9205f2c`**.
-- **Стильная игра (с.41 ✅):** **Меню** — `menu-ui-layout.js`, широкий adaptive layout
-  (`contentWidth` 1.45 m), единый `btnFontSize`, подписи EN; заголовок убран.
-  **Кольца** — 72 сегмента. **План** — Фаза **3.5** (3.5A магнитные руки → 3.5B сборка/GLB).
-- **Стильная игра (с.42 ✅):** Фаза **3.1** — `outside-scenery.js`: 4 ближних + 3 дальних
-  прототипа домов (боксы, wall-JPG, чёрная обводка); расстановка по схеме (primary на
-  диагоналях ±d, background на осях ±R); `floorRadius: 50` — визуальный пол под застройкой;
-  `axisDistanceOffset` / `positionOffset` в CONFIG; fix `floating-cube` (`inside` в
-  `_breakSnapFromHit`); `menuUiButtonDrawOpts` — общие кнопки game-menu/victory-ui.
-  **Дома ✅** (desktop + Quest). Текстуры: 7× `*-wall.jpg` в `assets/textures/outside-buildings/`.
-- **Стильная игра (с.43–44 ✅):** Фаза **3.2** — `room-floor-fog.js` (depth-prepass, 20 слоёв,
-  slo-mo × time-scale, Quest QA ✅). Коммит `dfeb141`.
-- **Стильная игра (с.44 ✅):** Фаза **3.3** — HDR: `{locationId}.*` → `base.*` через manifest,
-  `sky.tint`, без 404-перебора; `assets/hdri/base.jpg`. **Фаза 3 закрыта** (Quest QA ✅).
-- **Стильная игра — следующая:** **Фаза 3.5A** — магнитные руки (см. `CURRENT_TASK.md`).
-- **Стильная игра — после 3.5A:** **3.5B** — GLB-детали, позы слотов, призраки.
-- **Дальше:** Фаза 4 (локации) → 5 (опасности + таймер) → 6 (комикс-меню) → 7 (intro-comic).
-- **Не делаем:** VR-виньетка slo-mo (снято с бэклога). **Пропускаем:** захват VR отлёт.
-- **Закрыто:** пьедestal «запинание» (парящий диск, с.27).
-- Стек стабилен: PhysX 0.3.0 + physx-grab. **Тесты — Quest Link + localhost**; ПК не для геймплея.
+- **MVP ✅** (с.29–31): меню, сложность, купол R=2 m, Quest-прогон без блокеров.
+- **Стильная игра:** Фазы 0–3 ✅ (config, snap, cyan-купол, orbit-rings, outside-scenery, floor-fog, HDR).
+- **Сейчас:** **Фаза 3.5A** — магнитные руки (`CURRENT_TASK.md`).
+- **Дальше:** 3.5B → Фаза 4–7. Мастер-план: `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md`
+- **Не делаем:** VR-виньетка slo-mo. **Пропускаем:** захват «отлёт при тряске» (с.29).
+- **Тест:** Quest Link + localhost.
+
+Хроника по сессиям — `PROJECT_LOG_ARCHIVE.md`, оглавление в шапке ARCHIVE. **С.45:** старт сессии через `PROJECT_START.md` (DECISIONS LOCK).
 
 ---
 
-## ИЗВЕСТНЫЕ ПРОБЛЕМЫ
+## ИЗВЕСТНЫЕ ПРОБЛЕМЫ (активные)
 
-- **Руки без VPN** — решено локальными GLB (`assets/models/`).
-- **`extensionPageScript.js` в Network** — расширение браузера, игнорировать.
-- **Гонка spawn float** — ADR-11.
-- **In-hand удары (с.28):** ✅ Quest QA. ADR-18.
-- **Захват VR (отлёт при тряске):** пропущено по решению пользователя (с.29).
-- **VR-виньетка slo-mo:** не делаем (снято с бэклога, с.29).
-- **Пьедestal «запинание» (с.24):** закрыто — парящий диск (с.27).
-- **Шар→куб (башня):** pending + visual hit; ghost-boost убран (с.27).
-- **Шары в круглой комнате (с.34):** ✅ по коду — `CONFIG.room.wallBounce`, общий
-  `room-containment.js`. Quest QA не в фокусе с.35 (старый режим шаров заменён волнами).
-- **Шары бьют стол только снизу (с.34):** ✅ закрыто с.35 — волны «атомы времени»
-  (`waves.enabled=true`, WAVE_BALL, Quest QA ✅).
-- **Wireframe × grabbed-куб × купол (с.36):** ✅ закрыто — `collider-debug-viz`.
-- **VR-меню layout (с.37–38):** ✅ закрыто — Quest QA OK.
-- **Ядро 2.x (с.39–40):** ✅ Quest QA — кольца, float-inside/outside, hardcore-слоты, шары×кольца.
-  Закрыто: reparent `#assembly-core` ломал слоты → rotation sync в `assembly-hub`.
-- **Руки / хват (бэклог → Фаза 3.5A):** GLB рук есть, joint на `#leftHandCollider` в origin
-  entity — деталь «липнет» не к визуальной точке. Лор: магниты на концах, grip = заряд.
-- **Слоты сборки (бэклог → Фаза 3.5B):** wireframe-кубы 0.1 m, позы от «верха стола» —
-  смещены относительно центра сферы/колец; детали — кубы-заглушки (`parts.model: null`).
-- **Парящий стол ✅** (с.27) — **заменён** orbit-rings (с.39); `pedestal-builder.js` legacy.
-- **Бэклог** — см. `CURRENT_TASK.md`.
+- **Руки / хват → 3.5A:** joint на origin collider, не tip; GLB в `assets/models/`.
+- **Слоты → 3.5B:** wireframe смещены; детали — кубы-заглушки (`parts.model: null`).
+- **Гонка spawn float** — ADR-11, на геймплей не влияет.
+- **`extensionPageScript.js`** — расширение браузера, игнорировать.
+- **Бэклог задачи** — `CURRENT_TASK.md`. Закрытые — ARCHIVE / DECISIONS LOCK в START.
 
 ---
-
-
 
 ## СТРУКТУРА ПРОЕКТА
 
-```
-Tower/
-├── index.html
-├── js/config.js, main.js, init-session.js, game-lifecycle.js, desktop-ui-cursor.js
-├── js/assembly-zone.js, menu-ui-draw.js, menu-ui-layout.js, room-spawn-utils.js, room-containment.js
-├── js/spawn-floating-cubes.js, spawn-red-balls.js, spawn-ball-bat.js
-├── js/components/  physx-grab, floating-cube, red-ball, ball-bat, dome-builder,
-│                   orbit-ring, assembly-hub, assembly-sphere-visual,
-│                   room-fog-dome, room-floor-fog, room-dome-collider, world-hdri-sky, outside-scenery,
-│                   collider-debug-viz, time-scale, slowmo-vignette-3d,
-│                   float-motion-trail, ghost-tower-hint, assembly-core, victory-check, victory-ui,
-│                   game-menu, ball-wave-manager
-│                   (legacy: pedestal-builder.js — не в index.html)
-├── assets/models/  leftHandLow.glb, rightHandLow.glb
-├── assets/textures/outside-buildings/  *-wall.jpg (7 прототипов домов)
-├── assets/hdri/  base.jpg, manifest.json (небо по id локации → base)
-├── AGENTS.md, CURRENT_TASK.md, PROJECT_LOG.md, PROJECT_LOG_ARCHIVE.md
-```
-
----
-
-## ЧТО СДЕЛАНО (сводка)
-
-- **0–1:** комната, PhysX, руки, grab.
-- **2:** `floating-cube.js`, 11 кубиков, дрейф (ADR-04).
-- **3:** визуал + 89 плиток (ADR-05), layers (ADR-06–07), release/float (ADR-08),
-  пол→float (ADR-09), lenient containment, float/gravity материалы. QA ✅ (сессия 12).
-- **4:** `time-scale` + float velocity-scale + `_maintainFloatDrift` + `_driftDir` (ADR-12);
-  VFX trail loft (14 sect, deploy anchor, grab fade, UV-fade); CSS-виньетка удалена;
-  VR-виньетка отложена. QA trail ✅ (сессии 14–15). **Этап 4 закрыт.**
-- **Пред-5 (сессия 16):** физика gravity-кубов на столе — ADR-13/14. Quest QA ✅.
-- **5 (сессии 17–18):** победа (4 цветных, рандом-схема), призрачная башня,
-  `victory-ui` + рестарт без reload. Quest QA ✅.
-- **6 (сессии 18–19):** шары (скорость ×2–×3, homing-циклы, trail круглый, импульс кубам,
-  слои стен/пьедестала). Десктоп: не в центре, не за стены.
-- **7 (сессия 19–21, 26, 28):** `ball-bat`; in-hand удары ADR-18. Quest QA ✅.
-- **8 (с.29):** меню, 3 сложности, lifecycle, ghost wireframe, UI-прицел Quest,
-  shuffle fix, DOME layer opacity, float-куб homing к куполу. Quest QA ✅ (ADR-19).
-- **8 (с.30):** `world-hdri-sky`, `room-fog-dome`, `room-dome-collider`, spawn/containment
-  внутри купола. ПК QA ✅ (ADR-20).
-- **8 (с.31):** `fogDome.radius` 2 m, пол-диск, туман (fogLift/contrast); меню дальше +
-  видимость за игровым куполом; прицел поверх меню. Quest QA ✅.
-- **Стильная (с.41):** adaptive VR-меню (`menu-ui-layout.js`), EN labels, orbit-rings 72 seg;
-  дорожная карта Фазы 3.5 (руки → art-pass сборки).
-- **Стильная (с.42):** Фаза **3.1** — `outside-scenery.js` (7 домов за куполом, wall-JPG,
-  `floorRadius: 50`); общие кнопки меню/victory-ui; fix snap-break в `floating-cube`.
-  Desktop + Quest QA домов ✅.
-- **Стильная (с.43–44):** Фаза **3.2** — `room-floor-fog.js` (ADR-21); **3.3** — HDR
-  `{id}→base`, manifest; **Фаза 3 ✅** Quest QA.
-
-**QA купола (уточнение теста 1):** float-кубики сталкиваются с куполом **снаружи**
-(слой FLOAT_CUBE × DOME). Внутри на пьедестале кубики в gravity и **не** бьются о
-стенку купola (GRAVITY_CUBE × DOME отключена намеренно, ADR-07). Альтернатива:
-после теста 4 (пол → float + импульс вверх) кубик может удариться о крышку купола
-ещё в режиме float.
-
-Детали по сессиям — `PROJECT_LOG_ARCHIVE.md`.
+Сжатая версия — `PROJECT_START.md`. Полный список компонентов — grep `js/components/`.
