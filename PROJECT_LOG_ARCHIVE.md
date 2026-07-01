@@ -412,6 +412,8 @@
   `sky.tint` / `exposure` под cyan-купол; `assets/hdri/base.jpg`; удалены черновики city/ignore.
 - **Quest QA ✅** (пользователь): дома, туман, slo-mo, HDR — без блокеров.
 
+**Коммиты:** `dfeb141` (3.2 floor-fog), **`ab3c4ce`** (3.3 HDR + slo-mo + docs, push).
+
 ### Решения
 
 - Туман на кубах: **depth-prepass**, не `depthTest:true` (ADR-21).
@@ -421,7 +423,7 @@
 `room-fog-dome.js`, `room-spawn-utils.js`, gameplay renderOrder, `assets/hdri/*`,
 `CURRENT_TASK.md`, `PROJECT_LOG.md`.
 
-**Следующая сессия:** **Фаза 3.5A** — магнитные руки (tip anchor).
+**Следующая сессия:** **Фаза 3.5A** — магнитные руки (tip anchor). **Сессия закрыта ✅**
 
 ---
 

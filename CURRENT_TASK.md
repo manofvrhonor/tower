@@ -47,7 +47,7 @@ release без регрессий physx-grab; slo-mo без изменений.
 - **3.2:** `room-floor-fog.js` — 20 слоёв, depth-prepass + discard, `useTimeScale: true`.
 - **3.3:** небо — `assets/hdri/{locationId}.*` → `base.*`; список в `manifest.json`; без 404-перебора.
 - **3.1:** 7 домов, `floorRadius: 50`. Фаза **2.x ✅**, меню adaptive.
-- Коммит floor-fog: `dfeb141`. Следующий — 3.5A.
+- Коммиты: `dfeb141` (3.2), `ab3c4ce` (3.3 + закрытие фазы). **Сессия 44 закрыта ✅**
 
 ### НЕИЗВЕСТНО
 
