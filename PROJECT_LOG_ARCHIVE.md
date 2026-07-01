@@ -23,7 +23,10 @@
 | menu-ui-layout, orbit-ring | 37–41 | cyan-купол, меню |
 | outside-scenery | 42 | 7 домов, floorRadius 50 |
 | room-floor-fog, depth-prepass | 43–44 | ADR-21, HDR manifest |
+| hand-body-collider, joint target HandCollider | 47 | **не** #leftMagnet (нет physx-body) |
 | PROJECT_START, DECISIONS LOCK | 45 | старт сессии, grep ARCHIVE |
+| hand-controls-local, magnet tip | 46 | 3.5A.0–3.3 |
+| Fixed joint, snap грань red-tip | 48 | **не** faceStandoff / сдвиг collider |
 
 ## Хронология (одной строкой)
 
@@ -37,7 +40,10 @@
 | 32–41 | ✅ | стильная игра, snap, cyan, кольца |
 | 42–44 | ✅ | outside-scenery, floor-fog, HDR |
 | 45 | ✅ | PROJECT_START, DECISIONS LOCK, slim docs |
-| → | в работе | 3.5A.1 tip offset (`CURRENT_TASK.md`) |
+| 46 | ✅ | 3.5A офлайн, magnet tip, VFX, contact joint |
+| 47 | ✅ | 3.5A body collider кулака; grab anchor (зазор tip — открыто) |
+| 48 | ⚠️ | 3.5A.4 Fixed joint + snap грани; faceStandoff откат; Quest QA открыт |
+| → | в работе | 3.5A.4 Quest QA (`CURRENT_TASK.md`) |
 
 ---
 
@@ -437,6 +443,69 @@
 
 ---
 
+---
+
+## Сессия 47 — Фаза 3.5A: body collider кулака, калибровка рук, grab anchor ⚠️
+
+### Сделано
+
+- **`hand-body-collider.js`:** compound kinematic `a-box` на `#leftHandBody` / `#rightHandBody`;
+  кубы не проходят сквозь кулак. Паттерн как у биты: дети → потом `physx-body` на корне;
+  невидимые боксы — `physx-hidden-collision`.
+- **`CONFIG.player.hands.bodyCollider.parts`:** position / rotation / size; **rotation
+  запекается** в position+size (`_bakePart`) — иначе PhysX/wireframe не видят поворот
+  (180° по Z = симметрия, шаг ±90°).
+- **Quest QA ✅ (пользователь):** `bodyCollider` и `magnet` подогнаны под GLB в `config.js`.
+- **`hand-magnet-vfx.js`:** magnet offset через `setAttribute('position')`, не только
+  `object3D.position` — согласованность с иерархией A-Frame.
+- **`physx-grab.js`:** якорь joint — ближайшая точка на **грани** куба к magnet tip;
+  улучшено чтение `detail.points` (PxVec3Vector / массив). **target joint** — только
+  `#*HandCollider` (kinematic physx-body).
+
+### Откат / не сработало
+
+- **target `#leftMagnet`** — нет `physx-body` → joint не создаётся, **хват пропал** (откат).
+- **`_closestLocalOnBox` + magnet world pos** — хват восстановлен, но **зазор ~5–7 см**
+  у cyan-искр **как до сессии** (≈ половина ребра куба 0.1 м). → остаётся **3.5A.4**.
+
+### Решения (→ ADR-22)
+
+- Захват (`contactbegin`) — только `#*HandCollider` (r=0.01); body collider **не** эмитит grab.
+- Joint target — **только** entity с `physx-body` (сфера magnet), не `#leftMagnet` (VFX-якорь).
+- Калибровка кулака — `bodyCollider.parts`; искры/magnet tip — `hands.*.magnet` (раздельно).
+
+**Файлы:** `hand-body-collider.js`, `physx-grab.js`, `hand-magnet-vfx.js`, `config.js`, `index.html`, docs.
+
+**Следующая сессия:** **3.5A.4** — убрать зазор куба у magnet tip (joint anchor / softFixed / Quest).
+
+---
+
+## Сессия 46 — Фаза 3.5A: офлайн, magnet tip, VFX, contact joint ✅
+
+### Сделано
+
+- **Офлайн (3.5A.0):** `vendor/` (A-Frame 1.7.1, PhysX 0.3.0, wasm); ADR-10 → vendor в репо;
+  `hand-controls-local.js` (GLB + жесты без cdn.aframe.io); убран дубль `gltf-model` + CDN.
+- **Руки:** кулак по умолчанию; grip/trigger → `magnetcharge` / `magnetdischarge`.
+- **`hand-magnet-vfx.js`:** cyan-искры + red +3 см по local Z; оси якоря Quest зафиксированы
+  (`X` вбок, `Y` вперёд, `Z` вверх) — `CONFIG.player.hands.*.magnet`.
+- **Magnet tip (3.5A.1–2):** `#leftMagnet` / `#rightMagnet`; collider внутри; offset
+  `(0, -0.08, -0.01)`; radius **0.01** м.
+- **`physx-grab`:** joint якорь в **точке contactbegin** (не origin куба) — иначе зазор ~5–10 см;
+  `contactbegin` на collider; бита — скорость от `#leftMagnet`.
+
+### QA
+
+- **ПК ✅** (пользователь): офлайн, жесты, искры, позиция tip.
+- **Quest:** крепление кубов к magnet — **донастройка** (след. сессия).
+
+**Файлы:** `vendor/*`, `index.html`, `js/config.js`, `js/components/hand-controls-local.js`,
+`hand-magnet-vfx.js`, `physx-grab.js`, `assets/models/*HandLow.glb`, docs.
+
+**Следующая сессия:** **3.5A.4** — настройка крепления кубов/биты к magnet tip (Quest QA).
+
+---
+
 ## Сессия 45 — оптимизация контекста агента ✅
 
 ### Сделано
@@ -750,3 +819,56 @@
 - **Файлы:** `pedestal-builder.js`, `red-ball.js`, `collider-debug-viz.js`, `config.js`,
   `index.html`, `dome-builder.js`.
 - **Следующая сессия (25):** wireframe по типам; парящий стол + купол; комната-купол + skybox.
+
+---
+
+## Сессия 48 — Фаза 3.5A.4: Fixed joint, snap грани к red-tip ⚠️
+
+### Сделано
+
+- **`physx-grab.js`:** `D6 softFixed` → **`Fixed`** joint — жёсткий хват без «резинки» (ПК ✅).
+- **Snap куба:** `_snapCubeToMagnetFace` — фронтальная грань к магниту (`attachAxis` +Z world);
+  якорь joint на **грани** box (не origin); gravity off на захвате.
+- **Единый якорь tip:** world-pos из `magnetVfx.redAbove.offsetZ` (0.03 local `#*Magnet`);
+  `#*HandCollider` на том же tip (`_applyHandColliderAttachOffset`).
+- **`config.js`:** `hands.grab` — только `attachAxis`; убраны `attachLocal`, `faceStandoff`.
+
+### Не сработало / откат
+
+- **`faceStandoff` / `grabLocal`** — сдвиг collider на 0.08 local; пользователь: «спустил вниз»,
+  «ползунки от балды»; **удалено**.
+- **Snap к `handCollider.getWorldPosition()`** при смещённом collider — грань не у искр.
+- **Промежуточные `_closestLocalOnBox` без поворота грани** — липнет с любой стороны.
+
+### Открыто
+
+- **Quest QA 3.5A.4:** грань у red/cyan tip, release, slo-mo; калибровка `attachAxis` / `redAbove.offsetZ`.
+
+**Файлы:** `physx-grab.js`, `config.js`, `CURRENT_TASK.md`.
+
+**Следующая сессия:** Quest QA 3.5A.4 → при OK закрыть фазу 3.5A.
+
+---
+
+## Сессия 49 — Фаза 3.5A закрыта: collider якорь, snap фронтом ✅
+
+### Сделано
+
+- **Единый якорь `#*HandCollider`:** `hands.grab.colliderLocal` — position/rotation;
+  snap + joint target = world-pos collider (`_getGrabAnchorWorld`).
+- **`hand-magnet-vfx.js`:** VFX sync к collider (`_syncVfxToCollider` на `#*Magnet` —
+  `visible=false` на a-sphere скрывает детей object3D); `sparkSeparation: 0.04` (cyan/red ±2 см).
+- **Snap фронтом:** `attachAxis: {0, -1, 0}` — Quest −Y к пальцам (не +Z «снизу»).
+- **Quest QA ✅** (пользователь): захват фронтом, release, slo-mo — OK.
+- Удалены дубликаты `*.new.glb` (остаток скачивания агента с.46, не использовались).
+
+### Открыто (не блокирует 3.5B)
+
+- **GLB руки с магнитом** (`leftHandMagnet.glb`) — в мастер-плане 3.5A; отложено (сейчас HandLow + VFX).
+
+- Snap к `redAbove.offsetZ` — red только visual offset, не grab point.
+- VFX через `setObject3D` на `#*HandCollider` — невидим из-за `visible=false`.
+
+**Файлы:** `physx-grab.js`, `hand-magnet-vfx.js`, `config.js`.
+
+**Следующая сессия:** **3.5B.0** — слоты от центра сферы/колец.

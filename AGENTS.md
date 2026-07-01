@@ -89,7 +89,7 @@ alwaysApply: true
 | Проект | `D:\VIBECODING\Tower` |
 | Сервер | `npx serve` |
 | VR-тест | Quest 3, Quest Link, `http://localhost:<порт>` |
-| CDN | только `cdn.jsdelivr.net`, версии зафиксированы (ADR-10) |
+| CDN | нет runtime; `vendor/` + `assets/models/` (ADR-10) |
 
 ---
 

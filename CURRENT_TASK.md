@@ -1,49 +1,88 @@
 ---
 
+
+
 name: Current Task
+
+
 
 alwaysApply: true
 
+
+
 ---
+
+
 
 # CURRENT_TASK.md — Текущая задача
 
-## Задача: Фаза 3.5A — магнитные руки
 
-**Мастер-план:** `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md` → Фаза 3.5A.
 
-**Цель:** хват «магнитом» на кончиках рук — деталь/бита липнут к tip, не к origin collider.
+## Задача: Фаза 3.5B — сборка и детали
 
-**Критерий завершения:** в Quest захват куба/биты визуально на кончике пальцев/магнита;
-release без регрессий physx-grab; slo-mo без изменений.
+
+
+**Мастер-план:** `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md` → Фаза 3.5B.
+
+
+
+**Цель:** GLB-детали вместо кубов, призраки под форму, слоты от центра сферы/колец; состояния snapped/active/broken.
+
+
+
+**Критерий завершения:** магнитом поднёс → release → snap; призраки читаемы на cyan-кольце; Quest FPS OK.
+
+
 
 ### Микро-шаги
 
-- ⬜ **3.5A.1** — якорь магнита (tip offset на руке, CONFIG).
-- ⬜ **3.5A.2** — joint / grab point на tip (не `#leftHandCollider` origin).
-- ⬜ **3.5A.3** — VFX grip (заряд магнита, опционально).
-- ⬜ **3.5A.4** — Quest QA хват + бита.
-- ⬜ **git commit** (по запросу, один микро-шаг = один коммит).
 
-**Не делаем в 3.5A:** GLB-детали, смена слотов (→ 3.5B).
-**Не трогаем:** `room-floor-fog.js`, `outside-scenery.js`, `assembly-hub` / ядро 2.x.
-**Закрытое (Фаза 3):** см. ARCHIVE с.43–44, `PROJECT_START.md` → ARCHIVE-индекс.
+
+- ⬜ **3.5B.0** — пересчёт `CONFIG.mechanisms.slots` от центра сферы/колец.
+
+- ⬜ **3.5B.1** — `CONFIG.parts[].model` → загрузка GLB вместо куба; PhysX box по bounds.
+
+- ⬜ **3.5B.2** — призраки слотов под форму детали (не один `slotSize`).
+
+- ⬜ **3.5B.3** — визуальные состояния: floating, ghost, snapped, snapped_active, broken.
+
+- ⬜ **git commit** — по запросу.
+
+
+
+**Не делаем в 3.5B:** `location-manager` (Фаза 4), перенос между комнатами.
+
+
+
+**Закрыто (3.5A ✅):** magnet grab — collider якорь, Fixed joint, snap фронтом, VFX, Quest QA (с.49).
+
+
 
 ---
 
+
+
 ## Working Context
 
-### ИЗВЕСТНО
 
-- Joint сейчас на `#leftHandCollider` / `#rightHandCollider` в **origin** entity — визуально не tip.
-- GLB рук: `assets/models/leftHandLow.glb`, `rightHandLow.glb`; kinematic sphere r=0.05.
-- Захват: `physx-grab.js`, D6 softFixed (ADR-03, ADR-14). Бита: dynamic + BAT (ADR-16).
-- Фазы 0–3 ✅. DECISIONS LOCK: не kinematic grab биты, не `_touchEl` (ARCHIVE с.20, с.26).
 
-### НЕИЗВЕСТНО
+### ИЗВЕСТНО (наследие 3.5A)
 
-- Оптимальный offset tip для Quest GLB рук (QA после 3.5A.1).
+
+
+- **Grab якорь:** `#*HandCollider` — `hands.grab.colliderLocal`; snap + joint target = центр сферы.
+
+- **Фронт snap:** `hands.grab.attachAxis` `{0, -1, 0}` (Quest −Y = к пальцам).
+
+- **VFX:** `hand-magnet-vfx` на `#*Magnet`, sync к collider; `sparkSeparation: 0.04`.
+
+- **Кулак:** `#*HandBody` + `bodyCollider.parts` (отдельная калибровка).
+
+
 
 ### Следующее действие
 
-Микро-шаг **3.5A.1** — CONFIG + якорь tip на `#leftHand` / `#rightHand`.
+
+
+**3.5B.0** — слоты от центра сферы/колец (`CONFIG.mechanisms.slots`).
+

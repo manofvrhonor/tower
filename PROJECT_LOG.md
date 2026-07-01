@@ -20,7 +20,7 @@ VR **Tower of Time** для Quest 3 (WebXR). Белая комната 3×3×3 �
 
 | Компонент | Версия / путь |
 |---|---|
-| A-Frame | 1.7.1, jsDelivr |
+| A-Frame | 1.7.1, `vendor/` |
 | PhysX | `@c-frame/physx@v0.3.0`, явный `wasmUrl` |
 | Захват | локальный `js/components/physx-grab.js` (из examples/grab.js) |
 | Руки | `hand-controls` + GLB в `assets/models/`, kinematic sphere r=0.05 |
@@ -184,13 +184,15 @@ static box-плиток (`dome-builder.js`), плотно без щелей.
 
 ---
 
-### ADR-10: CDN — только jsDelivr
+### ADR-10: Зависимости — vendor в репо (офлайн)
 
-**Решение:** все библиотеки через `https://cdn.jsdelivr.net/`, версии зафиксированы.
+**Решение:** A-Frame 1.7.1, PhysX 0.3.0 (+ wasm) — `vendor/`; жесты рук — `hand-controls-local.js` + `assets/models/*.glb`. Пути относительные (`index.html`).
 
-**Причина:** стабильность из РФ без VPN.
+**Причина:** игра без интернета (localhost, GitHub Pages); раньше jsDelivr + cdn.aframe.io (сессия 3 — неполный fix).
 
-**Не делать:** aframe.io, unpkg, cdnjs и др.
+**Не делать:** runtime-загрузка A-Frame/PhysX/рук с CDN; дубль `gltf-model` + `hand-controls` на одной entity.
+
+**Версии:** aframe@1.7.1, @c-frame/physx@v0.3.0 (зафиксированы в `vendor/`).
 
 ---
 
@@ -281,8 +283,12 @@ joint перебарывал контакты — схваченный куб п
 - клэмп скорости gravity-куба в `tick` (`maxLinearSpeed 1.8`, `maxAngularSpeed 8.0`)
   через `get/setLinearVelocity` — гарантированно обрезает выброс.
 
-**Не делать:** жёсткий Fixed joint для захвата; полагаться на дефолтные 4/1 итерации
+**Не делать:** D6 softFixed для magnet-grab куба (с.48 — резинка в VR); полагаться на дефолтные 4/1 итерации
 для стопок; искать `setMaxDepenetrationVelocity` (в этом биндинге отсутствует).
+
+**Сессия 48 (3.5A.4):** для **захвата куба магнитом** вернули **`Fixed`** joint вместо
+`D6 softFixed` — пользователь отверг «резинку» при тряске руки. Риск ADR-14 (продавливание
+стопки) принят; snap грани + gravity off на grab. Бита — отдельный путь в `addJoint`.
 
 ---
 
@@ -323,19 +329,21 @@ joint перебарывал контакты — схваченный куб п
   **не** меняется на `GRABBED_CUBE` → бита в руке **упирается** в пьедestal (WORLD).
   `ball-bat`: `onGrabAcquired` / `attachToHand` (скорость руки для броска), **без**
   `object3D.attach` к руке и **без** state `grabbed` (kinematic-телепорт).
-- **Захват кубов:** без изменений — `grabbed-dynamic` + D6 softFixed + слой
-  `GRABBED_CUBE` (купол игнорирует).
-
-**Устарело (сессия 26):** state `grabbed` + `setKinematicTarget` для биты — прошивала
-пьедestal; откатан.
+- **Захват кубов:** `grabbed-dynamic` + D6 softFixed + слой `GRABBED_CUBE` (купол игнорирует).
+  **Magnet tip (3.5A, с.46–47):** collider-сфера `#*HandCollider` (r=0.01) внутри
+  `#leftMagnet` / `#rightMagnet`; VFX/magnet offset — `CONFIG.player.hands.*.magnet`;
+  **body collider кулака** — отдельно `bodyCollider.parts` + `hand-body-collider.js` (ADR-22).
+  Joint **target** — `#*HandCollider` (physx-body), **не** `#leftMagnet` (с.47 — хват ломается).
+  Якорь на кубе: грань к magnet tip (`_closestLocalOnBox`) + `detail.points` если есть;
+  иначе зазор ~½ ребра (0.05 м) — **открыто 3.5A.4**.
 
 **Не делать:**
 - Kinematic `grabbed` на бите (прошивает static).
 - Возвращать `geometry` на корень биты (сломает коллайдер ручки).
 - Логику «запомни контакт и хватай по grip» (`_touchEl`) в общем пути `physx-grab` —
   ломает захват кубиков (сессия 20).
-- Править захват «вслепую»: offset сферы руки и anchor joint по `contactbegin` без
-  калибровки в VR (сессия 26 — регрессия). Ghost-contact + неверные оси hand-controls.
+- **physx-joint target на `#leftMagnet`** — нет physx-body (с.47).
+- Править захват «вслепую»: только offset сферы HAND **без** точки contact / грани куба (с.26 — регрессия).
 
 **Удар по шару (сессии 21, 28):** `red-ball._deflectOffBat` + `_clampBatDeflect`.
 Slo-mo: только перенаправление (доударная скорость). Realtime: `max(preHit×boost,
@@ -397,6 +405,37 @@ Depth-prepass + discard в шейдере (кубы без налёта). Ани
 
 ---
 
+### ADR-22: Body collider кулака + grab joint (сессия 47, Фаза 3.5A)
+
+**Решение:**
+- **`hand-body-collider.js`** на `#leftHandBody` / `#rightHandBody`: compound kinematic
+  `a-box`; offsets — `CONFIG.player.hands.bodyCollider.parts`.
+- **Rotation в CONFIG** запекается в position/size (`_bakePart`) — `rotation` на
+  дочернем `a-box` PhysX/wireframe не подхватывает; шаг калибровки ±90° по Z
+  (180° = симметрия бокса, визуально без изменений).
+- Невидимые primitive: **`physx-hidden-collision`**; `physx-body` на корне **после**
+  append детей + `object3dset`.
+- **Захват** — только `#*HandCollider` (сфера r=0.01, `emitCollisionEvents`); body
+  collider **не** слушает `contactbegin` для grab.
+- **physx-joint target** — `#*HandCollider` (единственный physx-body у magnet tip).
+  `#leftMagnet` — VFX-якорь (`hand-magnet-vfx`), **без** physx-body.
+- **Magnet offset** — `CONFIG.player.hands.*.magnet` (position `#*Magnet` на кулаке).
+  **Grab якорь** — `#*HandCollider` + `hands.grab.colliderLocal` (с.49).
+- **Snap грани куба** — world-pos collider; фронт — `hands.grab.attachAxis`
+  (Quest: `{0, -1, 0}` = к пальцам, с.49). Fixed joint (с.48).
+- **VFX** — `hand-magnet-vfx` sync к collider; `sparkSeparation` (с.49).
+
+**Quest QA ✅ (с.49):** snap фронтом, release, slo-mo.
+
+**Не делать:**
+- `physx-joint target: #leftMagnet` — хват пропадает (с.47).
+- **`faceStandoff` / сдвиг collider от red-tip** «чтобы не пересекались искры» (с.48 откат).
+- Один offset на body collider вместо magnet для искр и grab-сферы.
+- `data-physx-hidden-collider` вместо `physx-hidden-collision` на fist boxes (PhysX
+  игнорирует invisible mesh).
+
+---
+
 ### ADR-18: Удары кубом/битой в захвате (сессия 28)
 
 **Решение:**
@@ -442,7 +481,7 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 
 ## ДОРОЖНАЯ КАРТА
 
-Этапы **0–8 ✅** (MVP). Стильная игра: Фазы **0–3 ✅**, **3.5A** в работе. Детали — `PROJECT_LOG_ARCHIVE.md`, `PROJECT_START.md`.
+Этапы **0–8 ✅** (MVP). Стильная игра: Фазы **0–3 ✅**, **3.5A ✅**. Детали — `PROJECT_LOG_ARCHIVE.md`, `PROJECT_START.md`.
 
 ---
 
@@ -450,8 +489,8 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 
 - **MVP ✅** (с.29–31): меню, сложность, купол R=2 m, Quest-прогон без блокеров.
 - **Стильная игра:** Фазы 0–3 ✅ (config, snap, cyan-купол, orbit-rings, outside-scenery, floor-fog, HDR).
-- **Сейчас:** **Фаза 3.5A** — магнитные руки (`CURRENT_TASK.md`).
-- **Дальше:** 3.5B → Фаза 4–7. Мастер-план: `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md`
+- **Сейчас:** **Фаза 3.5B** — GLB-детали, слоты, призраки (`CURRENT_TASK.md`).
+- **Дальше:** Фаза 4–7. Мастер-план: `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md`
 - **Не делаем:** VR-виньетка slo-mo. **Пропускаем:** захват «отлёт при тряске» (с.29).
 - **Тест:** Quest Link + localhost.
 
@@ -461,7 +500,6 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 
 ## ИЗВЕСТНЫЕ ПРОБЛЕМЫ (активные)
 
-- **Руки / хват → 3.5A:** joint на origin collider, не tip; GLB в `assets/models/`.
 - **Слоты → 3.5B:** wireframe смещены; детали — кубы-заглушки (`parts.model: null`).
 - **Гонка spawn float** — ADR-11, на геймплей не влияет.
 - **`extensionPageScript.js`** — расширение браузера, игнорировать.

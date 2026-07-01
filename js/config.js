@@ -329,6 +329,55 @@ const CONFIG = {
   player: {
     startPosition: { x: 0, y: 0, z: 1 },  // 1 метр южнее центра
     eyeHeight: 1.6,                        // высота камеры над полом игрока
+    // Якорь магнита на кулаке (local #leftHand / #rightHand). Калибровка — Quest QA.
+    hands: {
+      left: {
+        // Quest #leftHand local: X=вбок, Y=вперёд (−), Z=вверх (+). Калибровка — Quest QA.
+        magnet: { position: { x: 0, y: -0.08, z: -0.01 }, rotation: { x: 0, y: 0, z: 0 } },
+      },
+      right: {
+        magnet: { position: { x: 0, y: -0.08, z: -0.01 }, rotation: { x: 0, y: 0, z: 0 } },
+      },
+      // Якорь grab = #*HandCollider (colliderLocal); snap + VFX на collider. redAbove — только visual offset.
+      grab: {
+        colliderLocal: {
+          position: { x: 0, y: 0, z: 0 },
+          rotation: { x: 0, y: 0, z: 0 },
+        },
+        attachAxis: { x: 0, y: -1, z: 0 },
+      },
+      // Compound collider кулака (hand-body-collider.js). a-box: width=X, height=Y (− вперёд), depth=Z.
+      // Калибровка под GLB — Quest QA + debug.showColliders.
+      // rotation запекается в position/size (hand-body-collider._bakePart). Оси: X=вбок, Y=вперёд (−), Z=вверх.
+      bodyCollider: {
+        parts: [
+          {
+            position: { x: 0, y: -0.02, z: 0 },
+            rotation: { x: 180, y: 90, z: 0 },
+            size: { x: 0.09, y: 0.08, z: 0.06 },
+          },
+          {
+            position: { x: 0, y: -0.07, z: 0.012 },
+            rotation: { x: 180, y: 90, z: 0 },
+            size: { x: 0.08, y: 0.07, z: 0.05 },
+          },
+        ],
+      },
+      magnetVfx: {
+        sparkCount: 5,
+        sparkSeparation: 0.04,
+        color: '#55eeff',
+        coreColor: '#e8ffff',
+        sparkRadius: 0.004,
+        orbitRadius: 0.014,
+        pulseSpeed: 10,
+        redAbove: {
+          offsetZ: 0.03,
+          color: '#ff3333',
+          coreColor: '#ff6644',
+        },
+      },
+    },
   },
 
   // === Замедление времени (SUPERHOT, Этап 4) ===

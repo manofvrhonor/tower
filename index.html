@@ -6,14 +6,15 @@
   <title>Tower — VR Workshop</title>
   <link rel="icon" href="data:,">
 
-  <!-- A-Frame core (1.7.1, требуется для @c-frame/physx) -->
-  <script src="https://cdn.jsdelivr.net/npm/aframe@1.7.1/dist/aframe-master.min.js"></script>
-
-  <!-- PhysX engine (@c-frame/physx v0.3.0) -->
-  <script src="https://cdn.jsdelivr.net/gh/c-frame/physx@v0.3.0/dist/physx.min.js"></script>
+  <!-- A-Frame + PhysX — vendor/ (офлайн, ADR-10) -->
+  <script src="vendor/aframe-1.7.1.min.js"></script>
+  <script src="vendor/physx-0.3.0.min.js"></script>
 
   <!-- Локальный компонент захвата (joint-based, dynamic bodies сохраняются) -->
   <script src="js/components/physx-grab.js"></script>
+  <script src="js/components/hand-controls-local.js"></script>
+  <script src="js/components/hand-magnet-vfx.js"></script>
+  <script src="js/components/hand-body-collider.js"></script>
 
   <!-- Стили -->
   <link rel="stylesheet" href="css/style.css" />
@@ -75,14 +76,8 @@
       delay: 1000;
       useDefaultScene: false;
       gravity: 0 -9.8 0;
-      wasmUrl: https://cdn.jsdelivr.net/gh/c-frame/physx@v0.3.0/wasm/physx.release.wasm
+      wasmUrl: vendor/physx.release.wasm
     ">
-
-    <!-- ====== АССЕТЫ ====== -->
-    <a-assets>
-      <a-asset-item id="leftHandModel" src="assets/models/leftHandLow.glb"></a-asset-item>
-      <a-asset-item id="rightHandModel" src="assets/models/rightHandLow.glb"></a-asset-item>
-    </a-assets>
 
     <!-- Мировое небо: assets/hdri/{id}.* → base.* -->
     <a-entity id="world-sky" world-hdri-sky></a-entity>
@@ -130,32 +125,36 @@
     <a-entity id="player" position="0 0 1">
       <a-camera position="0 1.6 0" look-controls wasd-controls slowmo-vignette-3d></a-camera>
 
-      <!-- Левая рука: hand-controls + physx-grab + дочерний коллайдер -->
+      <!-- Левая рука: hand-controls-local + physx-grab + дочерний коллайдер -->
       <a-entity id="leftHand"
-                hand-controls="hand: left; handModelStyle: lowPoly; color: #ffffff"
-                gltf-model="#leftHandModel"
+                hand-controls-local="hand: left; handModelStyle: lowPoly; color: #ffffff"
                 physx-grab>
-        <a-sphere id="leftHandCollider"
-                  radius="0.05"
-                  visible="false"
-                  data-physx-hidden-collider
-                  physx-body="type: kinematic; emitCollisionEvents: true"
-                  physx-material="collisionLayers: 6; collidesWithLayers: 2, 3, 4, 5, 7">
-        </a-sphere>
+        <a-entity id="leftHandBody" hand-body-collider="hand: left"></a-entity>
+        <a-entity id="leftMagnet" hand-magnet-vfx="hand: left">
+          <a-sphere id="leftHandCollider"
+                    radius="0.01"
+                    visible="false"
+                    data-physx-hidden-collider
+                    physx-body="type: kinematic; emitCollisionEvents: true"
+                    physx-material="collisionLayers: 6; collidesWithLayers: 2, 3, 4, 5, 7">
+          </a-sphere>
+        </a-entity>
       </a-entity>
 
-      <!-- Правая рука: hand-controls + physx-grab + дочерний коллайдер -->
+      <!-- Правая рука: hand-controls-local + physx-grab + дочерний коллайдер -->
       <a-entity id="rightHand"
-                hand-controls="hand: right; handModelStyle: lowPoly; color: #ffffff"
-                gltf-model="#rightHandModel"
+                hand-controls-local="hand: right; handModelStyle: lowPoly; color: #ffffff"
                 physx-grab>
-        <a-sphere id="rightHandCollider"
-                  radius="0.05"
-                  visible="false"
-                  data-physx-hidden-collider
-                  physx-body="type: kinematic; emitCollisionEvents: true"
-                  physx-material="collisionLayers: 6; collidesWithLayers: 2, 3, 4, 5, 7">
-        </a-sphere>
+        <a-entity id="rightHandBody" hand-body-collider="hand: right"></a-entity>
+        <a-entity id="rightMagnet" hand-magnet-vfx="hand: right">
+          <a-sphere id="rightHandCollider"
+                    radius="0.01"
+                    visible="false"
+                    data-physx-hidden-collider
+                    physx-body="type: kinematic; emitCollisionEvents: true"
+                    physx-material="collisionLayers: 6; collidesWithLayers: 2, 3, 4, 5, 7">
+          </a-sphere>
+        </a-entity>
       </a-entity>
     </a-entity>
 

@@ -16,7 +16,7 @@ alwaysApply: true
 ## Цель (кратко)
 
 VR **Tower of Time** для Quest 3 (WebXR). Белая комната, orbit-rings, сборка механизма из деталей.
-SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная игра** — Фазы 0–3 ✅, **Фаза 3.5A** (магнитные руки).
+SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная игра** — Фазы 0–3 ✅, **3.5A ✅**, **Фаза 3.5B** (сборка и детали).
 
 ---
 
@@ -24,10 +24,10 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 
 | Компонент | Версия / путь |
 |---|---|
-| A-Frame | 1.7.1, jsDelivr |
-| PhysX | `@c-frame/physx@v0.3.0`, явный `wasmUrl` |
+| A-Frame | 1.7.1, `vendor/` |
+| PhysX | `@c-frame/physx@v0.3.0`, `vendor/`, wasm локально |
 | Захват | `js/components/physx-grab.js` |
-| Руки | `hand-controls` + GLB, kinematic sphere r=0.05 |
+| Руки | `hand-controls-local.js` + GLB в `assets/models/` |
 | Код | HTML + `<script>`, `js/config.js`, без сборщиков/TS/npm |
 
 **Отменено (не возвращать):** Cannon, super-hands, A-Frame 1.5, другие CDN, авто-деплой Netlify.
@@ -39,8 +39,8 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 ## Где мы
 
 - Этапы 0–8 (MVP) ✅. Стильная игра: Фазы **0–3 ✅** (outside-scenery, floor-fog, HDR sky).
-- **Сейчас:** **Фаза 3.5A** — магнитный хват на tip рук (`CURRENT_TASK.md`).
-- **Дальше:** 3.5B (GLB-детали, слоты) → Фаза 4–7 (локации, опасности, комикс).
+- **Сейчас:** **Фаза 3.5B** — GLB-детали, слоты, призраки (`CURRENT_TASK.md`).
+- **Дальше:** Фаза 4–7 (локации, опасности, комикс).
 - Мастер-план: `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md`
 - **Не делаем:** VR-виньетка slo-mo. **Пропускаем:** захват «отлёт при тряске» (с.29).
 
@@ -57,7 +57,7 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 | 05 | Купол 89 плиток | dome-builder |
 | 06–07 | Collision layers | physx-material, physx-grab, маски |
 | 08–09 | Float/gravity, release, пол | floating-cube, containment |
-| 10 | CDN jsDelivr | index.html, зависимости |
+| 10 | vendor офлайн | vendor/, hand-controls-local |
 | 12 | timeScale, slo-mo VFX | time-scale, trail |
 | 13–14 | Gravity sleep, soft-grab, contact | стопки, physx-grab |
 | 15 | Шары, волны WAVE_BALL | red-ball, ball-wave-manager |
@@ -67,6 +67,7 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 | 19 | Меню, lifecycle, сложность | game-menu, game-lifecycle |
 | 20 | room-fog-dome, hdri, collider | room-dome-collider, world-hdri-sky |
 | 21 | floor-fog depth-prepass | room-floor-fog |
+| 22 | body collider рук, grab joint | hand-body-collider, physx-grab |
 
 ---
 
@@ -87,6 +88,10 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 | 37–41 | cyan-купол, меню, кольца | menu-ui-layout, orbit-ring |
 | 42 | outside-scenery | outside-scenery, floorRadius |
 | 43–44 | floor-fog, HDR manifest | room-floor-fog, depth-prepass, manifest |
+| 46 | 3.5A magnet tip, офлайн vendor | hand-controls-local, hand-magnet-vfx, vendor |
+| 47 | 3.5A body collider, grab anchor | hand-body-collider, physx-grab, bodyCollider |
+| 48 | 3.5A.4 Fixed joint, snap грань red-tip | physx-grab, config; **не** faceStandoff |
+| 49 | 3.5A закрыта: collider якорь, attachAxis −Y, VFX | physx-grab, hand-magnet-vfx, config |
 
 ---
 
@@ -95,16 +100,19 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 Сжатая выжимка. Детали и контекст отката — grep ARCHIVE / ADR.
 
 **Стек и инфра:**
-- ❌ Cannon, super-hands, A-Frame 1.5, CDN кроме jsDelivr, TypeScript, сборщики, npm deps
+- ❌ Cannon, super-hands, A-Frame 1.5, runtime CDN (jsDelivr/aframe.io), TypeScript, сборщики, npm deps
 - ❌ HTML-оверлей меню; autospawn на load; авто-деплой Netlify
 
 **PhysX / захват:**
 - ❌ Угадывать WASM API по C++ доке; числа вместо enum-обёрток; `PxVec3` / `PxTransform`
-- ❌ Жёсткий Fixed joint для захвата (→ D6 softFixed)
+- ❌ D6 softFixed для magnet-grab куба (→ Fixed joint, с.48 — резинка в VR)
 - ❌ Kinematic `grabbed` + `setKinematicTarget` на **бите** (с.26 откат — прошивает пьедestal)
 - ❌ `_touchEl` / early-grab в `physx-grab` (с.20 — ломает захват кубов)
 - ❌ `dynamic→kinematic` без сброса `bodyComp.setKinematic=false` (ADR-02)
 - ❌ Переводить схваченный куб в kinematic без причины
+- ❌ **physx-joint target на `#leftMagnet`** — нет physx-body, хват ломается (с.47)
+- ❌ **`faceStandoff` / сдвиг `#*HandCollider` от red-tip** (с.48 откат)
+- ❌ Rotation fist collider только через `a-box rotation` без `_bakePart` (с.47)
 
 **Коллайдеры / комната:**
 - ❌ `a-plane` + `physx-body` (с.22)
@@ -145,8 +153,8 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 
 ## Активный бэклог
 
-- **3.5A:** tip offset / joint на tip рук (не origin collider) — `physx-grab`, `#leftHand` / `#rightHand`
-- **3.5B:** GLB-детали, позы слотов, призраки
+- **3.5B.0:** слоты от центра сферы/колец
+- **3.5B:** GLB-детали, призраки под форму, состояния snapped/active/broken
 - Слоты wireframe смещены от центра сферы — art-pass в 3.5B
 
 ---
@@ -158,7 +166,9 @@ Tower/
 ├── index.html, js/config.js, js/main.js, js/game-lifecycle.js
 ├── js/components/  physx-grab, floating-cube, ball-bat, assembly-hub, assembly-core,
 │                   room-fog-dome, room-floor-fog, world-hdri-sky, outside-scenery,
-│                   time-scale, game-menu, victory-ui, …
+│                   time-scale, game-menu, victory-ui, hand-controls-local,
+│                   hand-magnet-vfx, hand-body-collider, …
+├── vendor/         aframe-1.7.1.min.js, physx-0.3.0.min.js, physx.release.wasm
 ├── assets/models/  leftHandLow.glb, rightHandLow.glb
 ├── assets/hdri/    base.jpg, manifest.json
 ├── AGENTS.md, PROJECT_START.md, CURRENT_TASK.md
