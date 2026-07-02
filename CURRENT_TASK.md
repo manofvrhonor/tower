@@ -38,9 +38,9 @@ alwaysApply: true
 
 
 
-- ✅ **3.5A.5.0** — `hand-magnet-mesh.js` + `magnet.glb` на `#*Magnet`; scale 0.0075.
+- ⏸ **3.5A.5.0** — `magnet.glb` отключён (только VFX + collider); mesh удалён.
 
-- ⏸ **3.5A.5.1** — калибровка в `config.js` (ручная, пауза): `magnetMesh.position.y: 0.03`, rotation left `z:90` / right `z:270`.
+- ⏸ **3.5A.5.1** — калибровка визуала магнита (отложено).
 
 - ⬜ **3.5B.0** — пересчёт `CONFIG.mechanisms.slots` от центра сферы/колец.
 
@@ -88,5 +88,5 @@ alwaysApply: true
 
 
 
-**Пауза 3.5A.5** — визуал магнита OK на сейчас. Дальше: Quest QA collider/VFX или **3.5B.0**.
+**3.5B.0** — слоты от центра сферы/колец (`CONFIG.mechanisms.slots`).
 

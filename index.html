@@ -14,7 +14,6 @@
   <script src="js/components/physx-grab.js"></script>
   <script src="js/components/hand-controls-local.js"></script>
   <script src="js/components/hand-magnet-vfx.js"></script>
-  <script src="js/components/hand-magnet-mesh.js"></script>
   <script src="js/components/hand-body-collider.js"></script>
 
   <!-- Стили -->
@@ -131,7 +130,7 @@
                 hand-controls-local="hand: left; handModelStyle: lowPoly; color: #ffffff"
                 physx-grab>
         <a-entity id="leftHandBody" hand-body-collider="hand: left"></a-entity>
-        <a-entity id="leftMagnet" hand-magnet-vfx="hand: left" hand-magnet-mesh="hand: left">
+        <a-entity id="leftMagnet" hand-magnet-vfx="hand: left">
           <a-sphere id="leftHandCollider"
                     radius="0.01"
                     visible="false"
@@ -147,7 +146,7 @@
                 hand-controls-local="hand: right; handModelStyle: lowPoly; color: #ffffff"
                 physx-grab>
         <a-entity id="rightHandBody" hand-body-collider="hand: right"></a-entity>
-        <a-entity id="rightMagnet" hand-magnet-vfx="hand: right" hand-magnet-mesh="hand: right">
+        <a-entity id="rightMagnet" hand-magnet-vfx="hand: right">
           <a-sphere id="rightHandCollider"
                     radius="0.01"
                     visible="false"

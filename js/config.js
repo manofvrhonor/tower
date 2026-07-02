@@ -334,22 +334,9 @@ const CONFIG = {
       left: {
         // Quest #leftHand local: X=вбок, Y=вперёд (−), Z=вверх (+). Калибровка — Quest QA.
         magnet: { position: { x: 0, y: -0.08, z: -0.01 }, rotation: { x: 0, y: 0, z: 0 } },
-        // magnet.glb — Sketchfab, ~см; scale 0.01 → метры. Калибровка — Quest QA.
-        magnetMesh: {
-          url: 'assets/models/magnet.glb',
-          scale: 0.0075,
-          position: { x: 0, y: 0.03, z: 0 },
-          rotation: { x: 90, y: 0, z: 90 },
-        },
       },
       right: {
         magnet: { position: { x: 0, y: -0.08, z: -0.01 }, rotation: { x: 0, y: 0, z: 0 } },
-        magnetMesh: {
-          url: 'assets/models/magnet.glb',
-          scale: 0.0075,
-          position: { x: 0, y: 0.03, z: 0 },
-          rotation: { x: 90, y: 0, z: 270 },
-        },
       },
       // Якорь grab = #*HandCollider (colliderLocal); snap + VFX на collider. redAbove — только visual offset.
       grab: {
@@ -379,15 +366,15 @@ const CONFIG = {
       magnetVfx: {
         sparkCount: 5,
         sparkSeparation: 0.04,
-        color: '#55eeff',
-        coreColor: '#e8ffff',
+        color: '#ff3333',
+        coreColor: '#ff6644',
         sparkRadius: 0.004,
         orbitRadius: 0.014,
         pulseSpeed: 10,
         redAbove: {
           offsetZ: 0.03,
-          color: '#ff3333',
-          coreColor: '#ff6644',
+          color: '#55eeff',
+          coreColor: '#e8ffff',
         },
       },
     },
