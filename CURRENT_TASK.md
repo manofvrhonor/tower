@@ -50,7 +50,7 @@ alwaysApply: true
 
 - ⬜ **3.5B.3** — визуальные состояния: floating, ghost, snapped, snapped_active, broken.
 
-- ⬜ **git commit** — по запросу.
+- ⬜ **git commit** — `e1abf20` ✅ push main.
 
 
 
@@ -100,5 +100,7 @@ alwaysApply: true
 
 
 
-**3.5B.3** — визуальные состояния детали: floating, ghost, snapped, snapped_active, broken.
+**3.5B.3** — визуальные состояния детали (следующая сессия).
+
+**Сессия 52 закрыта** — commit `e1abf20`, push main ✅.
 
