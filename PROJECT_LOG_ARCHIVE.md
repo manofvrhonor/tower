@@ -872,3 +872,66 @@
 **Файлы:** `physx-grab.js`, `hand-magnet-vfx.js`, `config.js`.
 
 **Следующая сессия:** **3.5B.0** — слоты от центра сферы/колец.
+
+---
+
+## Сессия 50 — 3.5A.5 руки, magnet off, cartoon купол откат ✅
+
+### Сделано
+
+- **Коммит `b115e2e` + push:** новые `leftHandLow.glb` / `rightHandLow.glb`; удалены
+  `magnet.glb` и `hand-magnet-mesh.js` — магнит только VFX + `#*HandCollider`.
+- **VFX:** swap cyan/red искр в `magnetVfx` (`config.js`).
+- **3.5A.5.0:** пробовали `magnet.glb` + `hand-magnet-mesh` — отключено по решению пользователя.
+- **3.5B.0:** пересчёт слотов от центра сферы — **откат** пользователем (оставлены старые позы).
+- **Cartoon `room-fog-dome`:** эксперимент (cel-cyan, контуры, штриховка) — **полный откат**
+  на energy-шейдер (ленты + fbm).
+
+### Откат / не использовать
+
+- Cartoon `renderStyle` на `#room-fog-dome` — «стена», статичные контуры (с.50).
+- `magnetMesh` / отдельный GLB магнита — отложено; руки с магнитом в меше — в бэклоге 3.5A.5.
+
+**Файлы:** `config.js`, `index.html`, `assets/models/*HandLow.glb`, `room-fog-dome.js` (energy).
+
+**Следующая сессия:** **3.5B.0** — слоты (если снова нужно) или **3.5B.1** GLB-детали.
+
+---
+
+## Сессия 51 — 3.5B.1 vis + _COL, part-entity, Quest QA ✅
+
+### Сделано
+
+- **3.5B.1a–c:** `config.js` — `colliderModel`, `glbPartIds: ['fa_core','fa_coil']`;
+  пути `phase_splitter_trident` / `phase_modulator_ring` + `_COL.glb`.
+- **`part-entity.js`:** vis (дочерний, `physx-no-collision`) + `_COL` (невидим,
+  `physx-hidden-collision`); `physx-body` на корне без geometry; wireframe ON → контур COL.
+- **`spawn-floating-cubes.js`:** GLB-детали на первых позициях, остальное — кубы.
+- **Quest QA ✅** (пользователь): grab → snap, wireframe `_COL`, FPS ok.
+
+### Контракт ассетов
+
+- Пара файлов: `имя.glb` (vis) + `имя_COL.glb` (low-poly convex collider).
+- Pivot vis = pivot COL = точка снепа.
+
+**Файлы:** `config.js`, `part-entity.js`, `spawn-floating-cubes.js`, `index.html`,
+`assets/models/phase_*.{glb,_COL.glb}`.
+
+**Следующая сессия:** **3.5B.2** — призраки слотов под форму детали.
+
+---
+
+## Сессия 52 — 3.5B.2 призраки слотов + fix restart после победы ✅
+
+### Сделано
+
+- **`assembly-core.js`:** призрак слота по `parts[].model` (vis GLB + wireframe/fill);
+  box `slotSize` fallback если model null; GLTF cache.
+- **Fix победы после Restart:** `game-lifecycle.restartGame()` — clear + spawn +
+  `victory-check.reset()`; `victory-ui` «Заново» больше не вызывает `startGame()`
+  (тот выходил при `state===playing`).
+- **Quest QA ✅** (пользователь): призраки ok; restart → повторная победа ok.
+
+**Файлы:** `assembly-core.js`, `game-lifecycle.js`, `victory-ui.js`.
+
+**Следующая сессия:** **3.5B.3** — состояния визуала детали.

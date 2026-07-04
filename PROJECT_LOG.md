@@ -436,6 +436,23 @@ Depth-prepass + discard в шейдере (кубы без налёта). Ани
 
 ---
 
+### ADR-23: GLB-детали vis + _COL (сессия 51, Фаза 3.5B.1)
+
+**Решение:**
+- **vis:** дочерний entity, GLB через `GLTFLoader`, атрибут `physx-no-collision`.
+- **col:** дочерний entity, `_COL.glb`, `visible=false`, `physx-hidden-collision` +
+  `data-physx-hidden-collider` → PhysX convex; **wireframe ON** рисует COL (`collider-debug-viz`).
+- **CONFIG:** `parts[].model` + `parts[].colliderModel`; спавн — `floatingCubes.glbPartIds`.
+- **Именование:** `имя_COL.glb` рядом с vis. Загрузка в `play()` (после attach к сцене).
+
+**Quest QA ✅ (с.51):** grab → snap, wireframe `_COL`, FPS ok.
+
+**Не делать:**
+- High-res GLB mesh как PhysX collider на корне entity.
+- `gltf-model` в `init()` до insert в DOM (GLB не грузится).
+
+---
+
 ### ADR-18: Удары кубом/битой в захвате (сессия 28)
 
 **Решение:**
@@ -500,7 +517,7 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 
 ## ИЗВЕСТНЫЕ ПРОБЛЕМЫ (активные)
 
-- **Слоты → 3.5B:** wireframe смещены; детали — кубы-заглушки (`parts.model: null`).
+- **Слоты → 3.5B.3:** состояния визуала детали (floating/snapped/broken).
 - **Гонка spawn float** — ADR-11, на геймплей не влияет.
 - **`extensionPageScript.js`** — расширение браузера, игнорировать.
 - **Бэклог задачи** — `CURRENT_TASK.md`. Закрытые — ARCHIVE / DECISIONS LOCK в START.

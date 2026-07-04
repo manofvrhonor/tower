@@ -68,6 +68,7 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 | 20 | room-fog-dome, hdri, collider | room-dome-collider, world-hdri-sky |
 | 21 | floor-fog depth-prepass | room-floor-fog |
 | 22 | body collider рук, grab joint | hand-body-collider, physx-grab |
+| 23 | GLB vis + _COL collider | part-entity, parts[].colliderModel |
 
 ---
 
@@ -92,6 +93,9 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 | 47 | 3.5A body collider, grab anchor | hand-body-collider, physx-grab, bodyCollider |
 | 48 | 3.5A.4 Fixed joint, snap грань red-tip | physx-grab, config; **не** faceStandoff |
 | 49 | 3.5A закрыта: collider якорь, attachAxis −Y, VFX | physx-grab, hand-magnet-vfx, config |
+| 50 | 3.5A.5 руки GLB, magnet off; cartoon купол откат | hand GLB, config, room-fog-dome |
+| 51 | 3.5B.1 vis + _COL, part-entity, Quest QA | part-entity, glbPartIds, phase_*.glb |
+| 52 | 3.5B.2 призраки слотов; restartGame fix | assembly-core, game-lifecycle, victory-ui |
 
 ---
 
@@ -125,6 +129,7 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 
 **Визуал / VFX:**
 - ❌ VR-виньетка slo-mo (снято с бэклога, с.29)
+- ❌ **cartoon renderStyle на `room-fog-dome`** — откат с.50 (стена/контуры); energy-шейдер
 - ❌ «Фикс» floor-fog только `depthTest:true` / opacity (с.43–44 → depth-prepass, ADR-21)
 - ❌ Stencil xz-диск для тумана; перебор URL HDR в рантайме (→ manifest)
 - ❌ `if (getScale() < 0.999)` для in-hand ударов (→ `isWorldSlowMo()`, ADR-18)
@@ -169,7 +174,7 @@ Tower/
 │                   time-scale, game-menu, victory-ui, hand-controls-local,
 │                   hand-magnet-vfx, hand-body-collider, …
 ├── vendor/         aframe-1.7.1.min.js, physx-0.3.0.min.js, physx.release.wasm
-├── assets/models/  leftHandLow.glb, rightHandLow.glb
+├── assets/models/  *HandLow.glb, phase_*.glb + *_COL.glb
 ├── assets/hdri/    base.jpg, manifest.json
 ├── AGENTS.md, PROJECT_START.md, CURRENT_TASK.md
 ├── PROJECT_LOG.md (ADR), PROJECT_LOG_ARCHIVE.md (сессии)

@@ -419,7 +419,9 @@ AFRAME.registerComponent('victory-ui', {
     console.log('[victory-ui] заново — новая игра');
     this._releaseAllGrabs();
     this._hidePanel();
-    if (typeof window.startGame === 'function') {
+    if (typeof window.restartGame === 'function') {
+      window.restartGame();
+    } else if (typeof window.startGame === 'function') {
       window.startGame();
     }
     this._busy = false;

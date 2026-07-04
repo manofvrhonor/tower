@@ -3,7 +3,8 @@
 /**
  * game-lifecycle.js — меню ↔ игра (сессия 29).
  *
- * startGame(): shuffle + спавн кубов/шаров/биты, показ ghost.
+ * startGame(): первый старт из меню.
+ * restartGame(): «Заново» после победы (state уже playing).
  * returnToMenu(): очистка мира, сброс victory-check, показ меню.
  */
 (function () {
@@ -59,9 +60,14 @@
     }
   }
 
-  function startGame() {
-    if (state === 'playing') return;
+  function resetVictoryCheck() {
+    var scene = document.querySelector('a-scene');
+    var vc = scene && scene.components['victory-check'];
+    if (vc && typeof vc.reset === 'function') vc.reset();
+  }
 
+  /** Спавн мира + сброс слотов/victory-check (общий для start и restart). */
+  function spawnWorld() {
     applyDifficulty(currentDifficulty);
 
     if (typeof window.shuffleVictoryScheme === 'function') {
@@ -71,7 +77,6 @@
     if (typeof window.respawnFloatingCubes === 'function') {
       window.respawnFloatingCubes();
     }
-    // Шары: волны «атомы времени» (если включены) или старый фиксированный спавн.
     var wavesOn = CONFIG.balls && CONFIG.balls.waves && CONFIG.balls.waves.enabled;
     if (wavesOn && window.ballWaveManager &&
         typeof window.ballWaveManager.startWaves === 'function') {
@@ -83,32 +88,48 @@
       window.respawnBallBat();
     }
 
-    // Подсказка победы — призраки слотов на #assembly-core (Фаза 1.5).
-    // Старая ghost-tower-hint (башня кубов) больше не показывается.
     var core = document.getElementById('assembly-core');
     var coreComp = core && core.components['assembly-core'];
     if (coreComp && typeof coreComp.resetOccupancy === 'function') {
       coreComp.resetOccupancy();
     }
 
-    var scene = document.querySelector('a-scene');
-    var vc = scene && scene.components['victory-check'];
-    if (vc && typeof vc.reset === 'function') vc.reset();
+    resetVictoryCheck();
+  }
 
+  function emitGameStarted() {
+    var scene = document.querySelector('a-scene');
+    if (scene) {
+      scene.emit('game-started', { difficulty: currentDifficulty }, false);
+    }
+  }
+
+  function startGame() {
+    if (state === 'playing') return;
+
+    spawnWorld();
     state = 'playing';
-    scene.emit('game-started', { difficulty: currentDifficulty }, false);
+    emitGameStarted();
     console.log('[game-lifecycle] game started');
+  }
+
+  /** «Заново» на плашке победы — state уже playing, нужен полный респawn. */
+  function restartGame() {
+    releaseAllGrabs();
+    clearWorld();
+    spawnWorld();
+    state = 'playing';
+    emitGameStarted();
+    console.log('[game-lifecycle] game restarted');
   }
 
   function returnToMenu() {
     releaseAllGrabs();
     clearWorld();
-
-    var scene = document.querySelector('a-scene');
-    var vc = scene && scene.components['victory-check'];
-    if (vc && typeof vc.reset === 'function') vc.reset();
+    resetVictoryCheck();
 
     state = 'menu';
+    var scene = document.querySelector('a-scene');
     if (scene) scene.emit('return-to-menu', null, false);
     console.log('[game-lifecycle] returned to menu');
   }
@@ -127,6 +148,7 @@
 
   window.applyDifficulty = applyDifficulty;
   window.startGame = startGame;
+  window.restartGame = restartGame;
   window.returnToMenu = returnToMenu;
   window.getGameState = getState;
   window.getGameDifficulty = getDifficulty;

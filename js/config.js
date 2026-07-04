@@ -511,6 +511,9 @@ const CONFIG = {
     // Палитра цветных (6 шт — для башни 5 + 1 excluded при shuffle).
     // В мире спавнятся только coloredCubeCount штук. Красный исключён.
     coloredCubeCount: 5,
+
+    // GLB-детали (3.5B.1): part.id → part-entity на первых позициях spawnPositions.
+    glbPartIds: ['fa_core', 'fa_coil'],
     targetColors: [
       '#4A90E2',  // синий
       '#E28A4A',  // оранжевый
@@ -817,8 +820,8 @@ const CONFIG = {
   //   part.homeLocation ←→ locations[].id                        (где деталь спавнится)
   //   progression.edges[].requiresMechanism / unlocksLocation    (граф маршрутов)
   //
-  // model: null → примитив-заглушка (бокс/цилиндр с cyan-материалом);
-  //        строка → путь к GLB в assets/models/ (подставим, когда будет арт).
+  // model: null → куб-заглушка; строка → vis GLB в assets/models/.
+  // colliderModel: null → нет; строка → low-poly _COL.glb (PhysX convex, wireframe ON).
 
   // Допуски снепа детали в слот и сила «слома» сборки при попадании опасного объекта.
   assembly: {
@@ -853,8 +856,8 @@ const CONFIG = {
   // Деталь можно унести в другую локацию (механика переноса — Фаза 4).
   parts: [
     // — будущее —
-    { id: 'fa_core',        kind: 'mechanism', model: null, homeLocation: 'future',  mechanism: 'pastActivation',    slot: 'pa_s1' },
-    { id: 'fa_coil',        kind: 'mechanism', model: null, homeLocation: 'future',  mechanism: 'pastActivation',    slot: 'pa_s2' },
+    { id: 'fa_core',        kind: 'mechanism', model: 'assets/models/phase_splitter_trident.glb',      colliderModel: 'assets/models/phase_splitter_trident_COL.glb',      homeLocation: 'future',  mechanism: 'pastActivation',    slot: 'pa_s1' },
+    { id: 'fa_coil',        kind: 'mechanism', model: 'assets/models/phase_modulator_ring.glb',      colliderModel: 'assets/models/phase_modulator_ring_COL.glb',      homeLocation: 'future',  mechanism: 'pastActivation',    slot: 'pa_s2' },
     { id: 'pa_future_gear', kind: 'mechanism', model: null, homeLocation: 'future',  mechanism: 'presentActivation', slot: 'pr_s1' },
     { id: 'junk_f1',        kind: 'junk',      model: null, homeLocation: 'future',  mechanism: null,                slot: null  },
     { id: 'junk_f2',        kind: 'junk',      model: null, homeLocation: 'future',  mechanism: null,                slot: null  },
