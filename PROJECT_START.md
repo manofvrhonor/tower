@@ -39,7 +39,7 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 ## Где мы
 
 - Этапы 0–8 (MVP) ✅. Стильная игра: Фазы **0–3 ✅** (outside-scenery, floor-fog, HDR sky).
-- **Сейчас:** **Фаза 3.5B ✅** (кроме опц. 3.5B.0) — commit не запушен.
+- **Сейчас:** **Фаза 3.5B ✅** — commit `ba9ecdd`, push main.
 - **Дальше:** git commit 3.5B → **Фаза 4** (локации).
 - Мастер-план: `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md`
 - **Не делаем:** VR-виньетка slo-mo. **Пропускаем:** захват «отлёт при тряске» (с.29).

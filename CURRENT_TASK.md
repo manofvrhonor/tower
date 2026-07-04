@@ -52,7 +52,7 @@ alwaysApply: true
 
 - ✅ **3.5B.3 QA** ✅ — снеп, разряды по mesh, победа, broken (с.53).
 
-- ⬜ **git commit** — пол + 3.5B.3 (не запушено).
+- ✅ **git commit** — `ba9ecdd` ✅ push main.
 
 
 
@@ -108,8 +108,6 @@ alwaysApply: true
 
 
 
-**git commit** — `feat: 3.5B.3 разряды + пол asphalt` (по запросу).
+**Фаза 4** — `location-manager` (обновить `CURRENT_TASK.md` при старте).
 
-**Дальше:** **Фаза 4** — `location-manager` (`CURRENT_TASK` обновить при старте 4).
-
-**Сессия 53 закрыта** — QA ✅.
+**Сессия 53 закрыта** — commit `ba9ecdd`, push main ✅.

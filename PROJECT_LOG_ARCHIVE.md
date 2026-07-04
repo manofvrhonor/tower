@@ -952,4 +952,6 @@
 **Файлы:** `config.js`, `room-fog-dome.js`, `part-entity.js`, `part-snap-energy.js`,
 `floating-cube.js`, `index.html`, `assets/textures/floor/asphalt.jpg`.
 
-**Следующая сессия:** **git commit** 3.5B (пол + визуал) или **Фаза 4**.
+**Следующая сессия:** **Фаза 4** — `location-manager`.
+
+**Commit:** `ba9ecdd` — push main ✅.
