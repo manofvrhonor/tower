@@ -143,7 +143,16 @@ AFRAME.registerComponent('floating-cube', {
     this._lastAppliedTimeScale = 1.0;
     this.el.setAttribute('physx-body', 'type: dynamic');
     this._resetKinematicLatch();
+    this._setPartVisual('floating');
     console.log('[floating-cube] un-snapped by hand', this.el.id || '(no id)');
+  },
+
+  /** Визуальное состояние GLB-детали (3.5B.3, part-entity). */
+  _setPartVisual: function (state) {
+    var pe = this.el.components['part-entity'];
+    if (pe && typeof pe.setVisualState === 'function') {
+      pe.setVisualState(state);
+    }
   },
 
   /** red-ball (обычный или волна WAVE_BALL) — опасный объект для слома снепа. */
@@ -216,6 +225,8 @@ AFRAME.registerComponent('floating-cube', {
    */
   _breakSnapFromHit: function (otherEl) {
     if (this.state !== 'snapped') return;
+
+    this._setPartVisual('broken');
 
     var core = this._getAssemblyCore();
     if (core && this._snappedSlotId && typeof core.releaseSlot === 'function') {
@@ -386,6 +397,7 @@ AFRAME.registerComponent('floating-cube', {
     this._snappedSlotId = slot.slotId;
     this.el.setAttribute('physx-body', 'type: kinematic');
     core.occupySlot(slot.slotId, this.el);
+    this._setPartVisual('snapped');
 
     console.log('[floating-cube] snapped', this.el.id || '(no id)', '→ slot', slot.slotId);
   },

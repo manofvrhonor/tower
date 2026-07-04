@@ -935,3 +935,21 @@
 **Файлы:** `assembly-core.js`, `game-lifecycle.js`, `victory-ui.js`.
 
 **Следующая сессия:** **3.5B.3** — состояния визуала детали.
+
+---
+
+## Сессия 53 — 3.5B.3 разряды + пол asphalt, QA ✅
+
+### Сделано
+
+- **Пол:** `assets/textures/floor/asphalt.jpg` → `room-fog-dome.js` (тайл 2 m).
+- **3.5B.3:** `part-entity.setVisualState`; хуки в `floating-cube.js`.
+- **`part-snap-energy.js`:** cyan разряды — ridged-noise шейдер по mesh + jagged LineSegments
+  по поверхности (случайный spawn/glow); не bbox-палки, не жёлтый emissive.
+- Итерации: контраст/яркость шейера; живые bolt-пути по triangle-samples mesh.
+- **QA ✅** (пользователь): снеп, разряды, победа, ПК ok.
+
+**Файлы:** `config.js`, `room-fog-dome.js`, `part-entity.js`, `part-snap-energy.js`,
+`floating-cube.js`, `index.html`, `assets/textures/floor/asphalt.jpg`.
+
+**Следующая сессия:** **git commit** 3.5B (пол + визуал) или **Фаза 4**.

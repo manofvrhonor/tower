@@ -15,7 +15,7 @@ AFRAME.registerComponent('room-fog-dome', {
     this._uniforms = null;
     this._cfg = this._readCfg();
     this._buildDome();
-    this._buildFloor();
+    this._initFloor();
   },
 
   remove: function () {
@@ -29,7 +29,10 @@ AFRAME.registerComponent('room-fog-dome', {
     if (!mesh) return;
     this.el.object3D.remove(mesh);
     if (mesh.geometry) mesh.geometry.dispose();
-    if (mesh.material) mesh.material.dispose();
+    if (mesh.material) {
+      if (mesh.material.map) mesh.material.map.dispose();
+      mesh.material.dispose();
+    }
   },
 
   tick: function (time) {
@@ -87,7 +90,48 @@ AFRAME.registerComponent('room-fog-dome', {
       renderOrder: fd.renderOrder !== undefined ? fd.renderOrder : 5,
       floorRadius: fd.floorRadius !== undefined ? fd.floorRadius : null,
       floorRenderOrder: fd.floorRenderOrder !== undefined ? fd.floorRenderOrder : -2,
+      floorTexture: fd.floorTexture || null,
+      floorMetersPerRepeat: fd.floorMetersPerRepeat !== undefined
+        ? fd.floorMetersPerRepeat : 2.0,
     };
+  },
+
+  _initFloor: function () {
+    var self = this;
+    var path = this._cfg.floorTexture;
+    if (!path) {
+      this._buildFloor(null);
+      return;
+    }
+    if (!this._texLoader) this._texLoader = new THREE.TextureLoader();
+    this._texLoader.load(
+      path,
+      function (texture) {
+        if (!self.el.parentNode) {
+          texture.dispose();
+          return;
+        }
+        texture.colorSpace = THREE.SRGBColorSpace;
+        self._buildFloor(texture);
+      },
+      undefined,
+      function () {
+        console.warn('[room-fog-dome] floor texture not loaded:', path);
+        self._buildFloor(null);
+      }
+    );
+  },
+
+  _applyFloorTexture: function (mat, source, floorR, metersPerRepeat) {
+    if (!source) return;
+    var tex = source.clone();
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    var repeat = (2 * floorR) / Math.max(metersPerRepeat, 0.001);
+    tex.repeat.set(repeat, repeat);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.needsUpdate = true;
+    mat.map = tex;
   },
 
   _buildDome: function () {
@@ -299,7 +343,11 @@ AFRAME.registerComponent('room-fog-dome', {
   },
 
   /** Круглый пол на y=0; floorRadius >> radius купола — площадка под домами снаружи. */
-  _buildFloor: function () {
+  _buildFloor: function (sourceTexture) {
+    if (this._floorMesh) {
+      this._disposeMesh(this._floorMesh);
+      this._floorMesh = null;
+    }
     var c = this._cfg;
     var floorR = c.floorRadius !== null && c.floorRadius !== undefined
       ? c.floorRadius
@@ -315,6 +363,7 @@ AFRAME.registerComponent('room-fog-dome', {
       // Не пишем depth — иначе floor-fog с depthTest:true схлопывается в плоский слой на полу.
       depthWrite: false,
     });
+    this._applyFloorTexture(mat, sourceTexture, floorR, c.floorMetersPerRepeat);
 
     this._floorMesh = new THREE.Mesh(geo, mat);
     this._floorMesh.name = 'room-fog-dome-floor';

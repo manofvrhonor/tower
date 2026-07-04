@@ -18,7 +18,7 @@ alwaysApply: true
 
 
 
-## Задача: 3.5B — GLB детали vis + _COL, сборка
+## Задача: 3.5B — GLB детали vis + _COL, сборка ✅
 
 
 
@@ -26,7 +26,7 @@ alwaysApply: true
 
 
 
-**Цель 3.5B:** GLB vis + `_COL` collider, призраки под форму, слоты; состояния snapped/active/broken.
+**Цель 3.5B:** GLB vis + `_COL` collider, призраки под форму, слоты; состояния snapped/active/broken. **QA ✅ с.53**
 
 
 
@@ -48,15 +48,19 @@ alwaysApply: true
 
 - ✅ **3.5B.2 QA** ✅ — призраки trident/ring; restart после победы ok.
 
-- ⬜ **3.5B.3** — визуальные состояния: floating, ghost, snapped, snapped_active, broken.
+- ✅ **3.5B.3** — визуальные состояния + cyan разряды (`part-snap-energy.js`).
 
-- ⬜ **git commit** — `e1abf20` ✅ push main.
+- ✅ **3.5B.3 QA** ✅ — снеп, разряды по mesh, победа, broken (с.53).
+
+- ⬜ **git commit** — пол + 3.5B.3 (не запушено).
 
 
 
 **Не делаем в 3.5B:** `location-manager` (Фаза 4), перенос между комнатами.
 
 
+
+**Закрыто (3.5B.3 ✅):** `setVisualState`; ridged шейдер + bolt-линии по поверхности mesh.
 
 **Закрыто (3.5B.2 ✅):** призраки слотов по vis-GLB; fix `restartGame()` после победы.
 
@@ -90,9 +94,13 @@ alwaysApply: true
 
 - **GLB детали (3.5B.1):** `part-entity.js` — vis + `_COL`; `glbPartIds: ['fa_core','fa_coil']`.
 
+- **Визуал детали (3.5B.3):** снеп → cyan разряды (`part-snap-energy.js`), не emissive.
+
 - **Файлы:** `phase_splitter_trident.glb` + `_COL`, `phase_modulator_ring.glb` + `_COL`.
 
 - **Купол:** energy-шейдер `room-fog-dome` (cartoon с.50 — откат).
+
+- **Пол:** текстура `assets/textures/floor/asphalt.jpg` (`room.fogDome.floorTexture`, repeat 2 m).
 
 
 
@@ -100,7 +108,8 @@ alwaysApply: true
 
 
 
-**3.5B.3** — визуальные состояния детали (следующая сессия).
+**git commit** — `feat: 3.5B.3 разряды + пол asphalt` (по запросу).
 
-**Сессия 52 закрыта** — commit `e1abf20`, push main ✅.
+**Дальше:** **Фаза 4** — `location-manager` (`CURRENT_TASK` обновить при старте 4).
 
+**Сессия 53 закрыта** — QA ✅.

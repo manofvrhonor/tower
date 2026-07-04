@@ -506,7 +506,7 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 
 - **MVP ✅** (с.29–31): меню, сложность, купол R=2 m, Quest-прогон без блокеров.
 - **Стильная игра:** Фазы 0–3 ✅ (config, snap, cyan-купол, orbit-rings, outside-scenery, floor-fog, HDR).
-- **Сейчас:** **Фаза 3.5B** — GLB-детали, слоты, призраки (`CURRENT_TASK.md`).
+- **Сейчас:** **Фаза 3.5B ✅** (опц. 3.5B.0 слоты) — ждёт git commit.
 - **Дальше:** Фаза 4–7. Мастер-план: `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md`
 - **Не делаем:** VR-виньетка slo-mo. **Пропускаем:** захват «отлёт при тряске» (с.29).
 - **Тест:** Quest Link + localhost.
@@ -517,7 +517,6 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 
 ## ИЗВЕСТНЫЕ ПРОБЛЕМЫ (активные)
 
-- **Слоты → 3.5B.3:** состояния визуала детали (floating/snapped/broken).
 - **Гонка spawn float** — ADR-11, на геймплей не влияет.
 - **`extensionPageScript.js`** — расширение браузера, игнорировать.
 - **Бэклог задачи** — `CURRENT_TASK.md`. Закрытые — ARCHIVE / DECISIONS LOCK в START.

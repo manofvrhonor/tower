@@ -100,6 +100,8 @@ const CONFIG = {
       heightSegments: 32,
       renderOrder: 5,
       floorRadius: 50,
+      floorTexture: 'assets/textures/floor/asphalt.jpg',
+      floorMetersPerRepeat: 2.0,
       spawnMargin: 0.12,
       collider: {
         latitudeRings: 10,
@@ -257,6 +259,50 @@ const CONFIG = {
       opacity: 1.0,
       fillOpacity: 0.22,
       renderOrder: 1100,
+    },
+    // Визуальные состояния GLB-детали (3.5B.3, part-entity + part-snap-energy).
+    partVisual: {
+      energy: {
+        color: '#18b8d8',
+        glowColor: '#66f5ff',
+        coreColor: '#e8ffff',
+        noiseScale: 9.0,
+        scrollSpeed: 3.2,
+        streakSharpness: 4.8,
+        flowWarp: 0.5,
+        intensity: 1.15,
+        surfaceContrast: 2.6,
+        windowStrength: 0.4,
+        windowSpeed: 2.4,
+        energyTint: 0.82,
+        fresnelStrength: 0.55,
+        boltCount: 6,
+        boltStepsMin: 5,
+        boltStepsMax: 12,
+        boltLifeMin: 0.07,
+        boltLifeMax: 0.26,
+      },
+      floating: {
+        opacity: 1.0,
+      },
+      snapped: {
+        opacity: 1.0,
+        energyIntensity: 0.95,
+      },
+      snapped_active: {
+        opacity: 1.0,
+        energyIntensity: 1.25,
+        pulseSpeed: 3.0,
+        pulseAmp: 0.42,
+      },
+      broken: {
+        opacity: 0.92,
+        energyColor: '#ff3355',
+        energyGlow: '#ff6644',
+        energyCore: '#ffaa88',
+        energyIntensity: 1.0,
+        durationMs: 450,
+      },
     },
 
     collider: {

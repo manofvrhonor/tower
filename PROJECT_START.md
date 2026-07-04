@@ -39,8 +39,8 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 ## Где мы
 
 - Этапы 0–8 (MVP) ✅. Стильная игра: Фазы **0–3 ✅** (outside-scenery, floor-fog, HDR sky).
-- **Сейчас:** **Фаза 3.5B** — GLB-детали, слоты, призраки (`CURRENT_TASK.md`).
-- **Дальше:** Фаза 4–7 (локации, опасности, комикс).
+- **Сейчас:** **Фаза 3.5B ✅** (кроме опц. 3.5B.0) — commit не запушен.
+- **Дальше:** git commit 3.5B → **Фаза 4** (локации).
 - Мастер-план: `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md`
 - **Не делаем:** VR-виньетка slo-mo. **Пропускаем:** захват «отлёт при тряске» (с.29).
 
@@ -96,6 +96,7 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 | 50 | 3.5A.5 руки GLB, magnet off; cartoon купол откат | hand GLB, config, room-fog-dome |
 | 51 | 3.5B.1 vis + _COL, part-entity, Quest QA | part-entity, glbPartIds, phase_*.glb |
 | 52 | 3.5B.2 призраки слотов; restartGame fix | assembly-core, game-lifecycle, victory-ui |
+| 53 | 3.5B.3 разряды, пол asphalt, QA ✅ | part-snap-energy, room-fog-dome, part-entity |
 
 ---
 
