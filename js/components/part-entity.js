@@ -594,6 +594,8 @@ AFRAME.registerComponent('part-entity', {
 
   tick: function (time, timeDelta) {
 
+    if (typeof window.isVictoryFrozen === 'function' && window.isVictoryFrozen()) return;
+
     if (!this._spinGroup || !this._spinAxisReady) return;
 
     if (this._visualState !== 'snapped' && this._visualState !== 'snapped_active') return;

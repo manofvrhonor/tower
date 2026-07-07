@@ -102,7 +102,10 @@ const CONFIG = {
       floorRadius: 50,
       floorTexture: 'assets/textures/floor/asphalt.jpg',
       floorMetersPerRepeat: 2.0,
+      // spawnMargin — только спавн/clamp (дальше от стенки, меньше взрывов).
+      // containmentMargin — tick-отскок room-containment (близко к PhysX-плиткам).
       spawnMargin: 0.12,
+      containmentMargin: 0.01,
       collider: {
         latitudeRings: 10,
         longitudeSegments: 28,
@@ -217,7 +220,7 @@ const CONFIG = {
     // Отскок от room-dome-collider: отражение v' = v − (1+e)(v·n)n (все float-тела).
     wallBounce: {
       restitution:        0.95,
-      nearWallRatio:      0.87,
+      nearWallRatio:      0.98,   // tick-отскок близко к maxR (было 0.87 — рано)
       minApproachRatio:   0.04,   // v·n / |v| — порог «летит в стенку» для tick
       inwardSkipRatio:    0.82,   // уже отлетает от стены — tick не трогает
       minBounceSpeed:     0.20,
@@ -488,6 +491,18 @@ const CONFIG = {
     },
   },
 
+  // Спавн: clamp по радиусу GLB *_COL (collider-bounds-cache.js).
+  spawn: {
+    colliderRadiusPad: 0.02,
+    fallbackRadius: 0.05,
+    // Задержка стартового импульса — PhysX успевает развести пересечения COL.
+    impulseDelayMs: 200,
+    // Мин. зазор между центрами при спавне (м).
+    separationGap: 0.06,
+    // Запас к радиусу _COL для clamp/разведения (convex ≥ bbox).
+    radiusSafetyMult: 1.1,
+  },
+
   // Плавающие кубики (свойство float — невесомость + инерция).
   // Используются компонентом floating-cube. См. CURRENT_TASK.md, задача 2.
   floatingCubes: {
@@ -562,7 +577,7 @@ const CONFIG = {
       '#5c5c5c', '#707070',
     ],
 
-  // 11 позиций внутри room.fogDome (R=2.0, margin 0.12 + half куба 0.05; clamp при спавне).
+  // 11 позиций внутри room.fogDome (R=2.0, spawnMargin 0.12 + half; clamp при спавне).
     spawnPositions: [
       { x: -0.83, y: 2.00, z:  0.42 },
       { x:  0.71, y: 1.62, z: -0.95 },
@@ -916,9 +931,22 @@ const CONFIG = {
       machineModel:      'assets/models/machine/machine.glb',
       machineCollider:   'assets/models/machine/machine_COL.glb',
       ringModel:         'assets/models/machine/ring.glb',
-      ringCollider:      'assets/models/machine/ring_COL.glb',
       ringInnerModel:    'assets/models/machine/ring_inner.glb',
-      ringInnerCollider: 'assets/models/machine/ring_inner_COL.glb',
+      // Сегмент-коллайдеры (machine-ring-collider.js). Подогнать radius под GLB + showColliders.
+      ringSegments: {
+        radius: 0.34,
+        thickness: 0.025,
+        bandWidth: 0.04,
+        segments: 72,
+        overlap: 1.08,
+      },
+      ringInnerSegments: {
+        radius: 0.30,
+        thickness: 0.02,
+        bandWidth: 0.035,
+        segments: 64,
+        overlap: 1.08,
+      },
       // ring крутится вокруг своей центральной оси.
       ringSpinAxis:     'x',
       ringSpinDeg:      -18,
@@ -932,7 +960,7 @@ const CONFIG = {
     coreSpinSpeedDeg: 96,
     // Ось вращения core (стадия C): 'x','y','z' — локальная ось детали.
     // GLB-поворот запекается при загрузке (_bakeRootTransform).
-    coreSpinAxis: 'x',
+    coreSpinAxis: 'z',
     coreSpinByFile: {},
   },
 
@@ -1218,6 +1246,7 @@ const CONFIG = {
 
   // === Победа — все слоты assembly-core заняты (victory-check.js) ===
   victory: {
+    freezeWorldOnVictory: true,
     stableDurationMs: 1000,
     checkIntervalMs:  200,
 

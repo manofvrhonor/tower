@@ -614,6 +614,8 @@ AFRAME.registerComponent('ball-bat', {
   tick: function (time, timeDelta) {
     this._tickDeltaSec = Math.min((timeDelta || 16) / 1000, 0.1);
 
+    if (typeof window.isVictoryFrozen === 'function' && window.isVictoryFrozen()) return;
+
     if (this._grabbed && this._handEl) {
       var now = performance.now();
       var handPos = new THREE.Vector3();

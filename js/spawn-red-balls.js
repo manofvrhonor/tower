@@ -31,6 +31,7 @@
       layers.GRAVITY_CUBE,
       layers.GRABBED_CUBE,
       layers.BALL,
+      layers.HAND,
       layers.BAT,
     ].join(', ');
 

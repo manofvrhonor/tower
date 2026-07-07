@@ -13,7 +13,88 @@
       'collidesWithLayers: ' + collidesWithList;
   }
 
-  function spawnStagePart(stage, position, mass, matStr, root) {
+  function defaultBodyRadius(size) {
+    var spawn = (typeof CONFIG !== 'undefined' && CONFIG.spawn) || {};
+    if (spawn.fallbackRadius !== undefined) return spawn.fallbackRadius;
+    return size / 2;
+  }
+
+  /** Радиус clamp: spawnRadius из сессии → кэш _COL → fallback. */
+  function bodyRadiusForStage(stage, size) {
+    if (stage.spawnRadius !== undefined) return stage.spawnRadius;
+    if (stage.colliderModel && typeof getCachedColliderRadius === 'function') {
+      var cached = getCachedColliderRadius(stage.colliderModel);
+      if (cached !== null) return cached;
+    }
+    return defaultBodyRadius(size);
+  }
+
+  function bodyRadiusForJunk(item, size) {
+    if (item.type === 'cube') return size / 2;
+    if (item.spawnRadius !== undefined) return item.spawnRadius;
+    if (item.colliderModel && typeof getCachedColliderRadius === 'function') {
+      var cached = getCachedColliderRadius(item.colliderModel);
+      if (cached !== null) return cached;
+    }
+    return defaultBodyRadius(size);
+  }
+
+  function effectiveSpawnRadius(r) {
+    var spawn = (typeof CONFIG !== 'undefined' && CONFIG.spawn) || {};
+    var mult = spawn.radiusSafetyMult !== undefined ? spawn.radiusSafetyMult : 1.1;
+    return r * mult;
+  }
+
+  function separationGap() {
+    var spawn = (typeof CONFIG !== 'undefined' && CONFIG.spawn) || {};
+    return spawn.separationGap !== undefined ? spawn.separationGap : 0.06;
+  }
+
+  /** Развести pos от уже поставленных (центры ближе sum(r)+gap → сдвиг). */
+  function separateFromPlaced(pos, radius, placed) {
+    var out = { x: pos.x, y: pos.y, z: pos.z };
+    var gap = separationGap();
+    var i;
+    for (i = 0; i < placed.length; i++) {
+      var p = placed[i];
+      var dx = out.x - p.x;
+      var dy = out.y - p.y;
+      var dz = out.z - p.z;
+      var dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      var need = radius + p.r + gap;
+      if (dist >= need) continue;
+      if (dist > 1e-6) {
+        var s = need / dist;
+        out.x = p.x + dx * s;
+        out.y = p.y + dy * s;
+        out.z = p.z + dz * s;
+      } else {
+        out.x += need;
+      }
+      if (typeof clampPositionToRoomDome === 'function') {
+        out = clampPositionToRoomDome(out, radius);
+      }
+    }
+    placed.push({ x: out.x, y: out.y, z: out.z, r: radius });
+    return out;
+  }
+
+  function prepareSpawnPosition(rawPos, bodyRadius, placed) {
+    var r = effectiveSpawnRadius(bodyRadius);
+    var p = rawPos;
+    if (typeof clampPositionToRoomDome === 'function') {
+      p = clampPositionToRoomDome(p, r);
+    }
+    return separateFromPlaced(p, r, placed);
+  }
+
+  function tagSpawnRadius(el, radius) {
+    if (el && el.dataset && radius !== undefined) {
+      el.dataset.spawnRadius = String(radius);
+    }
+  }
+
+  function spawnStagePart(stage, position, mass, matStr, root, bodyRadius) {
     var el = document.createElement('a-entity');
     el.setAttribute('id', 'part-' + stage.partId);
     el.setAttribute('position', position.x + ' ' + position.y + ' ' + position.z);
@@ -36,10 +117,11 @@
       el.dataset.fixed = 'true';
     }
     root.appendChild(el);
+    tagSpawnRadius(el, bodyRadius);
     return el;
   }
 
-  function spawnJunkGlb(item, position, mass, matStr, root) {
+  function spawnJunkGlb(item, position, mass, matStr, root, bodyRadius) {
     var el = document.createElement('a-entity');
     el.setAttribute('id', item.id);
     el.setAttribute('position', position.x + ' ' + position.y + ' ' + position.z);
@@ -55,10 +137,11 @@
     el.dataset.isTarget = 'false';
     el.dataset.partId = item.id;
     root.appendChild(el);
+    tagSpawnRadius(el, bodyRadius);
     return el;
   }
 
-  function spawnJunkCube(item, position, size, mass, matStr, root) {
+  function spawnJunkCube(item, position, size, mass, matStr, root, bodyRadius) {
     var el = document.createElement('a-entity');
     el.setAttribute('id', item.id);
     el.setAttribute('geometry',
@@ -71,6 +154,7 @@
     el.setAttribute('float-motion-trail', '');
     el.dataset.isTarget = 'false';
     root.appendChild(el);
+    tagSpawnRadius(el, bodyRadius);
     return el;
   }
 
@@ -127,28 +211,25 @@
     var created = 0;
     var posIdx = 0;
     var i;
+    var placed = [];
 
     for (i = 0; i < stages.length; i++) {
       if (posIdx >= positions.length) break;
-      var pMech = positions[posIdx];
-      if (typeof clampPositionToRoomDome === 'function') {
-        pMech = clampPositionToRoomDome(pMech, size / 2);
-      }
-      spawnStagePart(stages[i], pMech, mass, matStr, root);
+      var rMech = bodyRadiusForStage(stages[i], size);
+      var pMech = prepareSpawnPosition(positions[posIdx], rMech, placed);
+      spawnStagePart(stages[i], pMech, mass, matStr, root, rMech);
       posIdx += 1;
       created += 1;
     }
 
     for (i = 0; i < junkItems.length; i++) {
       if (posIdx >= positions.length) break;
-      var pJunk = positions[posIdx];
-      if (typeof clampPositionToRoomDome === 'function') {
-        pJunk = clampPositionToRoomDome(pJunk, size / 2);
-      }
+      var rJunk = bodyRadiusForJunk(junkItems[i], size);
+      var pJunk = prepareSpawnPosition(positions[posIdx], rJunk, placed);
       if (junkItems[i].type === 'glb') {
-        spawnJunkGlb(junkItems[i], pJunk, mass, matStr, root);
+        spawnJunkGlb(junkItems[i], pJunk, mass, matStr, root, rJunk);
       } else {
-        spawnJunkCube(junkItems[i], pJunk, size, mass, matStr, root);
+        spawnJunkCube(junkItems[i], pJunk, size, mass, matStr, root, rJunk);
       }
       posIdx += 1;
       created += 1;
@@ -178,7 +259,22 @@
 
   function respawnFloatingCubes() {
     clearCubes();
-    spawn();
+    var session = (typeof CONFIG !== 'undefined' && CONFIG.session) || null;
+    if (!session) {
+      console.error('[spawn-floating-cubes] CONFIG.session missing — rollAssemblySession first');
+      return;
+    }
+    var runSpawn = function () {
+      spawn();
+    };
+    if (typeof preloadSessionColliderBounds === 'function') {
+      preloadSessionColliderBounds(session).then(runSpawn).catch(function (err) {
+        console.warn('[spawn-floating-cubes] COL preload failed:', err);
+        runSpawn();
+      });
+      return;
+    }
+    runSpawn();
   }
 
   window.spawnFloatingCubes = spawn;

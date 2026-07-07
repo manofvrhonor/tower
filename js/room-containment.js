@@ -21,7 +21,8 @@
     if (!dome) return null;
 
     var half = bodyRadius !== undefined ? bodyRadius : 0;
-    var maxR = dome.radius - half - dome.margin;
+    var inset = dome.containmentMargin !== undefined ? dome.containmentMargin : 0.01;
+    var maxR = dome.radius - half - inset;
     if (maxR <= 0.1) return null;
 
     el.object3D.getWorldPosition(_world);
@@ -158,7 +159,8 @@
 
     opts = opts || {};
     var half = bodyRadius !== undefined ? bodyRadius : 0;
-    var maxR = dome.radius - half - dome.margin;
+    var inset = dome.containmentMargin !== undefined ? dome.containmentMargin : 0.01;
+    var maxR = dome.radius - half - inset;
     if (maxR <= 0.1) return false;
 
     var cx = dome.center.x;

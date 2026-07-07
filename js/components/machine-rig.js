@@ -10,6 +10,8 @@
  *     в случайном направлении по случайной оси (per session). Снеп-схема
  *     (#assembly-core), сфера-визуал и купол-коллайдер — дети ring_inner и
  *     вращаются вместе с ним.
+ *   - machine_COL — static PhysX на корпусе.
+ *     ring / ring_inner — kinematic сегменты (machine-ring-collider.js), не convex _COL.
  *
  * Ось/знак спина ring_inner выбираются заново на каждое 'game-started'.
  * В hardcore скорость ring_inner множится на difficulties.hardcore.ringInnerSpinMult.
@@ -33,16 +35,45 @@ AFRAME.registerComponent('machine-rig', {
     this._innerSpinDeg = this._innerBaseDeg;
     this._rollInnerSpin();
 
+    this._initPhysxMaterial();
+
     this._onGameStarted = this._onGameStarted.bind(this);
     this.el.sceneEl.addEventListener('game-started', this._onGameStarted);
 
     this._loadVisual(this.el, this._cfg.machineModel);
-    if (this._ringEl) this._loadVisual(this._ringEl, this._cfg.ringModel);
-    if (this._ringInnerEl) this._loadVisual(this._ringInnerEl, this._cfg.ringInnerModel);
+    this._loadCollider(this.el, this._cfg.machineCollider);
+    if (this._ringEl) {
+      this._loadVisual(this._ringEl, this._cfg.ringModel);
+    }
+    if (this._ringInnerEl) {
+      this._loadVisual(this._ringInnerEl, this._cfg.ringInnerModel);
+    }
   },
 
   remove: function () {
     this.el.sceneEl.removeEventListener('game-started', this._onGameStarted);
+  },
+
+  _initPhysxMaterial: function () {
+    var bm = (typeof CONFIG !== 'undefined' && CONFIG.world && CONFIG.world.bounceMaterial) || {};
+    var layers = (typeof CONFIG !== 'undefined' && CONFIG.collisionLayers) || {
+      WORLD: 0, FLOAT_CUBE: 2, GRAVITY_CUBE: 3, GRABBED_CUBE: 4, BALL: 5, BAT: 7, WAVE_BALL: 8,
+    };
+    this._physxMaterial =
+      'restitution: ' + (bm.restitution !== undefined ? bm.restitution : 0.95) +
+      '; staticFriction: ' + (bm.staticFriction !== undefined ? bm.staticFriction : 0.05) +
+      '; dynamicFriction: ' + (bm.dynamicFriction !== undefined ? bm.dynamicFriction : 0.05);
+    // Как pedestal-builder._layerTop: WORLD + WAVE_BALL (шары волны бьются о сборку).
+    this._layerSuffix =
+      '; collisionLayers: ' + layers.WORLD +
+      '; collidesWithLayers: ' + [
+        layers.FLOAT_CUBE,
+        layers.GRAVITY_CUBE,
+        layers.GRABBED_CUBE,
+        layers.BALL,
+        layers.BAT,
+        layers.WAVE_BALL,
+      ].join(', ');
   },
 
   _axisVec: function (letter) {
@@ -78,7 +109,6 @@ AFRAME.registerComponent('machine-rig', {
 
   _loadVisual: function (targetEl, url) {
     if (!targetEl || !url) return;
-    var self = this;
     this._loader.load(url, function (gltf) {
       var root = gltf.scene || gltf.scenes[0];
       if (!root) return;
@@ -89,6 +119,56 @@ AFRAME.registerComponent('machine-rig', {
     }, undefined, function (err) {
       console.error('[machine-rig] GLB load failed:', url, err);
     });
+  },
+
+  /** Low-poly machine_COL.glb → static PhysX на #machine-rig. */
+  _loadCollider: function (targetEl, url) {
+    if (!targetEl || !url) return;
+    var self = this;
+    this._loader.load(url, function (gltf) {
+      var colRoot = document.createElement('a-entity');
+      colRoot.setAttribute('visible', false);
+      colRoot.setAttribute('physx-hidden-collision', '');
+      colRoot.setAttribute('data-physx-hidden-collider', '');
+
+      var mesh = gltf.scene || gltf.scenes[0];
+      if (mesh) {
+        mesh.traverse(function (node) {
+          if (node.isMesh) node.frustumCulled = false;
+        });
+        colRoot.setObject3D('mesh', mesh);
+      }
+
+      targetEl.appendChild(colRoot);
+      self._attachStaticPhysx(targetEl, url);
+    }, undefined, function (err) {
+      console.error('[machine-rig] COL load failed:', url, err);
+    });
+  },
+
+  _attachStaticPhysx: function (targetEl, url) {
+    if (targetEl.dataset && targetEl.dataset.machinePhysxReady) return;
+    if (targetEl.dataset) targetEl.dataset.machinePhysxReady = 'true';
+
+    targetEl.setAttribute('physx-material', this._physxMaterial + this._layerSuffix);
+    targetEl.setAttribute('physx-body', 'type: static');
+
+    var tries = 0;
+    function rebuildWhenReady() {
+      var bodyComp = targetEl.components['physx-body'];
+      if (bodyComp && bodyComp.rigidBody) {
+        targetEl.object3D.updateMatrixWorld(true);
+        targetEl.emit('object3dset');
+        if (typeof window.applyColliderDebugVisual === 'function') {
+          window.applyColliderDebugVisual(targetEl);
+        }
+        console.log('[machine-rig] physx static:', url);
+        return;
+      }
+      tries += 1;
+      if (tries < 50) setTimeout(rebuildWhenReady, 100);
+    }
+    rebuildWhenReady();
   },
 
   tick: function (time, timeDelta) {

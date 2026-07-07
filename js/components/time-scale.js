@@ -62,6 +62,7 @@ AFRAME.registerSystem('time-scale', {
   },
 
   tick: function (time, dt) {
+    if (typeof window.isVictoryFrozen === 'function' && window.isVictoryFrozen()) return;
     if (!dt || dt <= 0) return;
 
     var dtSec = dt / 1000;

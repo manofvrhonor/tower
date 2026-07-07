@@ -67,7 +67,7 @@
     // в одной маске WORLD-коллайдеров → со стенами/полом/пьедесталом НЕ сталкивается
     // (летит сквозь туман). С кубами/битой сталкивается через свою маску ниже.
     var collidesWith = [
-      layers.FLOAT_CUBE, layers.GRAVITY_CUBE, layers.GRABBED_CUBE, layers.BAT,
+      layers.FLOAT_CUBE, layers.GRAVITY_CUBE, layers.GRABBED_CUBE, layers.HAND, layers.BAT,
     ].join(', ');
     var m = balls.material || { restitution: 0.32, staticFriction: 0.12, dynamicFriction: 0.10 };
     var contactOff = balls.contactOffset !== undefined ? balls.contactOffset : 0.017;

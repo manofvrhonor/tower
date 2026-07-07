@@ -39,8 +39,8 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 ## Где мы
 
 - Этапы 0–8 (MVP) ✅. Стильная игра: Фазы **0–3 ✅** (outside-scenery, floor-fog, HDR sky).
-- **Сейчас:** **Переделка сборки** (с.57–58, ПК) — GLB-машина + снеп-цепочка A→E, вращение ring_inner, сложности через `preAssembled` (ADR-24). **Фикс co-rotation** снепа: без DOM-реперента детали, kinematic + `_followSlot` (с.58). Кольцо развёрнуто (`ringSpinDeg -18`). Quest QA сборки — открыт.
-- **Дальше:** пер-деталь position-сдвиг стадий A–E (не все на нужной оси) → Quest QA сборки → тюнинг цепочки → **Фаза 4** (локации).
+- **Сейчас:** **Переделка сборки ✅** (с.61). **След.:** **Фаза 4** (локации).
+- **Дальше:** **Фаза 4** (локации); техдолг: clamp спавна по `_COL`.
 - Мастер-план: `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md`
 - **Не делаем:** VR-виньетка slo-mo. **Пропускаем:** захват «отлёт при тряске» (с.29).
 
@@ -103,6 +103,9 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 | 56 | Сложности 5 lvl + machine roll + меню polish ⚠️ core spin | init-session, spawn-floating-cubes, part-entity, game-menu, config, assets/models/machine |
 | 57 | GLB-машина + снеп-цепочка A→E, ring_inner ⚠️ Quest QA | machine-rig, assembly-core, init-session, assemblyChain |
 | 58 | Фикс снепа co-rotation (follow-slot, force eKINEMATIC), ring reverse | floating-cube, config; **не** DOM-реперент детали |
+| 59 | position A–E, containment split, hand↔ball, machine _COL ⚠️ ring collider | init-session, room-containment, machine-rig, red-ball; commit cd7c328 |
+| 60 | ring _COL откат, WAVE_BALL machine, convex-пробка | machine-rig; кольца без PhysX → сегменты |
+| 61 | Сегменты колец + victory-freeze + Quest QA ✅ | machine-ring-collider, victory-freeze, config |
 
 ---
 
@@ -152,6 +155,7 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 - ❌ Случайные слоты «на столе» / `sideCount` для сборки — снеп-цепочка A→E (`assemblyChain`)
 - ❌ Крутить physx-body core напрямую — whole-assembly rotation; **схема** (`#assembly-core`, не physx-body) реперентится под `#machine-ring-inner`
 - ❌ **DOM-реперент снепнутой ДЕТАЛИ под `#assembly-core`** — рушит physx-тело (`disconnectedCallback` → «table index out of bounds», деталь теряет kinematic и улетает). Co-rotation детали: kinematic + `_followSlot` (поза слота каждый кадр), с.58 ADR-24 v2
+- ❌ **Convex `_COL.glb` на `#machine-ring` / `#machine-ring-inner`** — сплошая hull-пробка, блокирует центр; не static/kinematic sync (с.59–60). **→ сегменты** (`orbit-ring`), ADR-24 с.60
 
 **Закрыто / пропущено:**
 - ❌ Захват VR «отлёт при тряске» — пропущено пользователем (с.29)

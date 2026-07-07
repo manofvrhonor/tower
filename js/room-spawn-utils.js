@@ -9,10 +9,13 @@
     var fd = room && room.fogDome;
     if (!fd || !fd.radius) return null;
     var c = fd.position || { x: 0, y: 0, z: 0 };
+    var collider = fd.collider || {};
+    var shellHalf = (collider.shellThickness !== undefined ? collider.shellThickness : 0.02) / 2;
     return {
       radius: fd.radius,
       center: { x: c.x, y: c.y, z: c.z },
-      margin: fd.spawnMargin !== undefined ? fd.spawnMargin : 0.12,
+      spawnMargin: fd.spawnMargin !== undefined ? fd.spawnMargin : 0.12,
+      containmentMargin: fd.containmentMargin !== undefined ? fd.containmentMargin : shellHalf,
     };
   }
 
@@ -21,7 +24,7 @@
     if (!dome || !pos) return pos;
 
     var half = bodyRadius !== undefined ? bodyRadius : 0;
-    var maxR = dome.radius - half - dome.margin;
+    var maxR = dome.radius - half - dome.spawnMargin;
     if (maxR <= 0.1) return pos;
 
     var cx = dome.center.x;
@@ -56,7 +59,7 @@
     var cx = dome.center.x;
     var cy = dome.center.y;
     var cz = dome.center.z;
-    var maxR = dome.radius - half - dome.margin;
+    var maxR = dome.radius - half - dome.spawnMargin;
     if (maxR <= 0.15) maxR = 0.15;
 
     for (var attempt = 0; attempt < 24; attempt++) {

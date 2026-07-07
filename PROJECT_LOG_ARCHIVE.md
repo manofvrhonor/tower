@@ -1116,3 +1116,84 @@
 **Следующая сессия:** пер-деталь position-сдвиг стадий A–E → тюнинг цепочки → Quest QA → Фаза 4.
 
 **Commit:** нет (вся с.57–58 незакоммичена).
+
+---
+
+## Сессия 59 — Position A–E, containment, machine _COL, hand↔ball ⚠️ ring collider
+
+### Сделано
+
+- **Commit `cd7c328`** — `Time machine real Snap-scheme fix` (push main): с.57–56 накопленное (машина, снеп, co-rotation, меню, assets).
+- **Пер-деталь position** (`init-session.js` `stagePose` + `assemblyChain.stages[].position` в config); пользователь подогнал позы — визуально ок на ПК.
+- **room-containment:** разделены `spawnMargin` (0.12, только спавн) и `containmentMargin` (0.01, tick-отскок у cyan); `nearWallRatio` 0.98 — убран «отскок от пустоты» ~20 см от vis.
+- **Отбивание шаров рукой:** `HAND` в маске BALL (`spawn-red-balls.js`, `ball-wave-manager.js`); `red-ball` — контакт `hand-body-collider` → `_deflectOffBat`. Пользователь: ок.
+- **machine-rig _COL (черновик):** загрузка `machine_COL` / `ring_COL` / `ring_inner_COL` как static PhysX (WORLD). Корпус `machine` — ок.
+
+### Не закрыто / баг
+
+- **Коллайдеры `ring` / `ring_inner`:** static PhysX **не двигается** с vis (`object3D.rotateOnAxis` в tick); wireframe `_COL` не совпадает с вращающейся геометрией. **→ с.60: kinematic + sync pose каждый кадр.**
+- **Quest QA** полный чек-лист — не закрыт (частичный фидбек: сборка ок, правки выше).
+- **coreSpinAxis** — пользователь подбирает в `config.js` (`coreSpinAxis` / `coreSpinByFile`).
+
+### Техдолг
+
+- Clamp спавна по реальному радиусу GLB `_COL` (не `size/2`).
+- Уборка `assets/models/machine/hold/`, `tip/`.
+
+**Файлы (локально):** `config.js`, `init-session.js`, `room-spawn-utils.js`, `room-containment.js`, `machine-rig.js`, `spawn-red-balls.js`, `ball-wave-manager.js`, `red-ball.js`, `CURRENT_TASK.md`.
+
+**Следующая сессия:** **коллайдеры ring/ring_inner (kinematic sync)** → commit локального → Quest QA → coreSpinAxis.
+
+**Commit сессии:** `cd7c328` (основной объём); пост-правки **не закоммичены**.
+
+---
+
+## Сессия 60 — ring _COL откат, WAVE_BALL на machine, convex-пробка ⚠️
+
+### Сделано
+
+- **machine-rig:** ring/ring_inner — пробовали **kinematic** + sync `updateMatrixWorld` (static не следовал за spin).
+- **machine-rig:** маска collidesWith как у **pedestal** (+ `WAVE_BALL`) — шары волны должны биться о корпус машины.
+- **Диагностика:** convex `_COL` на `#machine-ring` / `#machine-ring-inner` + vis без `physx-no-collision` → PhysX **сплошая** оболочка (дырка кольца залита), блокирует центр сборки; wireframe выглядит как два шара.
+- **Откат:** PhysX **снят** с колец — остаётся только **static `machine_COL`** на `#machine-rig`. Kinematic-хелперы убраны.
+
+### Не закрыто
+
+- **Коллайдеры колец** — следующая сессия: **сегменты** (паттерн `orbit-ring.js`), не convex `_COL.glb` на вращающемся entity.
+- **Quest QA** — чек-лист открыт.
+- **Commit** локального (containment, hand↔ball, machine-rig) — по запросу.
+- **coreSpinAxis** — пользователь.
+
+### Техдолг
+
+- `machine-rig._loadVisual`: vis на child + `physx-no-collision` (ADR-23), когда вернём col кольца.
+- Clamp спавна по GLB `_COL`; уборка `hold/`/`tip/`.
+
+**Файлы (локально):** `machine-rig.js`, `CURRENT_TASK.md` (+ накопленное с.59: `config.js`, `room-containment.js`, `spawn-red-balls.js`, `ball-wave-manager.js`, `red-ball.js`, …).
+
+**Следующая сессия:** **коллайдеры ring/ring_inner (сегменты)** → smoke ПК → Quest QA.
+
+**Commit сессии:** нет.
+
+---
+
+## Сессия 61 — Сегменты колец, victory-freeze, Quest QA ✅
+
+### Сделано
+
+- **machine-ring-collider.js:** kinematic box-сегменты на `#machine-ring` / `#machine-ring-inner` (паттерн `orbit-ring.js`); radius outer **0.34** / inner **0.30** (калибровка ПК).
+- **victory-freeze.js:** на `victory` — stopWaves, сброс velocity, sleep; guards в `red-ball` / `floating-cube` / `ball-bat` / `part-entity` / `time-scale`. Кольца крутятся; снепнутые — `_followSlot`.
+- **Фикс:** `PxVec3 is not a constructor` — velocity через `{x,y,z}` (ADR-02).
+- **collider-bounds-cache.js:** clamp спавна по `_COL`; разведение + отложенный импульс (фикс дёрганья на старте).
+- **Quest QA ✅** — пользователь ПК + Quest.
+- **coreSpinAxis** — ✅ пользователь.
+
+### Не закрыто
+
+- **Фаза 4** — локации.
+
+**Файлы:** `machine-ring-collider.js`, `victory-freeze.js`, `collider-bounds-cache.js`, `spawn-floating-cubes.js`, `floating-cube.js`, `config.js`, `index.html`, `machine-rig.js`, `room-containment.js`, `room-spawn-utils.js`, `spawn-red-balls.js`, `ball-wave-manager.js`, `red-ball.js`, `ball-bat.js`, `time-scale.js`, `part-entity.js`, `CURRENT_TASK.md`, `PROJECT_LOG*.md`, `PROJECT_START.md`.
+
+**Следующая сессия:** **Фаза 4** (локации).
+
+**Commit сессии:** PLACEHOLDER

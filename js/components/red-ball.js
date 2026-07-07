@@ -325,6 +325,12 @@ AFRAME.registerComponent('red-ball', {
       return;
     }
 
+    // Удар кулаком (hand-body-collider, kinematic): отскок как от биты.
+    if (other.el && other.el.components['hand-body-collider'] && this._rb) {
+      this._deflectOffBat(this._rb);
+      return;
+    }
+
     // Волна: с куполом не сталкивается (слой WAVE_BALL), homing не нужен. С полом/
     // пьедесталом (static) сталкивается — направляем наружу-вверх, чтобы шар не катился
     // по полу (restitution низкий, gravity off), а улетел за купол и деспавнился.
@@ -989,6 +995,8 @@ AFRAME.registerComponent('red-ball', {
   tick: function () {
     var rb = this._rb;
     if (!rb) return;
+
+    if (typeof window.isVictoryFrozen === 'function' && window.isVictoryFrozen()) return;
 
     if (this._waveMode) { this._waveTick(rb); return; }
 

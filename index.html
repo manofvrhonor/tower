@@ -29,6 +29,7 @@
        (до game-menu / victory-ui);
        6) main.js — диагностика. -->
   <script src="js/config.js"></script>
+  <script src="js/collider-bounds-cache.js"></script>
   <script src="js/assembly-zone.js"></script>
   <script src="js/menu-ui-draw.js"></script>
   <script src="js/menu-ui-layout.js"></script>
@@ -51,12 +52,14 @@
   <script src="js/spawn-ball-bat.js"></script>
   <script src="js/components/dome-builder.js"></script>
   <script src="js/components/machine-rig.js"></script>
+  <script src="js/components/machine-ring-collider.js"></script>
   <script src="js/components/assembly-hub.js"></script>
   <script src="js/components/assembly-sphere-visual.js"></script>
   <script src="js/components/collider-debug-viz.js"></script>
   <script src="js/components/ghost-tower-hint.js"></script>
   <script src="js/components/assembly-core.js"></script>
   <script src="js/components/victory-check.js"></script>
+  <script src="js/components/victory-freeze.js"></script>
   <script src="js/components/victory-ui.js"></script>
   <script src="js/components/menu-world-veil.js"></script>
   <script src="js/components/menu-backdrop-vfx.js"></script>
@@ -72,6 +75,7 @@
 <body>
   <a-scene
     victory-check
+    victory-freeze
     victory-ui
     game-menu
     menu-world-veil
@@ -109,8 +113,8 @@
          несёт снеп-схему (#assembly-core), сферу-визуал и купол-коллайдер. -->
     <a-entity id="assembly-hub" assembly-hub position="0 0.985 0">
       <a-entity id="machine-rig" machine-rig></a-entity>
-      <a-entity id="machine-ring">
-        <a-entity id="machine-ring-inner">
+      <a-entity id="machine-ring" machine-ring-collider="which: outer">
+        <a-entity id="machine-ring-inner" machine-ring-collider="which: inner">
           <a-entity id="assembly-core" assembly-core position="0 0 0"></a-entity>
           <a-entity id="dome-collider" dome-builder></a-entity>
           <a-entity id="assembly-sphere-visual" assembly-sphere-visual></a-entity>

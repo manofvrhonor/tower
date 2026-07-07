@@ -88,6 +88,7 @@ AFRAME.registerComponent('floating-cube', {
     this._snappedSlotId = null;
     // fixed — предустановленная деталь (сложность): несбиваемая, неснимаемая.
     this._isFixed = false;
+    this._spawnImpulseAt = 0;
     this._beginSteerCycle();
 
     // Подписка на возможные события готовности тела (план А).
@@ -314,16 +315,31 @@ AFRAME.registerComponent('floating-cube', {
     }
 
     console.log('[floating-cube] rigidBody detected on', this.el.id || '(no id)');
-    this._rb = rb; // сохраняем для tick
+    this._rb = rb;
     this._applyContactQuality(rb);
-    this._applyFloatPhysics(rb, true);
-    this._physicsApplied = true;
 
-    // Предустановленная деталь (сложность) — сразу снеп в свой слот + fixed.
-    if (this.el.dataset && this.el.dataset.startSnapped === 'true' &&
-        this.state !== 'snapped' && this.el.dataset.startSlot) {
+    var startSnapped = this.el.dataset && this.el.dataset.startSnapped === 'true' &&
+      this.el.dataset.startSlot;
+
+    if (startSnapped) {
       this.snapToSlotById(this.el.dataset.startSlot, true);
+      this._physicsApplied = true;
+      if (this._pollIntervalId) {
+        clearInterval(this._pollIntervalId);
+        this._pollIntervalId = null;
+      }
+      return;
     }
+
+    this._reclampSpawnPosition();
+    this._applyFloatPhysics(rb, false);
+    this._zeroBodyMotion(rb);
+
+    var spawnCfg = (typeof CONFIG !== 'undefined' && CONFIG.spawn) || {};
+    var delay = spawnCfg.impulseDelayMs !== undefined ? spawnCfg.impulseDelayMs : 200;
+    this._spawnImpulseAt = performance.now() + delay;
+
+    this._physicsApplied = true;
 
     if (this._pollIntervalId) {
       clearInterval(this._pollIntervalId);
@@ -764,6 +780,86 @@ AFRAME.registerComponent('floating-cube', {
       worldVelInvScale: prev > 0.001 ? 1 / prev : 1,
       minBounceSpeed: this.cfg.minDriftSpeed !== undefined ? this.cfg.minDriftSpeed : 0.28,
     };
+  },
+
+  /** Радиус для room-containment: dataset.spawnRadius (из _COL) или size/2. */
+  _getBodyHalf: function () {
+    var ds = this.el.dataset && this.el.dataset.spawnRadius;
+    if (ds !== undefined && ds !== '') {
+      var r = parseFloat(ds);
+      if (!isNaN(r) && r > 0) return r;
+    }
+    return (this.cfg.size !== undefined ? this.cfg.size : 0.1) / 2;
+  },
+
+  _spawnRadiusForClamp: function () {
+    var r = this._getBodyHalf();
+    var spawnCfg = (typeof CONFIG !== 'undefined' && CONFIG.spawn) || {};
+    var mult = spawnCfg.radiusSafetyMult !== undefined ? spawnCfg.radiusSafetyMult : 1.1;
+    return r * mult;
+  },
+
+  _reclampSpawnPosition: function () {
+    if (typeof clampPositionToRoomDome !== 'function') return;
+    var r = this._spawnRadiusForClamp();
+    var wp = this._getWorldPosition();
+    var clamped = clampPositionToRoomDome({ x: wp.x, y: wp.y, z: wp.z }, r);
+    var parent = this.el.object3D.parent;
+    if (parent) {
+      parent.updateMatrixWorld(true);
+      var tmp = new THREE.Vector3(clamped.x, clamped.y, clamped.z);
+      this.el.object3D.position.copy(parent.worldToLocal(tmp));
+    } else {
+      this.el.object3D.position.set(clamped.x, clamped.y, clamped.z);
+    }
+    this.el.object3D.updateMatrixWorld(true);
+  },
+
+  _zeroBodyMotion: function (rb) {
+    if (!rb) return;
+    try {
+      if (typeof rb.setLinearVelocity === 'function') {
+        rb.setLinearVelocity({ x: 0, y: 0, z: 0 }, false);
+      }
+      if (typeof rb.setAngularVelocity === 'function') {
+        rb.setAngularVelocity({ x: 0, y: 0, z: 0 }, false);
+      }
+      if (typeof rb.putToSleep === 'function') rb.putToSleep();
+    } catch (e) { /* ignore */ }
+  },
+
+  _applySpawnImpulse: function (rb) {
+    if (!rb) return;
+    var cfg = this.cfg;
+    var speed = (cfg.initialImpulseSpeed !== undefined) ? cfg.initialImpulseSpeed : 0.3;
+    if (speed > 0 && typeof rb.setLinearVelocity === 'function') {
+      var dir = this._randomUnitVector();
+      this._driftDir = { x: dir.x, y: dir.y, z: dir.z };
+      try {
+        rb.setLinearVelocity({
+          x: dir.x * speed, y: dir.y * speed, z: dir.z * speed,
+        }, true);
+      } catch (e) {
+        console.warn('[floating-cube] impulse failed:', e.message);
+      }
+    }
+    if (typeof rb.setAngularVelocity === 'function') {
+      var angSpeed = (cfg.initialAngularSpeed !== undefined) ? cfg.initialAngularSpeed : 0.8;
+      if (angSpeed > 0) {
+        var axis = this._randomUnitVector();
+        try {
+          rb.setAngularVelocity({
+            x: axis.x * angSpeed, y: axis.y * angSpeed, z: axis.z * angSpeed,
+          }, true);
+        } catch (e) {
+          console.warn('[floating-cube] angular velocity failed:', e.message);
+        }
+      }
+    }
+    if (typeof rb.wakeUp === 'function') rb.wakeUp();
+    this._lastAppliedTimeScale = 1.0;
+    this._applyTimeScaleToVelocity(rb);
+    console.log('[floating-cube] spawn impulse on', this.el.id || '(no id)');
   },
 
   _applyRoomWallBounceTick: function (rb, bodyHalf) {
@@ -1298,9 +1394,24 @@ AFRAME.registerComponent('floating-cube', {
     var rb = this._rb;
     if (!rb) return;
     if (this.el.is && this.el.is('grabbed-dynamic')) return;
+
+    if (typeof window.isVictoryFrozen === 'function' && window.isVictoryFrozen()) {
+      if (this.state === 'snapped') this._followSlot();
+      return;
+    }
+
     if (this.state === 'snapped') {
       this._followSlot();
       return;
+    }
+
+    if (this._spawnImpulseAt) {
+      if (performance.now() < this._spawnImpulseAt) {
+        this._zeroBodyMotion(rb);
+        return;
+      }
+      this._spawnImpulseAt = 0;
+      this._applySpawnImpulse(rb);
     }
 
     if (this.state === 'float-inside') {
@@ -1316,7 +1427,7 @@ AFRAME.registerComponent('floating-cube', {
       } else {
         this._clampGravityVelocity(rb);
       }
-      var gHalf = (this.cfg.size !== undefined ? this.cfg.size : 0.1) / 2;
+      var gHalf = this._getBodyHalf();
       this._applyRoomWallBounceTick(rb, gHalf);
       if (this._clampStrikerDeflect(rb)) return;
       if (performance.now() >= this._strikerClampUntilMs) {
@@ -1332,7 +1443,7 @@ AFRAME.registerComponent('floating-cube', {
         }
       }
 
-      var halfF = (this.cfg.size !== undefined ? this.cfg.size : 0.1) / 2;
+      var halfF = this._getBodyHalf();
       this._applyRoomWallBounceTick(rb, halfF);
 
       this._maintainFloatDrift(rb);

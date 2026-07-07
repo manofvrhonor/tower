@@ -506,7 +506,8 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 - Снеп-схема (`#assembly-core`), сфера-визуал, купол-коллайдер — **дети `#machine-ring-inner`**, вращаются вместе с ним.
 - Цепочка вдоль `CONFIG.machine.assemblyChain` (`axis`, `step`, `originOffset`, `stages`): по 1 случайной GLB из папок `attach/box/core/drum/end`. Стадия C = role `core` (доп. спин своей оси, прежний `_bakeRootTransform`).
 - Последовательный гейтинг: `assembly-core.findFreeSlotNear` → только следующая по `order` незанятая стадия (B нельзя без A).
-- Снепнутая деталь **реперентится под `#assembly-core`** (co-rotation, kinematic). Un-snap/слом → реперент назад под `#floating-cubes-root` с сохранением мировой позы.
+- Снепнутая деталь **без DOM-реперента** под `#assembly-core`: остаётся под `#floating-cubes-root`, `_forceKinematicFlag` + `_followSlot` в tick (co-rotation, с.58).
+- Un-snap/слом → kinematic off, dynamic float.
 - Сложность = `preAssembled` (стоящие на старте, несбиваемые `fixed`): easy ABC, normal AB, medium A, hard/hardcore пусто. Мусор: `junk/` + неиспользованные варианты стадий (leftovers) + добор цветными кубами.
 
 **Причина:** нужен визуально законченный вытянутый механизм и детерминированная сборка по сложности вместо случайных слотов «на столе».
@@ -516,7 +517,11 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 - Крутить physx-body core напрямую; whole-assembly rotation — только через реперент под вращающийся `ring_inner`.
 - `stackHeight` / `shuffleVictoryScheme` / `sideCount` (устарели).
 
-**Quest QA — открыт (с.57).**
+**Quest QA ✅ (с.61).** Machine `_COL`: static корпус. **Кольца:** kinematic box-сегменты (`machine-ring-collider.js`), не convex `_COL`. **Победа:** `victory-freeze.js` — стоп шаров/мусора/биты; кольца крутятся.
+
+**Дополнение (с.60):** `_COL.glb` на вращающихся кольцах через convex — **не использовать**. Коллизия — **box-сегменты** (kinematic), маска как machine (+ WAVE_BALL).
+
+**Дополнение (с.61):** на `victory` — `freezeWorldOnVictory`: stopWaves, velocity `{x:0,y:0,z:0}` (не `PxVec3`), guards в tick компонентов; снепнутые детали — `_followSlot` (co-rotation). **Clamp спавна:** `collider-bounds-cache.js`, per-part `spawnRadius`, разведение + `impulseDelayMs`.
 
 ---
 
@@ -530,8 +535,8 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 
 - **MVP ✅** (с.29–31): меню, сложность, купол R=2 m, Quest-прогон без блокеров.
 - **Стильная игра:** Фазы 0–3 ✅, **3.5B ✅** `ba9ecdd`.
-- **Сейчас:** **Переделка сборки** (с.57) — GLB-машина + снеп-цепочка A→E, вращение ring_inner, сложности через `preAssembled` (ADR-24). Меню/spin закрыты (с.56). Quest QA сборки — открыт.
-- **Дальше:** Quest QA сборки → тюнинг поз/шага цепочки на ПК → **Фаза 4** (локации).
+- **Сейчас:** **Фаза 4** (локации). Переделка сборки ✅ (с.57–61, ADR-24).
+- **Дальше:** **Фаза 4** (локации); техдолг: clamp спавна по `_COL`.
 - **Не делаем:** VR-виньетка slo-mo. **Пропускаем:** захват «отлёт при тряске» (с.29).
 - **Тест:** Quest Link + localhost.
 
