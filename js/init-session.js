@@ -1,59 +1,215 @@
 /* global CONFIG */
 
 /**
- * init-session.js — случайная схема победы на каждую игру.
+ * init-session.js — случайная снеп-цепочка A→B→C→D→E на каждую игру.
  *
- * shuffleVictoryScheme(): перемешивает только цвета кубов, которые реально
- * есть в мире (coloredCubeCount). Для hard (башня 5) excluded — 6-й цвет
- * палитры без куба. Вызывается из startGame(), не при load.
+ * rollAssemblySession(): по одной случайной GLB из каждой папки стадии
+ * (attach/box/core/drum/end) → упорядоченная цепочка вдоль оси ring_inner
+ * (CONFIG.machine.assemblyChain). Сложность задаёт, какие стадии уже стоят
+ * (preAssembled, несбиваемые). Мусор — из junk/, добор неиспользованными
+ * вариантами деталей стадий.
+ *
+ * Вызывается из game-lifecycle spawnWorld(), не при load. Manifest
+ * предзагружается при старте страницы.
  */
 (function () {
+  var manifestCache = null;
+
   function shuffleArray(arr) {
-    for (var i = arr.length - 1; i > 0; i--) {
+    var a = arr.slice();
+    var i;
+    for (i = a.length - 1; i > 0; i--) {
       var j = Math.floor(Math.random() * (i + 1));
-      var tmp = arr[i];
-      arr[i] = arr[j];
-      arr[j] = tmp;
+      var tmp = a[i];
+      a[i] = a[j];
+      a[j] = tmp;
     }
-    return arr;
+    return a;
   }
 
-  function shuffleVictoryScheme() {
-    var fc = (typeof CONFIG !== 'undefined' && CONFIG.floatingCubes) || {};
-    var victory = (typeof CONFIG !== 'undefined' && CONFIG.victory) || {};
-    var fullPalette = (fc.targetColors || []).slice();
-    var spawnCount = fc.coloredCubeCount !== undefined ? fc.coloredCubeCount : fullPalette.length;
-    var spawned = fullPalette.slice(0, spawnCount);
-    var need = victory.stackHeight || 4;
+  function machineCfg() {
+    return (typeof CONFIG !== 'undefined' && CONFIG.machine) || {};
+  }
 
-    if (need < spawnCount) {
-      // Лёгкий / нормальный: need цветов в башне + 1 excluded — все из кубов в мире.
-      if (spawned.length < need + 1) {
-        console.error('[init-session] need at least', need + 1,
-          'spawned colors, got', spawned.length);
-        return false;
-      }
-      shuffleArray(spawned);
-      victory.stackColors = spawned.slice(0, need);
-      victory.excludedColor = spawned[need];
-    } else if (need === spawnCount) {
-      // Сложный: все цветные кубы в башне; excluded — доп. цвет палитры без куба.
-      shuffleArray(spawned);
-      victory.stackColors = spawned.slice(0, need);
-      victory.excludedColor = fullPalette[spawnCount] || null;
-      if (!victory.excludedColor) {
-        console.error('[init-session] hard mode: need 6th palette color beyond spawned cubes');
-        return false;
-      }
-    } else {
-      console.error('[init-session] stackHeight', need, 'exceeds spawned colors', spawnCount);
+  function colliderUrl(folder, file) {
+    return folder + file.replace(/\.glb$/i, '_COL.glb');
+  }
+
+  function loadManifest() {
+    if (manifestCache) return Promise.resolve(manifestCache);
+
+    var mc = machineCfg();
+    var url = mc.manifestUrl || 'assets/models/machine-manifest.json';
+    return fetch(url)
+      .then(function (r) {
+        if (!r.ok) throw new Error('manifest HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (data) {
+        manifestCache = data;
+        return data;
+      })
+      .catch(function () {
+        console.warn('[init-session] manifest fetch failed — CONFIG.machine.manifest');
+        manifestCache = mc.manifest || {};
+        return manifestCache;
+      });
+  }
+
+  function getDifficultyPreset() {
+    var game = (typeof CONFIG !== 'undefined' && CONFIG.game) || {};
+    var id = (typeof window.getGameDifficulty === 'function' && window.getGameDifficulty()) ||
+      game.defaultDifficulty || 'normal';
+    return game.difficulties && game.difficulties[id];
+  }
+
+  /** Поза стадии i: originOffset + i*step по chain.axis + опц. stages[i].position. */
+  function stagePose(chain, i) {
+    var axis = (chain.axis || 'z').toLowerCase();
+    var d = (chain.originOffset || 0) + i * (chain.step || 0.12);
+    var pos = { x: 0, y: 0, z: 0 };
+    pos[axis] = d;
+    var st = chain.stages[i] || {};
+    var off = st.position;
+    if (off) {
+      pos.x += off.x || 0;
+      pos.y += off.y || 0;
+      pos.z += off.z || 0;
+    }
+    var rot = st.rotation || { x: 0, y: 0, z: 0 };
+    return { position: pos, rotation: { x: rot.x || 0, y: rot.y || 0, z: rot.z || 0 } };
+  }
+
+  function rollAssemblySession() {
+    if (!manifestCache) {
+      manifestCache = machineCfg().manifest || {};
+    }
+
+    var mc = machineCfg();
+    var chain = mc.assemblyChain || { axis: 'z', step: 0.12, originOffset: 0, stages: [] };
+    var stagesCfg = chain.stages || [];
+    var preset = getDifficultyPreset();
+    if (!preset) {
+      console.error('[init-session] unknown difficulty preset');
       return false;
     }
 
-    console.log('[init-session] stack bottom→top:', victory.stackColors.join(' → '));
-    console.log('[init-session] excluded this run:', victory.excludedColor);
+    var preSet = {};
+    (preset.preAssembled || []).forEach(function (id) { preSet[id] = true; });
+
+    var stages = [];
+    var leftovers = [];
+    var i;
+
+    for (i = 0; i < stagesCfg.length; i++) {
+      var stCfg = stagesCfg[i];
+      var files = manifestCache[stCfg.folder] || [];
+      if (!files.length) {
+        console.error('[init-session] no GLB in stage folder:', stCfg.folder);
+        return false;
+      }
+      var shuffled = shuffleArray(files);
+      var picked = shuffled[0];
+      var k;
+      for (k = 1; k < shuffled.length; k++) {
+        leftovers.push({ folder: stCfg.folder, file: shuffled[k] });
+      }
+
+      var folderPath = mc.basePath + stCfg.folder + '/';
+      var pose = stagePose(chain, i);
+      stages.push({
+        stageId: stCfg.id,
+        order: i,
+        role: stCfg.role || stCfg.folder,
+        partId: 'run_' + stCfg.id,
+        slotId: 'slot_' + stCfg.id,
+        model: folderPath + picked,
+        colliderModel: colliderUrl(folderPath, picked),
+        preAssembled: !!preSet[stCfg.id],
+        position: pose.position,
+        rotation: pose.rotation,
+      });
+    }
+
+    var assemblySlots = stages.map(function (s) {
+      return {
+        id: s.slotId,
+        stageId: s.stageId,
+        order: s.order,
+        acceptPartId: s.partId,
+        role: s.role,
+        model: s.model,
+        position: s.position,
+        rotation: s.rotation,
+      };
+    });
+
+    var partsById = {};
+    stages.forEach(function (s) { partsById[s.partId] = s; });
+
+    // Мусор: сначала junk/, затем неиспользованные варианты стадий.
+    var junkCount = preset.junkCount || 5;
+    var junkFolder = mc.junkPath || 'assets/models/junk/';
+    var junkPool = shuffleArray((manifestCache.junk || []).map(function (f) {
+      return { path: junkFolder, file: f };
+    }));
+    var leftoverPool = shuffleArray(leftovers).map(function (l) {
+      return { path: mc.basePath + l.folder + '/', file: l.file };
+    });
+    var combined = junkPool.concat(leftoverPool);
+
+    var junkItems = [];
+    var ji;
+    for (ji = 0; ji < junkCount && ji < combined.length; ji++) {
+      var jp = combined[ji];
+      junkItems.push({
+        type: 'glb',
+        id: 'junk_glb_' + ji,
+        model: jp.path + jp.file,
+        colliderModel: colliderUrl(jp.path, jp.file),
+      });
+    }
+
+    // Добор цветными кубами, если GLB-мусора не хватило.
+    var fc = (typeof CONFIG !== 'undefined' && CONFIG.floatingCubes) || {};
+    var cubePalette = shuffleArray(
+      (fc.junkCubeColors && fc.junkCubeColors.length)
+        ? fc.junkCubeColors.slice()
+        : [fc.trashColor || '#888888']
+    );
+    for (; ji < junkCount; ji++) {
+      junkItems.push({
+        type: 'cube',
+        id: 'junk_cube_' + ji,
+        color: cubePalette[ji % cubePalette.length],
+      });
+    }
+
+    CONFIG.session = {
+      stages: stages,
+      assemblySlots: assemblySlots,
+      partsById: partsById,
+      junkItems: junkItems,
+    };
+
+    var preIds = stages.filter(function (s) { return s.preAssembled; })
+      .map(function (s) { return s.stageId; });
+    console.log('[init-session] roll — chain:',
+      stages.map(function (s) { return s.stageId; }).join(''),
+      '| pre:', preIds.join('') || '(none)',
+      '| junk:', junkItems.length);
+
+    var coreEl = document.getElementById('assembly-core');
+    var coreComp = coreEl && coreEl.components['assembly-core'];
+    if (coreComp && typeof coreComp.rebuildFromSession === 'function') {
+      coreComp.rebuildFromSession();
+    }
+
     return true;
   }
 
-  window.shuffleVictoryScheme = shuffleVictoryScheme;
+  window.rollAssemblySession = rollAssemblySession;
+  window.preloadMachineManifest = loadManifest;
+
+  loadManifest();
 })();

@@ -3,8 +3,8 @@
 /**
  * assembly-core — слоты сборки механизма на ядре (Фаза 1, шаг 1.2).
  *
- * Читает CONFIG.mechanisms[<mechanism>] и рисует призрачные подсказки в позах
- * слотов: wireframe по vis-GLB детали (3.5B.2) или box slotSize (fallback).
+ * Читает CONFIG.session.assemblySlots (rollAssemblySession) или fallback
+ * CONFIG.mechanisms[<mechanism>]. Призраки: wireframe по GLB слота или box.
  *
  * Шаг 1.3: учёт занятости слотов и мировая поза для снепа (floating-cube).
  */
@@ -27,7 +27,6 @@ AFRAME.registerComponent('assembly-core', {
     this.el.object3D.add(this._group);
     this._gltfCache = {};
     this._loader = null;
-    this._buildSlots();
   },
 
   remove: function () {
@@ -44,6 +43,10 @@ AFRAME.registerComponent('assembly-core', {
   },
 
   _findPart: function (partId) {
+    var session = (typeof CONFIG !== 'undefined' && CONFIG.session) || null;
+    if (session && session.partsById && session.partsById[partId]) {
+      return session.partsById[partId];
+    }
     var parts = (typeof CONFIG !== 'undefined' && CONFIG.parts) || [];
     var i;
     for (i = 0; i < parts.length; i++) {
@@ -53,6 +56,12 @@ AFRAME.registerComponent('assembly-core', {
   },
 
   _getSlots: function () {
+    var session = (typeof CONFIG !== 'undefined' && CONFIG.session) || null;
+    if (session && session.assemblySlots && session.assemblySlots.length) {
+      this._mechanismId = 'session';
+      return session.assemblySlots;
+    }
+
     var mechs = (typeof CONFIG !== 'undefined' && CONFIG.mechanisms) || {};
     var id = this.data.mechanism || Object.keys(mechs)[0];
     var mech = mechs[id];
@@ -93,6 +102,10 @@ AFRAME.registerComponent('assembly-core', {
     };
   },
 
+  rebuildFromSession: function () {
+    this._buildSlots();
+  },
+
   ensureSlotsBuilt: function () {
     if (!this._slotMeshes.length) this._buildSlots();
   },
@@ -109,6 +122,9 @@ AFRAME.registerComponent('assembly-core', {
     );
     slotRoot.frustumCulled = false;
     slotRoot.userData.slotId = slot.id;
+    slotRoot.userData.acceptPartId = slot.acceptPartId || '';
+    slotRoot.userData.role = slot.role || '';
+    slotRoot.userData.order = slot.order !== undefined ? slot.order : 0;
     return slotRoot;
   },
 
@@ -195,7 +211,7 @@ AFRAME.registerComponent('assembly-core', {
   _buildSlotGhost: function (slot, vis) {
     var slotRoot = this._makeSlotRoot(slot);
     var part = this._findPart(slot.acceptPartId);
-    var modelUrl = part && part.model;
+    var modelUrl = slot.model || (part && part.model);
     var self = this;
     var fallbackSize = this.data.slotSize;
 
@@ -239,27 +255,65 @@ AFRAME.registerComponent('assembly-core', {
     return null;
   },
 
-  findFreeSlotNear: function (worldPos) {
+  /**
+   * Наименьший order среди незанятых слотов — единственная стадия, куда
+   * сейчас разрешён снеп (последовательный гейтинг A→B→C→D→E).
+   */
+  nextRequiredOrder: function () {
+    var next = null;
+    for (var i = 0; i < this._slotMeshes.length; i++) {
+      var m = this._slotMeshes[i];
+      if (this._occupied[m.userData.slotId]) continue;
+      var o = m.userData.order || 0;
+      if (next === null || o < next) next = o;
+    }
+    return next;
+  },
+
+  _slotPose: function (m) {
+    var wp = new THREE.Vector3();
+    m.getWorldPosition(wp);
+    var wq = new THREE.Quaternion();
+    m.getWorldQuaternion(wq);
+    return {
+      slotId: m.userData.slotId,
+      position: wp,
+      quaternion: wq,
+      localPosition: m.position.clone(),
+      localQuaternion: m.quaternion.clone(),
+    };
+  },
+
+  getSlotPose: function (slotId) {
+    var m = this._meshById(slotId);
+    return m ? this._slotPose(m) : null;
+  },
+
+  findFreeSlotNear: function (worldPos, partId) {
     var tol = (typeof CONFIG !== 'undefined' && CONFIG.assembly &&
       CONFIG.assembly.snapPosTolerance !== undefined)
       ? CONFIG.assembly.snapPosTolerance : 0.05;
+
+    // Гейтинг: снеп разрешён только в следующую по порядку стадию.
+    var required = this.nextRequiredOrder();
+    if (required === null) return null;
 
     var best = null;
     var bestDist = tol;
     for (var i = 0; i < this._slotMeshes.length; i++) {
       var m = this._slotMeshes[i];
       if (this._occupied[m.userData.slotId]) continue;
+      if ((m.userData.order || 0) !== required) continue;
+      if (partId && m.userData.acceptPartId && m.userData.acceptPartId !== partId) {
+        continue;
+      }
       m.getWorldPosition(this._tmpVec);
       var d = this._tmpVec.distanceTo(worldPos);
       if (d <= bestDist) { bestDist = d; best = m; }
     }
     if (!best) return null;
 
-    var pos = new THREE.Vector3();
-    best.getWorldPosition(pos);
-    var quat = new THREE.Quaternion();
-    best.getWorldQuaternion(quat);
-    return { slotId: best.userData.slotId, position: pos, quaternion: quat };
+    return this._slotPose(best);
   },
 
   isSlotOccupied: function (slotId) {

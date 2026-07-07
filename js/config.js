@@ -554,23 +554,13 @@ const CONFIG = {
       bounceDelayMax: 5,
     },
 
-    // Палитра цветных (6 шт — для башни 5 + 1 excluded при shuffle).
-    // В мире спавнятся только coloredCubeCount штук. Красный исключён.
-    coloredCubeCount: 5,
-
-    // GLB-детали (3.5B.1): part.id → part-entity на первых позициях spawnPositions.
-    glbPartIds: ['fa_core', 'fa_coil'],
-    targetColors: [
-      '#4A90E2',  // синий
-      '#E28A4A',  // оранжевый
-      '#4AE26A',  // зелёный
-      '#E2D24A',  // жёлтый
-      '#B14AE2',  // фиолетовый
-      '#2EC4B6',  // бирюзовый (6-й — для сложного режима, башня 5)
-    ],
-
-    // Цвет «мусорных» серых (6 шт).
+    // Fallback-кубы для junk, если в assets/models/junk/ не хватает GLB.
     trashColor: '#888888',
+    junkCubeColors: [
+      '#555555', '#626262', '#6e6e6e', '#7a7a7a', '#868686',
+      '#929292', '#666666', '#737373', '#808080', '#8c8c8c',
+      '#5c5c5c', '#707070',
+    ],
 
   // 11 позиций внутри room.fogDome (R=2.0, margin 0.12 + half куба 0.05; clamp при спавне).
     spawnPositions: [
@@ -585,6 +575,12 @@ const CONFIG = {
       { x: -0.75, y: 2.05, z:  0.65 },
       { x:  0.12, y: 1.71, z:  0.88 },
       { x:  0.95, y: 1.95, z: -0.85 },
+      { x: -0.55, y: 1.88, z: -0.35 },
+      { x:  0.48, y: 1.78, z:  0.62 },
+      { x: -0.90, y: 1.70, z:  0.15 },
+      { x:  0.22, y: 1.92, z: -0.72 },
+      { x: -0.30, y: 1.65, z:  0.95 },
+      { x:  0.78, y: 2.00, z: -0.55 },
     ],
   },
 
@@ -876,6 +872,73 @@ const CONFIG = {
     breakImpulse:        1.5,   // м/с — импульс разлёта детали при сломе сборки
   },
 
+  // Снеп-цепочка A→B→C→D→E из папок assets/models/machine/{attach,box,core,drum,end}
+  // + мусор из junk/. manifest.json — scripts/refresh-machine-manifest.ps1.
+  machine: {
+    basePath: 'assets/models/machine/',
+    junkPath: 'assets/models/junk/',
+    manifestUrl: 'assets/models/machine-manifest.json',
+    // Fallback если fetch manifest не удался (синхронизировать скриптом).
+    // Ключи = папки стадий сборки A..E + junk.
+    manifest: {
+      attach: ['attach_43.glb', 'attach_6.glb', 'retardation_helix_conduit.glb'],
+      box:    ['box_11.glb', 'box_13.glb', 'box_33.glb'],
+      core:   ['core_51.glb', 'core_63.glb', 'phase_splitter_trident.glb'],
+      drum:   ['hold_8.glb', 'hold_12.glb', 'phase_modulator_ring.glb'],
+      end:    ['tip_2.glb', 'tip_10.glb', 'tip_30.glb'],
+      junk:   ['pulse_capacitor_bank.glb'],
+    },
+
+    // Снеп-цепочка вдоль локальной оси ring_inner. Детали крепятся
+    // последовательно (A→B→C→D→E) с фиксированным шагом — собранное
+    // получается вытянутым устройством. Позы подгоняются на глаз на ПК.
+    //   axis         — локальная ось ring_inner, вдоль которой растёт цепочка.
+    //   step         — грубое расстояние между соседними стадиями, м.
+    //   originOffset — сдвиг всей цепочки от центра ring_inner (симметрия), м.
+    //   stages[i]    — база = originOffset + i*step по axis;
+    //                  position {x,y,z} — точный сдвиг стадии (м, локально ring_inner);
+    //                  rotation, role — опц.
+    assemblyChain: {
+      axis: 'z',
+      step: 0.12,
+      originOffset: -0.24,
+      stages: [
+        { id: 'A', folder: 'attach', rotation: { x: 0, y: 0, z: 0 }, position: { x: 0, y: 0, z: 0 } },
+        { id: 'B', folder: 'box',    rotation: { x: 0, y: 0, z: 0 }, position: { x: 0, y: 0, z: 0 } },
+        { id: 'C', folder: 'core',   role: 'core', rotation: { x: 0, y: 0, z: 0 }, position: { x: 0, y: 0, z: -0.03 } },
+        { id: 'D', folder: 'drum',   rotation: { x: 0, y: 0, z: 0 }, position: { x: 0, y: 0, z: -0.13 } },
+        { id: 'E', folder: 'end',    rotation: { x: 0, y: 0, z: 0 }, position: { x: 0, y: 0, z: -0.14 } },
+      ],
+    },
+
+    // GLB-машина: корневые модели (грузит machine-rig.js).
+    rig: {
+      machineModel:      'assets/models/machine/machine.glb',
+      machineCollider:   'assets/models/machine/machine_COL.glb',
+      ringModel:         'assets/models/machine/ring.glb',
+      ringCollider:      'assets/models/machine/ring_COL.glb',
+      ringInnerModel:    'assets/models/machine/ring_inner.glb',
+      ringInnerCollider: 'assets/models/machine/ring_inner_COL.glb',
+      // ring крутится вокруг своей центральной оси.
+      ringSpinAxis:     'x',
+      ringSpinDeg:      -18,
+      // ring_inner: ось и знак направления выбираются случайно per session
+      // (machine-rig). ringInnerSpinDeg — базовая скорость; hardcore множит
+      // на difficulties.hardcore.ringInnerSpinMult.
+      ringInnerSpinDeg:    30,
+      ringInnerRandomAxis: true,
+    },
+
+    coreSpinSpeedDeg: 96,
+    // Ось вращения core (стадия C): 'x','y','z' — локальная ось детали.
+    // GLB-поворот запекается при загрузке (_bakeRootTransform).
+    coreSpinAxis: 'x',
+    coreSpinByFile: {},
+  },
+
+  // Runtime: rollAssemblySession() в init-session.js (не править вручную).
+  session: null,
+
   // Локации-комнаты. Массив произвольной длины. start: true — стартовая комната.
   // partIds — какие детали спавнятся здесь изначально (источник истины — part.homeLocation;
   // дублируем для удобства спавнера). fogTint — оттенок поля времени/тумана этой эпохи.
@@ -902,8 +965,8 @@ const CONFIG = {
   // Деталь можно унести в другую локацию (механика переноса — Фаза 4).
   parts: [
     // — будущее —
-    { id: 'fa_core',        kind: 'mechanism', model: 'assets/models/phase_splitter_trident.glb',      colliderModel: 'assets/models/phase_splitter_trident_COL.glb',      homeLocation: 'future',  mechanism: 'pastActivation',    slot: 'pa_s1' },
-    { id: 'fa_coil',        kind: 'mechanism', model: 'assets/models/phase_modulator_ring.glb',      colliderModel: 'assets/models/phase_modulator_ring_COL.glb',      homeLocation: 'future',  mechanism: 'pastActivation',    slot: 'pa_s2' },
+    { id: 'fa_core',        kind: 'mechanism', model: 'assets/models/machine/core/phase_splitter_trident.glb',      colliderModel: 'assets/models/machine/core/phase_splitter_trident_COL.glb',      homeLocation: 'future',  mechanism: 'pastActivation',    slot: 'pa_s1' },
+    { id: 'fa_coil',        kind: 'mechanism', model: 'assets/models/machine/sides/phase_modulator_ring.glb',      colliderModel: 'assets/models/machine/sides/phase_modulator_ring_COL.glb',      homeLocation: 'future',  mechanism: 'pastActivation',    slot: 'pa_s2' },
     { id: 'pa_future_gear', kind: 'mechanism', model: null, homeLocation: 'future',  mechanism: 'presentActivation', slot: 'pr_s1' },
     { id: 'junk_f1',        kind: 'junk',      model: null, homeLocation: 'future',  mechanism: null,                slot: null  },
     { id: 'junk_f2',        kind: 'junk',      model: null, homeLocation: 'future',  mechanism: null,                slot: null  },
@@ -1009,16 +1072,24 @@ const CONFIG = {
 
   // === Меню и режимы сложности (сессия 29) ===
   game: {
-    defaultDifficulty: 'normal',
+    defaultDifficulty: 'medium',
+    // Порядок карусели меню (game-menu.js).
+    difficultyOrder: ['easy', 'normal', 'medium', 'hard', 'hardcore'],
+    // preAssembled — стадии цепочки, уже стоящие на старте (несбиваемые шаром).
+    // Собрать нужно оставшиеся стадии A→B→C→D→E по порядку.
+    //   easy: стоят ABC → собрать D,E | normal: AB → CDE | medium: A → BCDE
+    //   hard/hardcore: пусто → собрать всё. hardcore: больше мусора + быстрее ring_inner.
     difficulties: {
-      easy:   { label: 'Easy',     ballCount: 1, stackHeight: 3 },
-      normal: { label: 'Normal',   ballCount: 3, stackHeight: 4 },
-      hard:   { label: 'Hard',     ballCount: 5, stackHeight: 5 },
+      easy:     { label: 'Easy',     ballCount: 1, preAssembled: ['A', 'B', 'C'], junkCount: 5 },
+      normal:   { label: 'Normal',   ballCount: 2, preAssembled: ['A', 'B'],      junkCount: 6 },
+      medium:   { label: 'Medium',   ballCount: 3, preAssembled: ['A'],           junkCount: 7 },
+      hard:     { label: 'Hard',     ballCount: 4, preAssembled: [],              junkCount: 9 },
       hardcore: {
         label: 'Hardcore',
         ballCount: 5,
-        stackHeight: 5,
-        rotateAssemblyWithRing: 0,
+        preAssembled: [],
+        junkCount: 12,
+        ringInnerSpinMult: 2.2,
       },
     },
     // Общие отступы VR-плашек (game-menu, victory-ui) — menu-ui-layout.js.
@@ -1035,15 +1106,95 @@ const CONFIG = {
     menu: {
       worldPosition: { x: 0, y: 1.55, z: -0.65 },
       handPressRadius: 0.18,
+      handPressRadiusCard: 0.32,
       startText: 'Start',
       wireframeOnText: 'Wireframe: ON',
       wireframeOffText: 'Wireframe: OFF',
-      // Широкое меню: contentWidth задаёт ширину строк; кнопки — один fontSize.
-      layout: {
-        contentWidth: 1.45,
-        btnHeight:    0.165,
-        btnFontSize:  60,
-        wireframeBtn: { width: 0.55 },
+      // PNG для нового меню (карусель + старт + wireframe). Папка: assets/ui/menu/
+      // Формат: PNG sRGB, альфа. Цвета: см. menuTheme (cyan #33e0ff, серый карточек ~#6a6a6a).
+      assets: {
+        basePath: 'assets/ui/menu/',
+        cards: {
+          easy:     'card_easy.png',      // 512×768 px
+          normal:   'card_normal.png',    // 512×768 px
+          medium:   'card_medium.png',    // 512×768 px
+          hard:     'card_hard.png',      // 512×768 px
+          hardcore: 'card_hardcore.png',  // 512×768 px
+        },
+        cardPixelSize:   { w: 512, h: 768 },
+        cardSafeMargin:  36,   // отступ от края под срезанные углы (chamfer ~24 px)
+        startIdle:       'btn_start_idle.png',   // 1024×288 px, серая
+        startHover:      'btn_start_hover.png',  // 1024×288 px, cyan + glow
+        startPixelSize:  { w: 1024, h: 288 },
+        gearOff:         'icon_gear_off.png',    // 256×256 px, серая, прозрачный фон
+        gearOn:          'icon_gear_on.png',     // 256×256 px, cyan контур, прозрачный фон
+        gearPixelSize:   { w: 256, h: 256 },
+        sparkParticle:   'spark_particle.png',   // 128×128 px, мягкое cyan-пятно (опционально)
+      },
+      // Карусель / кнопки (метры, локально от game-menu root).
+      carousel: {
+        cardWidth:   0.30,
+        cardSpacing: 0.235,    // ближнее кольцо (offset 1) — раздвинуто, меньше перекрытия
+        farSpacingStep: 0.165, // offset 2: cardSpacing + step = 0.40 м от центра
+        carouselY:   0.14,
+        sideScale:   0.78,     // ближние (offset 1)
+        sideScaleFar: 0.50,    // дальние (offset 2) — ~36% меньше ближних
+        sideZ:       0.06,
+        maxVisibleOffset: 2,   // 2+2 карточки вокруг центра (wrap)
+        // Клик/наведение только по центру и ближним (offset ≤ clickableMaxOffset).
+        clickableMaxOffset: 1,
+        // Затемнение боковых (арт серый → множитель цвета, opacity всегда 1).
+        centerColor: '#ffffff',
+        dimNear:     0.60,     // offset 1 (соседние)
+        dimFar:      0.10,     // offset 2 (крайние) — в 2× темнее (было 0.20)
+        hoverCyan:   '#66f5ff',
+        // Неоновая cyan-рамка по контуру центральной карточки (тонкая линия + мягкий ореол).
+        frameColor:     '#33e0ff',
+        frameThickness: 0.006,  // тонкая чёткая линия, метры
+        frameGlow:      0.075,  // мягкий ореол вокруг линии, метры
+        frameChamfer:   0.045,  // срез углов, метры
+        framePad:       0.016,  // отступ рамки от края карточки, метры
+        pulseSpeed:     3.2,
+        // Бегущий по контуру рамки огонёк (canvas, тонкий штрих).
+        runnerColor:  '#e8feff',
+        runnerLength: 0.11,      // длина огонька, метры
+        runnerWidth:  0.013,     // толщина ядра, метры
+        runnerGlow:   0.038,     // ореол вокруг огонька, метры
+        runnerSpeed:  1.34,      // м/с по периметру (×2 от 0.67)
+        runnerFlashDurationMs:    1000,
+        runnerFlashIntervalMinMs: 4000,
+        runnerFlashIntervalMaxMs: 6000,
+      },
+      startBtn: {
+        width: 0.633,   // −⅓ от 0.95
+        height: 0.178,  // −⅓ от 0.267
+        y: -0.32,
+      },
+      gearBtn: {
+        size: 0.11,
+        y: -0.58,
+      },
+      veil: {
+        hideIds: [
+          'world-sky', 'room-fog-dome', 'outside-scenery', 'room-floor-fog',
+          'assembly-hub', 'ghost-tower-hint',
+        ],
+        radius: 48,
+      },
+      backdropVfx: {
+        sparkCount: 70,
+        // Искры привязаны к МИРУ и кружат вокруг игрока (не за взглядом).
+        shellRadiusMin: 1.8,   // ближе к игроку
+        shellRadiusMax: 5.5,   // дальний край облака
+        yMin: -1.4,            // относительно уровня глаз игрока
+        yMax: 3.0,
+        orbitSpeed: 0.12,      // рад/с вокруг игрока (± случайно)
+        bobAmp: 0.25,          // вертикальное покачивание, м
+        sparkSize: 0.05,       // размер спрайта (мир, м)
+        color: '#33e0ff',
+        coreColor: '#66f5ff',
+        explodeDurationMs: 900,
+        explodeSpeed: 3.2,
       },
     },
     // Палитра VR-меню: cyan + чёрный + белый (game-menu, victory-ui).
@@ -1065,31 +1216,10 @@ const CONFIG = {
     },
   },
 
-  // === Победа (Этап 5) ===
-  // stackColors и excludedColor заполняет js/init-session.js при каждой загрузке:
-  // shuffle(5 targetColors) → первые 4 = порядок башни снизу вверх, 5-й не нужен.
+  // === Победа — все слоты assembly-core заняты (victory-check.js) ===
   victory: {
-    stackHeight: 4,
-    stackColors: [],       // runtime: init-session.js
-    excludedColor: null,   // runtime: init-session.js
-
-    pedestalTopY: 1.0,
-    pedestalRadiusXZ: 0.25,
-
-    stackMaxHorizontalOffset: 0.07,
-    stackMinVerticalStep:     0.07,
-    stackMaxVerticalStep:     0.13,
-
-    maxLinearSpeed:   0.08,
-    maxAngularSpeed:  0.6,
     stableDurationMs: 1000,
     checkIntervalMs:  200,
-
-    // Призрачная подсказка на пьедестале (ghost-tower-hint.js).
-    // Декоративный wireframe — не связан с debug.showColliders.
-    ghostTower: {
-      lineOpacity: 1.0,
-    },
 
     // Плашка победы (victory-ui.js). Позиция = game.menu.worldPosition (общая с меню старта).
     ui: {

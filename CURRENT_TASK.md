@@ -1,113 +1,88 @@
 ---
-
-
-
 name: Current Task
-
-
-
 alwaysApply: true
-
-
-
 ---
-
-
 
 # CURRENT_TASK.md — Текущая задача
 
+## Задача: переделка сборки — GLB-машина + снеп-цепочка A→B→C→D→E (с.57)
 
+**Цель:** визуально законченный вытянутый механизм; детерминированная сборка по сложности вместо случайных слотов «на столе».
 
-## Задача: 3.5B — GLB детали vis + _COL, сборка ✅
+### Сделано (ПК, код) — не коммит
 
+- ✅ **config** — `machine.assemblyChain` (ось/шаг/стадии A–E), `machine.rig` (кольца), `difficulties` через `preAssembled`; `machine-manifest.json` + `refresh-machine-manifest.ps1` под папки `attach/box/core/drum/end/junk`.
+- ✅ **machine-rig.js** — грузит `machine.glb` + `ring.glb` + `ring_inner.glb`; спин `ring` (центр. ось) и `ring_inner` (случайная ось/знак per session, hardcore быстрее).
+- ✅ **index.html** — убраны `orbit-ring-0/1`; добавлена GLB-машина; `#assembly-core` + сфера + купол-коллайдер перевешены под `#machine-ring-inner`.
+- ✅ **assembly-hub.js** — убран `rotateAssemblyWithRing`/orbit-ring; хаб = позиционный якорь.
+- ✅ **init-session.js** — по 1 GLB из каждой папки A–E → упорядоченная цепочка; leftover-варианты в junk-пул.
+- ✅ **assembly-core.js** — слоты вдоль оси; `findFreeSlotNear` — только следующая по порядку стадия (гейтинг A→E); `getSlotPose`.
+- ✅ **spawn-floating-cubes.js** — `preAssembled` детали спавнятся снепнутыми + `fixed`; остальные грабабельны; junk из пула; `clearCubes` чистит и реперентнутые детали.
+- ✅ **floating-cube.js** — снеп реперентит деталь под `#assembly-core` (co-rotation); `snapToSlotById`; `fixed` деталь несбиваема шаром и неснимаема рукой; un-snap/слом → реперент назад.
+- ✅ **ФИКС снепа (ПК, браузер-проверка):** DOM-реперент под `#assembly-core` рушил physx-тело (`disconnectedCallback → remove → «table index out of bounds»`), деталь оставалась dynamic и улетала по большому радиусу за вращающимся кольцом. Теперь БЕЗ реперента: деталь остаётся под `#floating-cubes-root`, `_forceKinematicFlag` дожимает `eKINEMATIC`, `_followSlot` в tick каждый кадр держит деталь в мировой позе слота (co-rotation). Проверено: зазор деталь↔слот ~2–5 мм, снеп рукой без крашей.
+- ✅ **config:** `machine.rig.ringSpinDeg` `18 → -18` (развёрнуто направление большого кольца).
+- ✅ **Пер-деталь позиции A–E:** `stages[i].position:{x,y,z}` в config; `stagePose` (`init-session.js`) прибавляет сдвиг к базе `originOffset + i*step` по оси.
+- ✅ **Тюнинг position A–E (ПК):** пользователь подогнал `assemblyChain.stages[].position` в config — визуально ок на ПК.
 
+### Осталось
 
-**Мастер-план:** `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md` → 3.5B.
+- ⬜ **QA** — Quest QA новой сборки (чек-лист ниже).
+- ⬜ **Уборка** — удалить старые дубль-папки `assets/models/machine/hold/` и `tip/` (не подключены).
 
+### Критерий «готово»
 
-
-**Цель 3.5B:** GLB vis + `_COL` collider, призраки под форму, слоты; состояния snapped/active/broken. **QA ✅ с.53**
-
-
-
-### Микро-шаги (3.5B)
-
-
-
-- ✅ **3.5B.1a** — `colliderModel` + пути `fa_core` / `fa_coil` в `config.js`.
-
-- ✅ **3.5B.1b** — `part-entity.js`: vis + `_COL`, `physx-hidden-collision`, wireframe.
-
-- ✅ **3.5B.1c** — `spawn-floating-cubes.js`: GLB parts на первых позициях (`glbPartIds`).
-
-- ✅ **3.5B.1d** — Quest QA ✅: grab → snap, wireframe `_COL`, FPS.
-
-- ⬜ **3.5B.0** — слоты от центра сферы/колец (пробовали с.50 — откат; опционально).
-
-- ✅ **3.5B.2** — `assembly-core`: призрак по `parts[].model` (vis GLB), box fallback.
-
-- ✅ **3.5B.2 QA** ✅ — призраки trident/ring; restart после победы ok.
-
-- ✅ **3.5B.3** — визуальные состояния + cyan разряды (`part-snap-energy.js`).
-
-- ✅ **3.5B.3 QA** ✅ — снеп, разряды по mesh, победа, broken (с.53).
-
-- ✅ **git commit** — `ba9ecdd` ✅ push main.
-
-
-
-**Не делаем в 3.5B:** `location-manager` (Фаза 4), перенос между комнатами.
-
-
-
-**Закрыто (3.5B.3 ✅):** `setVisualState`; ridged шейдер + bolt-линии по поверхности mesh.
-
-**Закрыто (3.5B.2 ✅):** призраки слотов по vis-GLB; fix `restartGame()` после победы.
-
-**Закрыто (3.5B.1 ✅):** vis + `_COL`, `part-entity.js`, spawn `glbPartIds`.
-
-
-
-**Закрыто (3.5A ✅):** magnet grab — collider якорь, Fixed joint, snap фронтом, VFX, Quest QA (с.49).
-
-
+- [x] Цепочка A→E визуально стыкуется в вытянутый механизм (ПК, position-тюнинг) — Quest не проверен.
+- [ ] Гейтинг работает: нельзя поставить B без A и т.д.
+- [ ] Сложности: easy ABC / normal AB / medium A предустановлены и несбиваемы; hard/hardcore — с нуля.
+- [ ] Победа при всех 5 занятых слотах; «Заново» / «В меню» — ок.
 
 ---
 
+## Quest QA — чек-лист (новая сборка)
 
+**Среда:** Quest Link → `http://localhost:<порт>` (`npx serve`).
 
-## Working Context
+### Машина и кольца
+- [ ] `machine.glb` виден статично; `ring` крутится вокруг центральной оси; `ring_inner` крутится (своя случайная ось).
+- [ ] Снеп-схема + белая сфера + купол вращаются вместе с `ring_inner`.
 
+### Сборка (гейтинг)
+- [ ] Деталь A встаёт в слот; B/C/D/E не встают, пока не стоит предыдущая.
+- [ ] После A → встаёт B, и так до E; получается вытянутое устройство ABCDE.
+- [ ] Снепнутая деталь вращается вместе со схемой (не отрывается).
+- [ ] Стадия C (core) дополнительно крутится вокруг своей оси.
 
+### Сложности (5 прогонов)
+| Сложность | Стоит на старте | Собрать | Шары |
+|-----------|-----------------|---------|------|
+| Easy | A,B,C | D,E | 1 |
+| Normal | A,B | C,D,E | 2 |
+| Medium | A | B,C,D,E | 3 |
+| Hard | — | A,B,C,D,E | 4 |
+| Hardcore | — | A,B,C,D,E | 5 |
 
-### ИЗВЕСТНО (наследие 3.5A)
+- [ ] **Easy** — ABC стоят, несбиваемы шаром; собрать D,E.
+- [ ] **Normal** — AB стоят, несбиваемы; собрать CDE.
+- [ ] **Medium** — A стоит, несбиваема; собрать BCDE.
+- [ ] **Hard** — всё с нуля.
+- [ ] **Hardcore** — всё с нуля; мусора больше; `ring_inner` крутится заметно быстрее.
 
+### Мусор / шары / победа
+- [ ] Вокруг машины летает junk (GLB + при нехватке — неиспользованные варианты деталей / цветные кубы).
+- [ ] Шар сбивает поставленную игроком деталь (не предустановленную) — она вылетает.
+- [ ] Все слоты заняты → плашка победы; «Заново» — новая раскладка; «В меню» — возврат.
 
+### Если ❌ — записать
+1. Сложность / стадия (A–E) 2. Шаг (спавн / снеп / гейтинг / вращение / победа) 3. Ожидание vs факт.
 
-- **Grab якорь:** `#*HandCollider` — `hands.grab.colliderLocal`; snap + joint target = центр сферы.
+---
 
-- **Фронт snap:** `hands.grab.attachAxis` `{0, -1, 0}` (Quest −Y = к пальцам).
+**Фаза 4** (локации, перенос деталей между комнатами) — после закрытия QA сборки.
 
-- **VFX:** `hand-magnet-vfx` на `#*Magnet`, sync к collider; `sparkSeparation: 0.04`.
+---
 
-- **Кулак:** `#*HandBody` + `bodyCollider.parts` (отдельная калибровка).
+## Старт следующей сессии
 
-- **GLB детали (3.5B.1):** `part-entity.js` — vis + `_COL`; `glbPartIds: ['fa_core','fa_coil']`.
-
-- **Визуал детали (3.5B.3):** снеп → cyan разряды (`part-snap-energy.js`), не emissive.
-
-- **Файлы:** `phase_splitter_trident.glb` + `_COL`, `phase_modulator_ring.glb` + `_COL`.
-
-- **Купол:** energy-шейдер `room-fog-dome` (cartoon с.50 — откат).
-
-- **Пол:** текстура `assets/textures/floor/asphalt.jpg` (`room.fogDome.floorTexture`, repeat 2 m).
-
-
-
-### Следующее действие
-
-
-
-**Фаза 4** — `location-manager` (обновить `CURRENT_TASK.md` при старте).
-
-**Сессия 53 закрыта** — commit `ba9ecdd`, push main ✅.
+1. **Quest QA** — по чек-листу ниже (машина/кольца → гейтинг → 5 сложностей → мусор/шары/победа); проверить co-rotation снепа на Quest.
+2. **Commit** — по запросу (с.57–59 незакоммичена).
+3. Открытый техдолг: утечки купола (капсула) при наклонной оси ring_inner; уборка дубль-папок `hold/`,`tip/`.

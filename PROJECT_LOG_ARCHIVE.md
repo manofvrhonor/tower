@@ -27,6 +27,8 @@
 | PROJECT_START, DECISIONS LOCK | 45 | старт сессии, grep ARCHIVE |
 | hand-controls-local, magnet tip | 46 | 3.5A.0–3.3 |
 | Fixed joint, snap грань red-tip | 48 | **не** faceStandoff / сдвиг collider |
+| machine-rig, снеп-цепочка A→E, ring_inner | 57 | ADR-24; **не** orbit-ring/sideCount |
+| follow-slot снеп, force eKINEMATIC, ring reverse | 58 | ADR-24 v2; **не** DOM-реперент детали |
 
 ## Хронология (одной строкой)
 
@@ -43,7 +45,9 @@
 | 46 | ✅ | 3.5A офлайн, magnet tip, VFX, contact joint |
 | 47 | ✅ | 3.5A body collider кулака; grab anchor (зазор tip — открыто) |
 | 48 | ⚠️ | 3.5A.4 Fixed joint + snap грани; faceStandoff откат; Quest QA открыт |
-| → | в работе | 3.5A.4 Quest QA (`CURRENT_TASK.md`) |
+| 49–56 | ✅/⚠️ | руки GLB, 3.5B детали/призраки/разряды, меню PNG, сложности 5 lvl |
+| 57–58 | ⚠️ | GLB-машина + снеп-цепочка A→E; фикс co-rotation (follow-slot); Quest QA открыт |
+| → | в работе | пер-деталь позиции стадий + Quest QA сборки (`CURRENT_TASK.md`) |
 
 ---
 
@@ -955,3 +959,160 @@
 **Следующая сессия:** **Фаза 4** — `location-manager`.
 
 **Commit:** `ba9ecdd` — push main ✅.
+
+---
+
+## Сессия 54 — Фаза 6: VR-меню PNG (veil, искры, карусель) ⚠️ не закрыта
+
+### Сделано
+
+- **Medium** — 5-й уровень сложности в `CONFIG.game.difficulties`.
+- **Ассеты:** 9 PNG в `assets/ui/menu/`; спека в `CONFIG.game.menu.assets`.
+- **`menu-world-veil.js`** — чёрная завеса на камере, мир скрыт до Start.
+- **`menu-backdrop-vfx.js`** — cyan-искры; взрыв по кругу при Start.
+- **`game-menu.js`** — переписан под PNG: карусель, Start, gear, hover/pointer.
+- **`index.html`** — подключены новые компоненты.
+
+### Не закрыто / регрессии (пользователь, конец сессии)
+
+- **Карусель:** нужен **wrap** (выбранная по центру, боковые сзади), не линейный ряд Easy→Hardcore.
+- **Неактивные карточки:** нужны **обесцвеченные, opacity 1** — не полупрозрачные (`inactiveOpacity: 0.42` — ошибка).
+- **Слои:** боковые не должны наезжать на центр; occlusion без прозрачности.
+- **Hover:** прицел должен ловить **всю площадь** карточки (hit-plane + перекрытия боковых).
+- **Свечение:** мягкое по контуру **часов**, не прямоугольник PNG.
+- **Quest QA** — не прогоняли.
+
+### Технический долг
+
+- Не вызывать `_sortCarouselDom` (ломает DOM/mesh).
+- Не путать «не просвечивать» с `opacity < 1`.
+
+**Файлы:** `game-menu.js`, `menu-world-veil.js`, `menu-backdrop-vfx.js`, `config.js`, `index.html`, `assets/ui/menu/*.png`.
+
+**Следующая сессия:** **6.6-fix** — карусель wrap + opaque desaturate + hover/layers → Quest QA.
+
+**Commit:** нет (незакоммичено).
+
+---
+
+## Сессия 55 — Фаза 6: меню PNG — карусель, hover, искры, рамка ⚠️ Quest QA
+
+### Сделано
+
+- **`game-menu.js`** — полный rewrite: wrap-карусель (2+2), dim боковых (opacity 1), occlusion (renderOrder), hit-plane hover, неон-рамка + **бегущий огонёк на canvas** (`runnerSpeed` 0.67 м/с).
+- **`config.js`** — carousel (`dimNear/dimFar`, `sideScaleFar`, `clickableMaxOffset`, `frame*`, `runner*`), `defaultDifficulty: medium`, `backdropVfx` shell/orbit.
+- **Фикс старта:** `_layoutCarousel()` после `loaded` меша карточки (renderOrder до загрузки → наезд).
+- **`victory-ui.js`** — `victory-ui-clickable` только при показе плашки (`_setClickable`); скрытые кнопки перехватывали луч над нижней половиной карточек (THREE-raycaster игнорирует `visible`).
+- **`menu-backdrop-vfx.js`** — искры в **мировых** координатах (орбита вокруг игрока), не на камере.
+- **Тюнинг карусели:** ближние раздвинуты; крайние меньше/темнее/некликабельны; клик только center + соседи.
+- **Анимация огонька:** `tick()` компонента вместо `addEventListener('tick')` (Event ≠ time/delta).
+
+### ПК smoke ✅ (браузер)
+
+- F12 без красных; MEDIUM по центру; карусель/hover/Start/gear/искры; огонёк по рамке.
+
+### Не закрыто
+
+- **6.7 Quest QA** — grip + raycaster, визуал в шлеме (пользователь не прогонял).
+
+### Технический долг (не повторять)
+
+- Огонёк на отдельном mesh за PNG — не виден; рисовать на canvas рамки.
+- `inactiveOpacity < 1` для боковых карточек — ошибка (с.54).
+- `_sortCarouselDom` — ломает mesh (с.54).
+
+**Файлы:** `game-menu.js`, `victory-ui.js`, `menu-backdrop-vfx.js`, `config.js`, `CURRENT_TASK.md`.
+
+**Следующая сессия:** **6.7** Quest QA → закрыть Фазу 6 → **Фаза 4**.
+
+**Commit:** нет (незакоммичено).
+
+---
+
+## Сессия 56 — Сложности 5 lvl, machine roll, меню polish ⚠️ core spin
+
+### Сделано
+
+- **Папки моделей:** `assets/models/machine/core`, `sides`, `junk/`; GLB перенесены; `scripts/refresh-machine-manifest.ps1`.
+- **Сложность:** 5 уровней — `ballCount`, `sideCount`, `junkCount`; `rollAssemblySession()`; спавн из `CONFIG.session`; динамические слоты `assembly-core`.
+- **Убрано:** `stackHeight`, `shuffleVictoryScheme` для победы (остался `ghost-tower-hint` legacy).
+- **Меню (продолжение Ф.6):** огонёк — бег невидим + вспышки 1 с / 4–6 с, scale 0→100→0; runner ×2 speed; Start −⅓; крайние карточки 0.40 м, `dimFar` 0.10.
+- **Core spin:** `part-entity` — `_bakeRootTransform`, `coreSpinAxis: 'x'|'y'|'z'`; крутится vis, collider статичен.
+
+### Не закрыто
+
+- **Core spin axis** — пользователь: ось всё ещё не та; нужна **буква X/Y/Z из Blender** (не угадывать).
+- **diff-5 Quest QA** — 5 сложностей, junk fallback, hardcore стол.
+- **6.7 Quest QA** меню — не прогоняли.
+
+### Техдолг
+
+- Не возвращать bbox/world/assembly-up авто-оси для spin.
+- GLB root rotation — только через `_bakeRootTransform`, ось в `CONFIG.machine.coreSpinAxis`.
+
+**Файлы:** `config.js`, `init-session.js`, `game-lifecycle.js`, `spawn-floating-cubes.js`, `assembly-core.js`, `part-entity.js`, `floating-cube.js`, `game-menu.js`, `index.html`, `assets/models/machine/**`, `machine-manifest.json`, `scripts/refresh-machine-manifest.ps1`.
+
+**Следующая сессия:** **core spin** (X/Y/Z от пользователя) → **diff-5** + **6.7** Quest QA.
+
+**Commit:** нет (незакоммичено).
+
+---
+
+## Сессия 57 — Переделка сборки: GLB-машина + снеп-цепочка A→E ⚠️ Quest QA
+
+### Сделано (ПК, код)
+
+- **Отмена процедурной зоны:** убраны `orbit-ring-0/1` + коллайдеры из `index.html` (`orbit-ring.js` не подключён). `diff-5` (старая схема) закрыт как неактуальный — не тестировали.
+- **GLB-машина** (`machine-rig.js`): `machine.glb` статичен; `ring.glb` крутится вокруг центральной оси; `ring_inner.glb` крутится случайно (ось+знак per session; hardcore ×`ringInnerSpinMult`).
+- **Иерархия** (`index.html`): `#assembly-hub → #machine-rig`, `#machine-ring → #machine-ring-inner →` (`#assembly-core`, купол-коллайдер, сфера-визуал). Снеп-схема и купол вращаются с `ring_inner`.
+- **Данные** (`config.js`): `machine.assemblyChain` (axis/step/originOffset/stages A–E), `machine.rig`; `difficulties` через `preAssembled` (easy ABC / normal AB / medium A / hard,hardcore пусто), `ballCount`/`junkCount` сохранены, `sideCount`/`rotateAssemblyWithRing` убраны. Manifest + PS1 под папки `attach/box/core/drum/end/junk`.
+- **Цепочка** (`init-session.js`): по 1 случайной GLB из каждой папки → упорядоченные слоты; leftover-варианты + `junk/` → junk-пул; добор цветными кубами.
+- **Гейтинг** (`assembly-core.js`): `nextRequiredOrder` + `findFreeSlotNear` только для следующей стадии; `getSlotPose` (world+local).
+- **Снеп + co-rotation** (`floating-cube.js`): снепнутая деталь реперентится под `#assembly-core` (kinematic, крутится с `ring_inner`); `snapToSlotById` (старт предустановленных); `fixed` — несбиваема шаром, неснимаема рукой; un-snap/слом → реперент назад под `#floating-cubes-root`.
+- **Спавн** (`spawn-floating-cubes.js`): `preAssembled` → `startSnapped`+`fixed`; остальные грабабельны; `clearCubes` чистит и реперентнутые детали под `#assembly-core`.
+- **assembly-hub.js** — сведён к позиционному якорю + reset occupancy.
+
+### Не закрыто
+
+- **Quest QA** новой сборки — не прогоняли (чек-лист в `CURRENT_TASK.md`).
+- **Тюнинг** `assemblyChain` (axis/step/originOffset/повороты стадий) — на глаз на ПК.
+- **Уборка** дубль-папок `assets/models/machine/hold/`, `tip/` (не подключены; оставлены — удалить вручную).
+
+### Техдолг / риски (проверить в Quest)
+
+- Co-rotation снепнутых деталей опирается на sync kinematic-actor из world-matrix при вращении родителя (как у рук). Если physx не тянет — деталь визуально оторвётся от схемы.
+- Купол-коллайдер (капсула, открытый низ) теперь вращается — при наклонной оси возможны утечки float-inside кубов; тюнить при QA.
+
+**Файлы:** `config.js`, `index.html`, `machine-rig.js` (нов.), `assembly-hub.js`, `assembly-core.js`, `floating-cube.js`, `init-session.js`, `spawn-floating-cubes.js`, `game-lifecycle.js`, `machine-manifest.json`, `scripts/refresh-machine-manifest.ps1`.
+
+**Следующая сессия:** Quest QA сборки → тюнинг цепочки → **Фаза 4** (локации).
+
+**Commit:** нет (незакоммичено).
+
+---
+
+## Сессия 58 — Фикс снепа (co-rotation) + разворот кольца ⚠️ Quest QA
+
+### Диагностика (браузер MCP, ПК)
+
+- **ПК smoke** через браузер: F12 без красных; `machine/ring/ring_inner` грузятся; roll medium собрал цепочку A*(pre) B C D E, junk 7, `_COL`-пути ок.
+- **Баг «деталь A орбитит далеко за куполом»** (риск с.57 реализовался). На живой сцене: снепнутая деталь = `PxRigidDynamic`, флаг `eKINEMATIC` НЕ выставлен, латч `physx-body.setKinematic` пуст, хотя `data.type='kinematic'`. Тело остаётся dynamic → physx пишет **мировую** позу в **локальный** `object3D` → вращающийся `ring_inner` раскручивает большой локальный офсет.
+- **Краш `table index out of bounds`** (`_snapToSlot → coreEl.appendChild → disconnectedCallback → physx-body.remove → wakeUp`): DOM-реперент детали под `#assembly-core` сносит/пересоздаёт physx-тело во время захвата.
+- Биндинг `tock` (из `toString()`): kinematic-флаг ставится по латчу `type==='kinematic' && !setKinematic`, затем `kinematicMove()` гонит `setKinematicTarget` из world-matrix. Форс флага вживую → деталь мгновенно встала в слот (`partWorld===slotWorld`), co-rotation ок.
+
+### Сделано (ПК, код)
+
+- **ФИКС снепа** (`floating-cube.js`, ADR-24 v2): **убран DOM-реперент** под `#assembly-core`. Деталь остаётся под `#floating-cubes-root`; `_forceKinematicFlag` дожимает `eKINEMATIC` явно; `_setObjWorldPose` ставит в мировую позу слота; `_followSlot` в `tick` (state `snapped`) каждый кадр держит деталь в текущей мировой позе слота (co-rotation без реперента). Проверено: зазор деталь↔слот ~2–5 мм (лаг 1 кадр); снеп рукой (part B) — без крашей и ошибок консоли.
+- **Разворот кольца** (`config.js`): `machine.rig.ringSpinDeg` `18 → -18`.
+
+### Не закрыто
+
+- **Quest QA** новой сборки — не прогоняли.
+- **Тюнинг цепочки** — сейчас поза стадии считается **только вдоль одной оси** `assemblyChain.axis` с равным `step` (`stagePose` в `init-session.js`); у стадии есть только `rotation`, **пер-деталь позиции нет**. Пользователь: «не все детали на нужной оси» → **следующий шаг: добавить пер-стадийный `position:{x,y,z}`-сдвиг** в `stagePose` + примеры в config.
+- **Уборка** дубль-папок `hold/`, `tip/`.
+
+**Файлы:** `floating-cube.js`, `config.js`, `CURRENT_TASK.md`.
+
+**Следующая сессия:** пер-деталь position-сдвиг стадий A–E → тюнинг цепочки → Quest QA → Фаза 4.
+
+**Commit:** нет (вся с.57–58 незакоммичена).

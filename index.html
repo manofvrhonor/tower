@@ -21,7 +21,7 @@
 
   <!-- Конфиг и логика. Порядок важен:
        1) config.js — глобальный CONFIG;
-       2) init-session.js — shuffle stackColors до парсинга сцены;
+       2) init-session.js — preload machine-manifest; roll при startGame;
        3) floating-cube.js — компонент до парсинга <a-scene>;
        4) spawn-*.js — спавн по startGame() из game-lifecycle.js;
        5) dome-builder.js, ghost-tower-hint.js, victory-check.js — до <a-scene>;
@@ -50,7 +50,7 @@
   <script src="js/ball-wave-manager.js"></script>
   <script src="js/spawn-ball-bat.js"></script>
   <script src="js/components/dome-builder.js"></script>
-  <script src="js/components/orbit-ring.js"></script>
+  <script src="js/components/machine-rig.js"></script>
   <script src="js/components/assembly-hub.js"></script>
   <script src="js/components/assembly-sphere-visual.js"></script>
   <script src="js/components/collider-debug-viz.js"></script>
@@ -58,6 +58,8 @@
   <script src="js/components/assembly-core.js"></script>
   <script src="js/components/victory-check.js"></script>
   <script src="js/components/victory-ui.js"></script>
+  <script src="js/components/menu-world-veil.js"></script>
+  <script src="js/components/menu-backdrop-vfx.js"></script>
   <script src="js/components/game-menu.js"></script>
   <script src="js/components/world-hdri-sky.js"></script>
   <script src="js/components/room-fog-dome.js"></script>
@@ -72,6 +74,8 @@
     victory-check
     victory-ui
     game-menu
+    menu-world-veil
+    menu-backdrop-vfx
     collider-debug-viz
     physx="
       autoLoad: true;
@@ -100,13 +104,18 @@
            physx-material="restitution: 0.15; staticFriction: 0.70; dynamicFriction: 0.60; collisionLayers: 0; collidesWithLayers: 2, 3, 4, 5, 7, 8, 9"></a-box>
 
 
-    <!-- ====== ЯДРО СБОРКИ (Фаза 2.x): орбитальные кольца + белая сфера ====== -->
+    <!-- ====== МАШИНА ВРЕМЕНИ: GLB-корпус + 2 кольца + снеп-цепочка ======
+         machine.glb статичен; ring крутится; ring_inner крутится случайно и
+         несёт снеп-схему (#assembly-core), сферу-визуал и купол-коллайдер. -->
     <a-entity id="assembly-hub" assembly-hub position="0 0.985 0">
-      <a-entity id="orbit-ring-0" orbit-ring="index: 0"></a-entity>
-      <a-entity id="orbit-ring-1" orbit-ring="index: 1"></a-entity>
-      <a-entity id="assembly-core" assembly-core position="0 0.015 0"></a-entity>
-      <a-entity id="dome-collider" dome-builder></a-entity>
-      <a-entity id="assembly-sphere-visual" assembly-sphere-visual></a-entity>
+      <a-entity id="machine-rig" machine-rig></a-entity>
+      <a-entity id="machine-ring">
+        <a-entity id="machine-ring-inner">
+          <a-entity id="assembly-core" assembly-core position="0 0 0"></a-entity>
+          <a-entity id="dome-collider" dome-builder></a-entity>
+          <a-entity id="assembly-sphere-visual" assembly-sphere-visual></a-entity>
+        </a-entity>
+      </a-entity>
     </a-entity>
 
     <a-entity id="ghost-tower-hint" ghost-tower-hint position="0 0 0" visible="false"></a-entity>

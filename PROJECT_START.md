@@ -16,7 +16,7 @@ alwaysApply: true
 ## Цель (кратко)
 
 VR **Tower of Time** для Quest 3 (WebXR). Белая комната, orbit-rings, сборка механизма из деталей.
-SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная игра** — Фазы 0–3 ✅, **3.5A ✅**, **Фаза 3.5B** (сборка и детали).
+SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная игра** — Фазы 0–3 ✅, **3.5B ✅**, **Фаза 6** (VR-меню PNG, не QA).
 
 ---
 
@@ -39,8 +39,8 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 ## Где мы
 
 - Этапы 0–8 (MVP) ✅. Стильная игра: Фазы **0–3 ✅** (outside-scenery, floor-fog, HDR sky).
-- **Сейчас:** **Фаза 3.5B ✅** — commit `ba9ecdd`, push main.
-- **Дальше:** git commit 3.5B → **Фаза 4** (локации).
+- **Сейчас:** **Переделка сборки** (с.57–58, ПК) — GLB-машина + снеп-цепочка A→E, вращение ring_inner, сложности через `preAssembled` (ADR-24). **Фикс co-rotation** снепа: без DOM-реперента детали, kinematic + `_followSlot` (с.58). Кольцо развёрнуто (`ringSpinDeg -18`). Quest QA сборки — открыт.
+- **Дальше:** пер-деталь position-сдвиг стадий A–E (не все на нужной оси) → Quest QA сборки → тюнинг цепочки → **Фаза 4** (локации).
 - Мастер-план: `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md`
 - **Не делаем:** VR-виньетка slo-mo. **Пропускаем:** захват «отлёт при тряске» (с.29).
 
@@ -69,6 +69,7 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 | 21 | floor-fog depth-prepass | room-floor-fog |
 | 22 | body collider рук, grab joint | hand-body-collider, physx-grab |
 | 23 | GLB vis + _COL collider | part-entity, parts[].colliderModel |
+| 24 | GLB-машина, снеп-цепочка A→E, ring_inner spin | machine-rig, assembly-core, init-session |
 
 ---
 
@@ -97,6 +98,11 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 | 51 | 3.5B.1 vis + _COL, part-entity, Quest QA | part-entity, glbPartIds, phase_*.glb |
 | 52 | 3.5B.2 призраки слотов; restartGame fix | assembly-core, game-lifecycle, victory-ui |
 | 53 | 3.5B.3 разряды, пол asphalt, QA ✅ | part-snap-energy, room-fog-dome, part-entity |
+| 54 | Фаза 6 меню PNG — veil, искры, карусель (старт) | game-menu, menu-world-veil, menu-backdrop-vfx, assets/ui/menu |
+| 55 | Фаза 6 меню — rewrite карусели, hover, искры мир, рамка ⚠️ Quest | game-menu, victory-ui, menu-backdrop-vfx, config |
+| 56 | Сложности 5 lvl + machine roll + меню polish ⚠️ core spin | init-session, spawn-floating-cubes, part-entity, game-menu, config, assets/models/machine |
+| 57 | GLB-машина + снеп-цепочка A→E, ring_inner ⚠️ Quest QA | machine-rig, assembly-core, init-session, assemblyChain |
+| 58 | Фикс снепа co-rotation (follow-slot, force eKINEMATIC), ring reverse | floating-cube, config; **не** DOM-реперент детали |
 
 ---
 
@@ -134,6 +140,18 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 - ❌ «Фикс» floor-fog только `depthTest:true` / opacity (с.43–44 → depth-prepass, ADR-21)
 - ❌ Stencil xz-диск для тумана; перебор URL HDR в рантайме (→ manifest)
 - ❌ `if (getScale() < 0.999)` для in-hand ударов (→ `isWorldSlowMo()`, ADR-18)
+
+**Меню / UI (Фаза 6):**
+- ❌ `inactiveOpacity < 1` для боковых карточек карусели — dim множителем цвета, opacity 1 (с.54–55)
+- ❌ `victory-ui-clickable` на скрытой плашке победы — THREE-raycaster игнорирует `visible`, ломает hover меню (с.55)
+- ❌ `scene.addEventListener('tick')` для анимации меню — Event, не `(time, delta)`; `tick()` компонента (с.55)
+- ❌ Огонёк рамки отдельным mesh за PNG карточки — не виден; canvas рамки (с.55)
+
+**Сборка / машина (Фаза 3.5B, с.57 ADR-24):**
+- ❌ Возвращать cyan `orbit-ring` как зону сборки/коллизию — заменено GLB-машиной (`machine-rig`)
+- ❌ Случайные слоты «на столе» / `sideCount` для сборки — снеп-цепочка A→E (`assemblyChain`)
+- ❌ Крутить physx-body core напрямую — whole-assembly rotation; **схема** (`#assembly-core`, не physx-body) реперентится под `#machine-ring-inner`
+- ❌ **DOM-реперент снепнутой ДЕТАЛИ под `#assembly-core`** — рушит physx-тело (`disconnectedCallback` → «table index out of bounds», деталь теряет kinematic и улетает). Co-rotation детали: kinematic + `_followSlot` (поза слота каждый кадр), с.58 ADR-24 v2
 
 **Закрыто / пропущено:**
 - ❌ Захват VR «отлёт при тряске» — пропущено пользователем (с.29)

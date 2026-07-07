@@ -86,6 +86,8 @@ AFRAME.registerComponent('floating-cube', {
     // Снеп в слот сборки (Фаза 1, шаг 1.3).
     this._assemblyCore = null;
     this._snappedSlotId = null;
+    // fixed — предустановленная деталь (сложность): несбиваемая, неснимаемая.
+    this._isFixed = false;
     this._beginSteerCycle();
 
     // Подписка на возможные события готовности тела (план А).
@@ -128,6 +130,7 @@ AFRAME.registerComponent('floating-cube', {
     var st = (evt.detail && evt.detail.state) ? evt.detail.state : evt.detail;
     if (st !== 'grabbed-dynamic') return;
     if (this.state !== 'snapped') return;
+    if (this._isFixed) return; // предустановленную деталь рукой не снять
     this._unsnapFromSlot();
   },
 
@@ -138,6 +141,7 @@ AFRAME.registerComponent('floating-cube', {
       core.releaseSlot(this._snappedSlotId);
     }
     this._snappedSlotId = null;
+    this._reparentToFloatingRoot();
     // Временное состояние; финальное (snapped/gravity/float) определит onGrabReleased.
     this.state = 'float';
     this._lastAppliedTimeScale = 1.0;
@@ -233,6 +237,7 @@ AFRAME.registerComponent('floating-cube', {
       core.releaseSlot(this._snappedSlotId);
     }
     this._snappedSlotId = null;
+    this._reparentToFloatingRoot();
 
     this.el.setAttribute('physx-body', 'type: dynamic');
     this._resetKinematicLatch();
@@ -314,6 +319,12 @@ AFRAME.registerComponent('floating-cube', {
     this._applyFloatPhysics(rb, true);
     this._physicsApplied = true;
 
+    // Предустановленная деталь (сложность) — сразу снеп в свой слот + fixed.
+    if (this.el.dataset && this.el.dataset.startSnapped === 'true' &&
+        this.state !== 'snapped' && this.el.dataset.startSlot) {
+      this.snapToSlotById(this.el.dataset.startSlot, true);
+    }
+
     if (this._pollIntervalId) {
       clearInterval(this._pollIntervalId);
       this._pollIntervalId = null;
@@ -366,7 +377,8 @@ AFRAME.registerComponent('floating-cube', {
     var core = this._getAssemblyCore();
     if (!core || typeof core.findFreeSlotNear !== 'function') return false;
 
-    var slot = core.findFreeSlotNear(this._getWorldPosition());
+    var partId = this.el.dataset && this.el.dataset.partId;
+    var slot = core.findFreeSlotNear(this._getWorldPosition(), partId);
     if (!slot) return false;
 
     this._snapToSlot(core, slot);
@@ -374,32 +386,107 @@ AFRAME.registerComponent('floating-cube', {
   },
 
   /**
-   * Ставит деталь в позу слота и фиксирует kinematic-локом (ADR-02 п.7):
-   * смена type на kinematic не пересоздаёт actor, тело держит позу из object3D.
-   * tick для state 'snapped' позу не трогает.
+   * Ставит деталь в МИРОВУЮ позу слота и замораживает её kinematic-телом.
+   *
+   * БЕЗ DOM-реперента под #assembly-core: перевес entity рушит physx-тело
+   * (@c-frame/physx дёргает disconnectedCallback → remove body → «table index
+   * out of bounds», деталь теряет kinematic и улетает). Деталь остаётся под
+   * #floating-cubes-root; co-rotation даёт tick (_followSlot): каждый кадр
+   * ставим деталь в текущую мировую позу слота, который крутится с ring_inner.
    */
-  _snapToSlot: function (core, slot) {
-    var obj = this.el.object3D;
-    var parent = obj.parent;
-    if (parent) {
-      // Мировая поза слота → локальная к родителю детали (#floating-cubes-root).
-      obj.position.copy(parent.worldToLocal(slot.position.clone()));
-      var pq = new THREE.Quaternion();
-      parent.getWorldQuaternion(pq);
-      obj.quaternion.copy(pq.invert().multiply(slot.quaternion));
-    } else {
-      obj.position.copy(slot.position);
-      obj.quaternion.copy(slot.quaternion);
-    }
-    obj.updateMatrixWorld(true);
+  _snapToSlot: function (core, slot, fixed) {
+    this._setObjWorldPose(slot.position, slot.quaternion);
 
     this.state = 'snapped';
     this._snappedSlotId = slot.slotId;
+    this._isFixed = !!fixed;
+    if (fixed) this.el.dataset.fixed = 'true';
     this.el.setAttribute('physx-body', 'type: kinematic');
+    this._forceKinematicFlag();
     core.occupySlot(slot.slotId, this.el);
     this._setPartVisual('snapped');
 
-    console.log('[floating-cube] snapped', this.el.id || '(no id)', '→ slot', slot.slotId);
+    console.log('[floating-cube] snapped', this.el.id || '(no id)', '→ slot',
+      slot.slotId, fixed ? '(fixed)' : '');
+  },
+
+  /**
+   * Принудительно выставляет флаг eKINEMATIC на теле детали.
+   *
+   * Биндинг ставит его в tock только по латчу (type==='kinematic' &&
+   * !setKinematic), но после снепа этот путь не всегда срабатывает — тело
+   * остаётся dynamic и physx пишет мировую позу в локальный object3D. Дожимаем
+   * флаг явно, чтобы деталь стала настоящим kinematic и держалась позой.
+   */
+  _forceKinematicFlag: function () {
+    var bodyComp = this.el.components['physx-body'];
+    var rb = (bodyComp && bodyComp.rigidBody) || this._rb;
+    if (!rb || typeof rb.setRigidBodyFlag !== 'function') return;
+    var PX = this._getPhysX();
+    var flag = PX && PX.PxRigidBodyFlag && PX.PxRigidBodyFlag.eKINEMATIC;
+    if (!flag) return;
+    try {
+      rb.setRigidBodyFlag(flag, true);
+      if (bodyComp) bodyComp.setKinematic = true;
+    } catch (e) {
+      console.warn('[floating-cube] force kinematic failed:', e.message);
+    }
+  },
+
+  /** Ставит object3D детали в заданную МИРОВУЮ позу (с учётом родителя). */
+  _setObjWorldPose: function (wp, wq) {
+    var obj = this.el.object3D;
+    var parent = obj.parent;
+    if (parent) {
+      parent.updateMatrixWorld(true);
+      obj.position.copy(parent.worldToLocal(wp.clone()));
+      var pq = this._tmpParentQuat || (this._tmpParentQuat = new THREE.Quaternion());
+      parent.getWorldQuaternion(pq);
+      obj.quaternion.copy(pq.invert().multiply(wq));
+    } else {
+      obj.position.copy(wp);
+      obj.quaternion.copy(wq);
+    }
+    obj.updateMatrixWorld(true);
+  },
+
+  /** Удержание снепнутой детали в текущей мировой позе её слота (co-rotation). */
+  _followSlot: function () {
+    if (!this._snappedSlotId) return;
+    var core = this._getAssemblyCore();
+    if (!core || typeof core.getSlotPose !== 'function') return;
+    var slot = core.getSlotPose(this._snappedSlotId);
+    if (!slot) return;
+    this._setObjWorldPose(slot.position, slot.quaternion);
+  },
+
+  /** Снеп напрямую в слот по id (предустановленные детали на старте). */
+  snapToSlotById: function (slotId, fixed) {
+    var core = this._getAssemblyCore();
+    if (!core || typeof core.getSlotPose !== 'function') return false;
+    var slot = core.getSlotPose(slotId);
+    if (!slot) return false;
+    this._snapToSlot(core, slot, fixed);
+    return true;
+  },
+
+  /** Вернуть деталь под #floating-cubes-root, сохранив мировую позу. */
+  _reparentToFloatingRoot: function () {
+    var root = document.getElementById('floating-cubes-root');
+    if (!root || this.el.parentNode === root) return;
+    var obj = this.el.object3D;
+    var wp = new THREE.Vector3();
+    var wq = new THREE.Quaternion();
+    obj.getWorldPosition(wp);
+    obj.getWorldQuaternion(wq);
+    root.appendChild(this.el);
+    var parent = root.object3D;
+    parent.updateMatrixWorld(true);
+    obj.position.copy(parent.worldToLocal(wp.clone()));
+    var pq = new THREE.Quaternion();
+    parent.getWorldQuaternion(pq);
+    obj.quaternion.copy(pq.invert().multiply(wq));
+    obj.updateMatrixWorld(true);
   },
 
   _enterFloatInsideMode: function (applyImpulse) {
@@ -435,6 +522,7 @@ AFRAME.registerComponent('floating-cube', {
 
     // Фаза 1.4: шар (BALL / WAVE_BALL) сбивает снепнутую деталь со слота.
     if (this.state === 'snapped' && this._isDangerBall(otherEl)) {
+      if (this._isFixed) return; // предустановленную деталь шаром не сбить
       this._breakSnapFromHit(otherEl);
       return;
     }
@@ -1210,8 +1298,10 @@ AFRAME.registerComponent('floating-cube', {
     var rb = this._rb;
     if (!rb) return;
     if (this.el.is && this.el.is('grabbed-dynamic')) return;
-    // Снепнутая деталь kinematic — позу держит object3D, физику не трогаем.
-    if (this.state === 'snapped') return;
+    if (this.state === 'snapped') {
+      this._followSlot();
+      return;
+    }
 
     if (this.state === 'float-inside') {
       var posIn = this._getWorldPosition();

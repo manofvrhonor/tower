@@ -273,7 +273,6 @@ AFRAME.registerComponent('victory-ui', {
       fontSize: restartFs, bg: this._btnStart,
     });
     restartData.fontSize = restartFs;
-    restartData.el.setAttribute('class', 'victory-ui-clickable');
     if (layout && layout.rows[0] && layout.rows[0].buttons[0]) {
       var rp = layout.rows[0].buttons[0];
       restartData.el.setAttribute('position', rp.x + ' ' + rp.y + ' ' + rp.z);
@@ -291,7 +290,6 @@ AFRAME.registerComponent('victory-ui', {
       fontSize: menuFs, bg: this._btnNormal,
     });
     menuBtnData.fontSize = menuFs;
-    menuBtnData.el.setAttribute('class', 'victory-ui-clickable');
     if (layout && layout.rows[1] && layout.rows[1].buttons[0]) {
       var mp = layout.rows[1].buttons[0];
       menuBtnData.el.setAttribute('position', mp.x + ' ' + mp.y + ' ' + mp.z);
@@ -399,10 +397,25 @@ AFRAME.registerComponent('victory-ui', {
     }
   },
 
+  /**
+   * Класс-цель для десктоп-курсора добавляется только когда плашка показана.
+   * THREE-raycaster игнорирует visible, поэтому скрытые кнопки победы иначе
+   * перехватывают луч поверх стартового меню (общая worldPosition). Курсор
+   * пересоздаётся на victory/return-to-menu и заново читает классы.
+   */
+  _setClickable: function (on) {
+    for (var i = 0; i < this._buttons.length; i++) {
+      var el = this._buttons[i].data.el;
+      if (on) el.classList.add('victory-ui-clickable');
+      else el.classList.remove('victory-ui-clickable');
+    }
+  },
+
   _hidePanel: function () {
     this._shown = false;
     this._nearBtn = null;
     this._nearHintLogged = false;
+    this._setClickable(false);
     if (this._root) this._root.setAttribute('visible', false);
     for (var i = 0; i < this._buttons.length; i++) {
       this._buttons[i].data.el.setAttribute('scale', '1 1 1');
@@ -451,6 +464,7 @@ AFRAME.registerComponent('victory-ui', {
     var pos = this._getMenuPosition();
     this._root.setAttribute('position', pos.x + ' ' + pos.y + ' ' + pos.z);
     this._root.setAttribute('visible', true);
+    this._setClickable(true);
     this._facePlayer();
     if (typeof window.enableDesktopUiCursor === 'function') {
       window.enableDesktopUiCursor();

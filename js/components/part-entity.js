@@ -50,6 +50,14 @@ AFRAME.registerComponent('part-entity', {
 
     this._brokenTimer = null;
 
+    this._spinAxisVec = new THREE.Vector3(0, 1, 0);
+
+    this._spinGroup = null;
+
+    this._visModelRoot = null;
+
+    this._spinAxisReady = false;
+
     this.loader = new THREE.GLTFLoader();
 
     this.loader.setCrossOrigin('anonymous');
@@ -181,6 +189,8 @@ AFRAME.registerComponent('part-entity', {
     this._visualState = state;
 
     this._clearBrokenTimer();
+
+    if (state === 'floating') this._resetVisSpin();
 
     this._applyVisualState(state);
 
@@ -330,11 +340,25 @@ AFRAME.registerComponent('part-entity', {
 
         self._prepareVisMaterials(root);
 
+        self._bakeRootTransform(root);
+
+        self._visModelRoot = root;
+
+        var spinGroup = new THREE.Group();
+
+        spinGroup.name = 'core-spin-group';
+
+        spinGroup.add(root);
+
+        self._spinGroup = spinGroup;
+
+        self._setupCoreSpinAxis();
+
         var visEl = document.createElement('a-entity');
 
         visEl.setAttribute('physx-no-collision', '');
 
-        visEl.setObject3D('mesh', root);
+        visEl.setObject3D('mesh', spinGroup);
 
         self.el.appendChild(visEl);
 
@@ -463,6 +487,130 @@ AFRAME.registerComponent('part-entity', {
     }
 
     rebuildWhenReady();
+
+  },
+
+
+
+  _modelFileName: function () {
+
+    var url = this.data.model || '';
+
+    return url.split('/').pop().split('?')[0] || '';
+
+  },
+
+
+
+  /**
+
+   * Запекает rotation/position/scale корня GLB в детей — оси X/Y/Z совпадают со слотом.
+
+   */
+
+  _bakeRootTransform: function (root) {
+
+    root.updateMatrix();
+
+    var m = root.matrix.clone();
+
+    var isIdentity =
+
+      Math.abs(m.elements[0] - 1) < 1e-4 && Math.abs(m.elements[5] - 1) < 1e-4 &&
+
+      Math.abs(m.elements[10] - 1) < 1e-4 &&
+
+      Math.abs(m.elements[12]) < 1e-4 && Math.abs(m.elements[13]) < 1e-4 &&
+
+      Math.abs(m.elements[14]) < 1e-4;
+
+    if (isIdentity) return;
+
+    var i;
+
+    for (i = 0; i < root.children.length; i++) {
+
+      root.children[i].matrix.premultiply(m);
+
+      root.children[i].matrix.decompose(
+
+        root.children[i].position,
+
+        root.children[i].quaternion,
+
+        root.children[i].scale
+
+      );
+
+      root.children[i].updateMatrix();
+
+    }
+
+    root.rotation.set(0, 0, 0);
+
+    root.position.set(0, 0, 0);
+
+    root.scale.set(1, 1, 1);
+
+    root.updateMatrix();
+
+    console.log('[part-entity] baked GLB root transform:', this.data.partId || this.data.model);
+
+  },
+
+
+
+  _setupCoreSpinAxis: function () {
+
+    var mc = (typeof CONFIG !== 'undefined' && CONFIG.machine) || {};
+
+    var file = this._modelFileName();
+
+    var entry = mc.coreSpinByFile && mc.coreSpinByFile[file];
+
+    var letter = (typeof entry === 'string' ? entry : mc.coreSpinAxis || 'y').toLowerCase();
+
+    if (letter === 'x') this._spinAxisVec.set(1, 0, 0);
+
+    else if (letter === 'z') this._spinAxisVec.set(0, 0, 1);
+
+    else this._spinAxisVec.set(0, 1, 0);
+
+    this._spinAxisReady = true;
+
+    console.log('[part-entity] core spin axis:', letter.toUpperCase(), '—', file);
+
+  },
+
+
+
+  _resetVisSpin: function () {
+
+    if (this._spinGroup) this._spinGroup.rotation.set(0, 0, 0);
+
+  },
+
+
+
+  tick: function (time, timeDelta) {
+
+    if (!this._spinGroup || !this._spinAxisReady) return;
+
+    if (this._visualState !== 'snapped' && this._visualState !== 'snapped_active') return;
+
+    if (!this.el.dataset || this.el.dataset.partRole !== 'core') return;
+
+    var mc = (typeof CONFIG !== 'undefined' && CONFIG.machine) || {};
+
+    var deg = mc.coreSpinSpeedDeg;
+
+    if (!deg) return;
+
+    var dt = Math.min((timeDelta || 16) / 1000, 0.1);
+
+    var angle = THREE.MathUtils.degToRad(deg) * dt;
+
+    this._spinGroup.rotateOnAxis(this._spinAxisVec, angle);
 
   },
 

@@ -494,6 +494,30 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 
 **Quest QA ✅** (с.29).
 
+**Дополнение (с.56):** сложность 5 уровней — `ballCount` + `sideCount` + `junkCount`; победа = слоты assembly-core (не башня кубов). `rollAssemblySession()` + `assets/models/machine/{core,sides}`, `junk/` + `machine-manifest.json`. Core spin: `CONFIG.machine.coreSpinAxis` = `'x'|'y'|'z'`; `_bakeRootTransform` в part-entity. Старая `stackHeight` / `shuffleVictoryScheme` — не использовать.
+
+---
+
+### ADR-24: GLB-машина времени + снеп-цепочка A→B→C→D→E (с.57)
+
+**Решение:**
+- Убрана процедурная cyan-зона: `orbit-ring-0/1` + коллайдеры (`orbit-ring.js` не подключён).
+- GLB-машина (`machine-rig.js`): `machine.glb` статичен; `ring.glb` крутится вокруг центральной оси; `ring_inner.glb` крутится случайно (ось+знак per session, hardcore быстрее — `ringInnerSpinMult`).
+- Снеп-схема (`#assembly-core`), сфера-визуал, купол-коллайдер — **дети `#machine-ring-inner`**, вращаются вместе с ним.
+- Цепочка вдоль `CONFIG.machine.assemblyChain` (`axis`, `step`, `originOffset`, `stages`): по 1 случайной GLB из папок `attach/box/core/drum/end`. Стадия C = role `core` (доп. спин своей оси, прежний `_bakeRootTransform`).
+- Последовательный гейтинг: `assembly-core.findFreeSlotNear` → только следующая по `order` незанятая стадия (B нельзя без A).
+- Снепнутая деталь **реперентится под `#assembly-core`** (co-rotation, kinematic). Un-snap/слом → реперент назад под `#floating-cubes-root` с сохранением мировой позы.
+- Сложность = `preAssembled` (стоящие на старте, несбиваемые `fixed`): easy ABC, normal AB, medium A, hard/hardcore пусто. Мусор: `junk/` + неиспользованные варианты стадий (leftovers) + добор цветными кубами.
+
+**Причина:** нужен визуально законченный вытянутый механизм и детерминированная сборка по сложности вместо случайных слотов «на столе».
+
+**Не делать:**
+- Возвращать cyan `orbit-ring` как зону сборки/коллизию.
+- Крутить physx-body core напрямую; whole-assembly rotation — только через реперент под вращающийся `ring_inner`.
+- `stackHeight` / `shuffleVictoryScheme` / `sideCount` (устарели).
+
+**Quest QA — открыт (с.57).**
+
 ---
 
 ## ДОРОЖНАЯ КАРТА
@@ -505,9 +529,9 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 ## ГДЕ МЫ СЕЙЧАС
 
 - **MVP ✅** (с.29–31): меню, сложность, купол R=2 m, Quest-прогон без блокеров.
-- **Стильная игра:** Фазы 0–3 ✅ (config, snap, cyan-купол, orbit-rings, outside-scenery, floor-fog, HDR).
-- **Сейчас:** **Фаза 3.5B ✅** — commit `ba9ecdd`. **Дальше:** Фаза 4.
-- **Дальше:** Фаза 4–7. Мастер-план: `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md`
+- **Стильная игра:** Фазы 0–3 ✅, **3.5B ✅** `ba9ecdd`.
+- **Сейчас:** **Переделка сборки** (с.57) — GLB-машина + снеп-цепочка A→E, вращение ring_inner, сложности через `preAssembled` (ADR-24). Меню/spin закрыты (с.56). Quest QA сборки — открыт.
+- **Дальше:** Quest QA сборки → тюнинг поз/шага цепочки на ПК → **Фаза 4** (локации).
 - **Не делаем:** VR-виньетка slo-mo. **Пропускаем:** захват «отлёт при тряске» (с.29).
 - **Тест:** Quest Link + localhost.
 

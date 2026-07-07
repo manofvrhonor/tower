@@ -24,9 +24,10 @@
     }
     currentDifficulty = id;
     if (CONFIG.balls) CONFIG.balls.count = preset.ballCount;
-    if (CONFIG.victory) CONFIG.victory.stackHeight = preset.stackHeight;
     console.log('[game-lifecycle] difficulty:', id,
-      '— balls:', preset.ballCount, 'stack:', preset.stackHeight);
+      '— balls:', preset.ballCount,
+      'pre-assembled:', (preset.preAssembled || []).join('') || '(none)',
+      'junk:', preset.junkCount);
     return true;
   }
 
@@ -70,8 +71,10 @@
   function spawnWorld() {
     applyDifficulty(currentDifficulty);
 
-    if (typeof window.shuffleVictoryScheme === 'function') {
-      window.shuffleVictoryScheme();
+    if (typeof window.rollAssemblySession === 'function') {
+      if (!window.rollAssemblySession()) {
+        console.error('[game-lifecycle] rollAssemblySession failed');
+      }
     }
 
     if (typeof window.respawnFloatingCubes === 'function') {
