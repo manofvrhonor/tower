@@ -1,7 +1,7 @@
 /* global AFRAME, CONFIG, THREE */
 
 /**
- * menu-world-veil — чёрный fullscreen в menu; скрывает мир до Start.
+ * menu-world-veil — чёрный fullscreen: меню до Start; переход между эпохами (Фаза 4).
  */
 AFRAME.registerComponent('menu-world-veil', {
   schema: {},
@@ -15,9 +15,12 @@ AFRAME.registerComponent('menu-world-veil', {
     this._veilMesh = null;
     this._veilMat = null;
     this._revealing = false;
+    this._covering = false;
     this._revealT = 0;
-    this._revealDur = 0.55;
+    this._coverT = 0;
+    this._revealDur = (this.cfg.revealDurationMs || 550) / 1000;
     this._onRevealDone = null;
+    this._onCoverDone = null;
 
     this._onReturnMenu = this._onReturnMenu.bind(this);
     this.el.sceneEl.addEventListener('return-to-menu', this._onReturnMenu);
@@ -32,8 +35,24 @@ AFRAME.registerComponent('menu-world-veil', {
   },
 
   tick: function (time, delta) {
-    if (!this._revealing || !this._veilMat) return;
     var dt = (delta || 16) / 1000;
+
+    if (this._covering && this._veilMat) {
+      this._coverT += dt;
+      var cu = Math.min(1, this._coverT / this._coverDur);
+      this._veilMat.opacity = cu;
+      if (cu >= 1) {
+        this._covering = false;
+        if (this._onCoverDone) {
+          var ccb = this._onCoverDone;
+          this._onCoverDone = null;
+          ccb();
+        }
+      }
+      return;
+    }
+
+    if (!this._revealing || !this._veilMat) return;
     this._revealT += dt;
     var u = Math.min(1, this._revealT / this._revealDur);
     this._veilMat.opacity = 1 - u;
@@ -51,21 +70,40 @@ AFRAME.registerComponent('menu-world-veil', {
 
   setMenuMode: function (on) {
     this._revealing = false;
+    this._covering = false;
     this._revealT = 0;
+    this._coverT = 0;
     if (this._veilMat) this._veilMat.opacity = 1;
     if (this._veilMesh) this._veilMesh.visible = !!on;
     this._setWorldVisible(!on);
   },
 
-  revealWorld: function (callback) {
+  /** Затемнение 0→1 (прыжок между эпохами). Мир не скрываем — только veil на камере. */
+  coverWorld: function (callback, durationMs) {
+    if (!this._veilMesh || !this._veilMat) {
+      if (callback) callback();
+      return;
+    }
+    this._revealing = false;
+    this._covering = true;
+    this._coverT = 0;
+    this._coverDur = (durationMs || 400) / 1000;
+    this._onCoverDone = callback || null;
+    this._veilMesh.visible = true;
+    this._veilMat.opacity = 0;
+  },
+
+  revealWorld: function (callback, durationMs) {
     if (!this._veilMesh || !this._veilMat) {
       this._setWorldVisible(true);
       if (callback) callback();
       return;
     }
+    this._covering = false;
     this._onRevealDone = callback || null;
     this._revealing = true;
     this._revealT = 0;
+    this._revealDur = (durationMs || this.cfg.revealDurationMs || 550) / 1000;
     this._veilMesh.visible = true;
     this._veilMat.opacity = 1;
   },

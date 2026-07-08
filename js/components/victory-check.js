@@ -1,13 +1,10 @@
 /* global AFRAME, CONFIG */
 
 /**
- * victory-check — проверка условия победы (Фаза 1.5).
+ * victory-check — победа после финальной эпохи (Фаза 4, шаг 8).
  *
- * Победа: все слоты активного механизма (#assembly-core) заняты снепнутыми
- * деталями (state 'snapped', не в руке). Удержание stableDurationMs →
- * 'mechanism-complete' и 'victory' на сцене (victory-ui слушает victory).
- *
- * Старая геометрия «башни кубов» (Этап 5) заменена на слоты assembly-core.
+ * Победа только в Future (unlocks == null): все слоты A→E снепнуты,
+ * квота эпохи выполнена. Present/Past → travel-ready, не victory.
  */
 AFRAME.registerComponent('victory-check', {
   schema: {},
@@ -78,6 +75,12 @@ AFRAME.registerComponent('victory-check', {
   },
 
   _evaluate: function () {
+    var loc = typeof getActiveLocation === 'function' ? getActiveLocation() : null;
+    // Present/Past — квота эпохи → travel-ready (location-manager), не победа.
+    if (loc && loc.unlocks != null) {
+      return { ok: false };
+    }
+
     var core = this._getAssemblyCore();
     if (!core || typeof core.areAllSlotsOccupied !== 'function') {
       return { ok: false };
@@ -88,6 +91,10 @@ AFRAME.registerComponent('victory-check', {
     if (slotCount < 1) return { ok: false };
 
     if (!core.areAllSlotsOccupied()) {
+      return { ok: false };
+    }
+
+    if (loc && typeof isLocationQuotaMet === 'function' && !isLocationQuotaMet()) {
       return { ok: false };
     }
 

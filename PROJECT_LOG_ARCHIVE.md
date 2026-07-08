@@ -29,6 +29,10 @@
 | Fixed joint, snap грань red-tip | 48 | **не** faceStandoff / сдвиг collider |
 | machine-rig, снеп-цепочка A→E, ring_inner | 57 | ADR-24; **не** orbit-ring/sideCount |
 | follow-slot снеп, force eKINEMATIC, ring reverse | 58 | ADR-24 v2; **не** DOM-реперент детали |
+| phase4, travel-ui, wrist-inventory | 62 | ADR-25; план phase4_locations.plan |
+| location-manager, travel-ready, travel-ui | 63 | Фаза 4 шаги 1–6; co-rotation freeze fix |
+| outside-scenery epoch, spawn quota, wrist-inventory | 64 | Фаза 4 шаги 7–9; **не** fog/HDR по эпохе |
+| wrist-inventory QA, cylinder pockets, collider fix | 65 | Фаза 4 шаг 10 ✅; retrieve правая рука |
 
 ## Хронология (одной строкой)
 
@@ -46,8 +50,12 @@
 | 47 | ✅ | 3.5A body collider кулака; grab anchor (зазор tip — открыто) |
 | 48 | ⚠️ | 3.5A.4 Fixed joint + snap грани; faceStandoff откат; Quest QA открыт |
 | 49–56 | ✅/⚠️ | руки GLB, 3.5B детали/призраки/разряды, меню PNG, сложности 5 lvl |
-| 57–58 | ⚠️ | GLB-машина + снеп-цепочка A→E; фикс co-rotation (follow-slot); Quest QA открыт |
-| → | в работе | пер-деталь позиции стадий + Quest QA сборки (`CURRENT_TASK.md`) |
+| 57–61 | ✅ | GLB-машина A→E, co-rotation, ring сегменты, victory-freeze, Quest QA |
+| 62 | ✅ | меню карточки + план Фазы 4 (ADR-25) |
+| 63 | ✅ | Фаза 4 шаги 1–6: config, location-manager, travel-ready, travel-ui, veil |
+| 64 | ✅ | Фаза 4 шаги 7–9: пейзаж домов, спавн по эпохе, wrist-inventory |
+| 65 | ✅ | Фаза 4 шаг 10: wrist QA, цилиндры, collider fix — **фаза закрыта** |
+| → | — | **Фаза 5** — опасности, таймер петли |
 
 ---
 
@@ -1197,3 +1205,109 @@
 **Следующая сессия:** **Фаза 4** (локации).
 
 **Commit сессии:** `f6ac1c5`
+
+---
+
+## Сессия 62 — Меню карточки + план Фазы 4 ✅
+
+**Дата:** 2026-07-08
+
+### Сделано
+
+- **game-menu / config:** карточки сложности — вертикально, `cardWidth: 0.39` (+30%), PNG **666×998**; `cardRotationZ: 0`.
+- **Дизайн Фазы 4** (согласовано с пользователем, без кода локаций):
+  - Сложность: во всех 5 режимах пустая машина (`preAssembled: []`); разница только шары + мусор; Hardcore сохраняет `ringInnerSpinMult`.
+  - Старт эпохи: **Present** (не Future из старого config).
+  - Маршрут: Present (снеп A+B) → Past (C+D) → Future (E) → победа; 2+2+1.
+  - Прыжок: freeze мира + быстрые кольца + комикс-панель (кнопки эпох) + veil + искры 2–3 с + fade-in.
+  - Перенос: до 2 деталей в инвентаре **левого запястья** (HL:Alyx), не снеп на ядре.
+  - Пейзаж: Past — дома ниже (×0.4), Future — выше (×2.5); v1 только множитель height.
+  - Боковые апгрейд-слоты — отложены.
+- **Документация:** план [`.cursor/plans/phase4_locations.plan.md`](../.cursor/plans/phase4_locations.plan.md); ADR-25; `CURRENT_TASK.md`.
+
+### Не закрыто (код)
+
+- Шаги 1–9 плана Фазы 4 — **следующая сессия**.
+
+**Файлы (правки сессии):** `js/config.js`, `js/components/game-menu.js`, `CURRENT_TASK.md`, `PROJECT_LOG*.md`, `PROJECT_START.md`, `.cursor/plans/phase4_locations.plan.md`.
+
+**Следующая сессия:** Фаза 4 — **шаг 1** (config сложность + эпохи).
+
+**Commit сессии:** _(нет — только docs + menu config)_
+
+---
+
+## Сессия 63 — Фаза 4: шаги 1–6 (прыжок во времени) ✅
+
+**Дата:** 2026-07-08
+
+### Сделано
+
+- **Шаг 1–2 (`config.js`):** `preAssembled: []` везде; `locations` — present start, `stageIds` 2+2+1, `sceneryHeightMult`, `progression.route`.
+- **Шаг 3 (`location-manager.js`):** API эпох, персистент комнат, `travelTo`, `travel-ready`; `index.html`.
+- **Шаг 4:** `stage-snapped` → квота → `travel-ready`; `victory-freeze` + spin boost ×5 (`machine-rig`).
+- **Шаг 5 (`travel-ui.js`):** комикс-панель, кнопки ←/→ эпох, `travelTo` по нажатию.
+- **Шаг 6:** `menu-world-veil` cover/reveal + `menu-backdrop-vfx` — быстрая орбита искр вокруг `#assembly-hub` на `travel-ready` и при переходе.
+- **Фикс:** снепнутая деталь не «зависала» при freeze — `_followSlot` первым в `tick`, `travel-ready` на следующий кадр.
+- **QA ✅** (пользователь): чек-листы шагов 1–6, co-rotation fix, искры orbit.
+
+### Не закрыто
+
+- **Шаг 7–8** — `outside-scenery` height mult, HDR/fog по эпохе, спавн по локации, victory-check квота.
+- **Шаг 9** — `wrist-inventory.js`.
+- Визуально эпохи пока одинаковы (пейзаж/HDR — шаг 7).
+
+**Файлы:** `config.js`, `location-manager.js`, `index.html`, `floating-cube.js`, `victory-freeze.js`, `machine-rig.js`, `travel-ui.js`, `menu-world-veil.js`, `menu-backdrop-vfx.js`, `desktop-ui-cursor.js`, `CURRENT_TASK.md`, `.cursor/plans/phase4_locations.plan.md`.
+
+**Следующая сессия:** Фаза 4 — **шаг 7–8** (пейзаж/HDR/fog + спавн).
+
+**Commit сессии:** _(нет)_
+
+---
+
+## Сессия 64 — Фаза 4: шаги 7–9 (пейзаж, спавн, запястье) ✅
+
+**Дата:** 2026-07-08
+
+### Сделано
+
+- **Шаг 7 (`outside-scenery`):** высота домов × `sceneryHeightMult`; текстуры стен — `locations[].scenery.primaryWalls` / `backgroundWalls` (present-/past-/future-*.jpg). Геометрия — `room.outsideScenery.*Prototypes` без `wall`.
+- **Решение пользователя:** купол, туман, HDR **не** меняются по эпохе — отличие только застройка за куполом.
+- **Шаг 8:** `spawn-floating-cubes.js` — детали только текущей эпохи; `location-changed` travel → доспавн; `victory-check` — победа только в Future (`unlocks == null`).
+- **Шаг 9 (`wrist-inventory.js`):** 2 слота на `#leftHand`, cyan-карманы; store — grip/trigger **up** любой рукой у запястья; retrieve — grip/trigger **down** левой; **любой** `floating-cube` (механизм + мусор); хуки `floating-cube` / `physx-grab`.
+- **`machine-manifest.json`:** junk 9 GLB (`01 junk.glb` … `08 junk.glb`, `pulse_capacitor_bank.glb`); fallback в `config.js`.
+
+### Не закрыто / Quest QA
+
+- Калибровка позиций `wristInventory.slots` на Quest (карманы на запястье).
+- **Шаг 10** — финальный чек-лист Фазы 4, обновление ADR-25 «Где мы».
+
+**Файлы:** `outside-scenery.js`, `world-hdri-sky.js`, `room-fog-dome.js`, `room-floor-fog.js`, `spawn-floating-cubes.js`, `victory-check.js`, `wrist-inventory.js`, `floating-cube.js`, `physx-grab.js`, `config.js`, `index.html`, `machine-manifest.json`, `assets/textures/outside-buildings/*`, `CURRENT_TASK.md`, `.cursor/plans/phase4_locations.plan.md`.
+
+**Следующая сессия:** Фаза 4 — **шаг 10** (Quest QA + закрытие фазы).
+
+**Commit сессии:** _(нет)_
+
+---
+
+## Сессия 65 — Фаза 4: шаг 10 + wrist-inventory Quest QA ✅
+
+**Дата:** 2026-07-09
+
+### Сделано
+
+- **Wrist-inventory (итерации QA):** store только внутри `pocketRadius`; лучи-притяжение (12, тонкие) — только от **ближайшего** пустого слота; retrieve — **правая** рука (не левая).
+- **Визуал карманов:** цилиндры (`assembly-sphere-visual`, preset `wrist`); пустые — белые разряды; занятый слот — голубое мерцание; деталь в кармане — cyan `part-snap-energy` + полупрозрачность.
+- **Collider fix:** при store/retrieve — `_forceKinematicFlag` / `_resetKinematicLatch` + полный `physx-body` (mass, emitCollisionEvents) + `object3dset` (повторный store/retrieve без потери коллайдера).
+- **Калибровка Quest:** `CONFIG.wristInventory.slots` — пользователь подобрал позиции цилиндров на запястье.
+- **Шаг 10:** Quest QA пройден → **Фаза 4 закрыта**.
+
+### Файлы
+
+`wrist-inventory.js`, `assembly-sphere-visual.js`, `part-snap-energy.js`, `part-entity.js`, `floating-cube.js`, `config.js`, `CURRENT_TASK.md`, `PROJECT_LOG.md`, `PROJECT_START.md`, `.cursor/plans/phase4_locations.plan.md`.
+
+### Следующая сессия
+
+**Фаза 5** — опасности, отбивание, таймер петли (мастер-план `tower_stylish_game_c39f4c3b.plan.md`).
+
+**Commit сессии:** _(нет)_

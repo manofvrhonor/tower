@@ -72,6 +72,37 @@ AFRAME.registerComponent('part-snap-energy', {
   },
 
   _stateCfg: function (mode) {
+    if (mode === 'wrist-stored') {
+      var wi = (typeof CONFIG !== 'undefined' && CONFIG.wristInventory) || {};
+      var se = wi.storedEnergy || {};
+      var base = this._readEnergyBase();
+      return {
+        color: se.color || '#18b8d8',
+        glowColor: se.glowColor || '#66f5ff',
+        coreColor: se.coreColor || '#d4feff',
+        noiseScale: se.noiseScale !== undefined ? se.noiseScale : (base.noiseScale || 9.0),
+        scrollSpeed: se.scrollSpeed !== undefined ? se.scrollSpeed : (base.scrollSpeed || 3.2),
+        streakSharpness: se.streakSharpness !== undefined
+          ? se.streakSharpness : (base.streakSharpness || 4.8),
+        flowWarp: se.flowWarp !== undefined ? se.flowWarp : (base.flowWarp || 0.5),
+        intensity: se.energyIntensity !== undefined ? se.energyIntensity : 0.88,
+        surfaceContrast: se.surfaceContrast !== undefined
+          ? se.surfaceContrast : (base.surfaceContrast || 2.6),
+        windowStrength: se.windowStrength !== undefined
+          ? se.windowStrength : (base.windowStrength || 0.4),
+        windowSpeed: se.windowSpeed !== undefined
+          ? se.windowSpeed : (base.windowSpeed || 2.4),
+        energyTint: se.energyTint !== undefined ? se.energyTint : 0.9,
+        fresnelStrength: se.fresnelStrength !== undefined
+          ? se.fresnelStrength : (base.fresnelStrength || 0.55),
+        boltCount: se.boltCount !== undefined ? se.boltCount : 5,
+        boltStepsMin: se.boltStepsMin !== undefined ? se.boltStepsMin : 4,
+        boltStepsMax: se.boltStepsMax !== undefined ? se.boltStepsMax : 9,
+        boltLifeMin: se.boltLifeMin !== undefined ? se.boltLifeMin : 0.1,
+        boltLifeMax: se.boltLifeMax !== undefined ? se.boltLifeMax : 0.32,
+      };
+    }
+
     var az = (typeof CONFIG !== 'undefined' && CONFIG.assemblyZone) || {};
     var pv = az.partVisual || {};
     var base = this._readEnergyBase();

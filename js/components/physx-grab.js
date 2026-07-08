@@ -105,6 +105,7 @@ AFRAME.registerComponent('physx-grab', {
     if (hitEl && hitEl.components['physx-body'].data.type === 'static') return;
     // Красные шары — не хватаем (Этап 6; отбивание — Этап 7).
     if (hitEl && hitEl.components['red-ball']) return;
+    if (hitEl && hitEl.dataset && hitEl.dataset.inWristInventory === 'true') return;
     if (!hitEl || hitEl.is(this.GRABBED_STATE) || !this.grabbing || this.hitEl) { return; }
     hitEl.addState(this.GRABBED_STATE);
     this.hitEl = hitEl;

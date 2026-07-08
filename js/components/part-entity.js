@@ -14,7 +14,7 @@
 
  *
 
- * 3.5B.3: setVisualState — floating / snapped / snapped_active / broken
+ * 3.5B.3: setVisualState — floating / snapped / snapped_active / broken / wrist-stored
 
  * (ghost — только assembly-core). Снеп → part-snap-energy (cyan разряды).
 
@@ -108,6 +108,11 @@ AFRAME.registerComponent('part-entity', {
 
   _readVisualCfg: function (state) {
 
+    if (state === 'wrist-stored') {
+      var wi = (typeof CONFIG !== 'undefined' && CONFIG.wristInventory) || {};
+      return { opacity: wi.storedOpacity !== undefined ? wi.storedOpacity : 0.42 };
+    }
+
     var az = (typeof CONFIG !== 'undefined' && CONFIG.assemblyZone) || {};
 
     var pv = az.partVisual || {};
@@ -178,7 +183,7 @@ AFRAME.registerComponent('part-entity', {
 
   /**
 
-   * @param {string} state floating | snapped | snapped_active | broken
+   * @param {string} state floating | snapped | snapped_active | broken | wrist-stored
 
    */
 
@@ -274,7 +279,8 @@ AFRAME.registerComponent('part-entity', {
 
       this._setEnergyMode('off');
 
-    } else if (state === 'snapped' || state === 'snapped_active' || state === 'broken') {
+    } else if (state === 'snapped' || state === 'snapped_active' || state === 'broken'
+        || state === 'wrist-stored') {
 
       this._setEnergyMode(state);
 
@@ -290,7 +296,7 @@ AFRAME.registerComponent('part-entity', {
 
 
 
-    if (state === 'floating' || state === 'broken') {
+    if (state === 'floating' || state === 'broken' || state === 'wrist-stored') {
 
       for (var i = 0; i < this._visMaterials.length; i++) {
 

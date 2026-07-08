@@ -29,6 +29,7 @@
        (до game-menu / victory-ui);
        6) main.js — диагностика. -->
   <script src="js/config.js"></script>
+  <script src="js/location-manager.js"></script>
   <script src="js/collider-bounds-cache.js"></script>
   <script src="js/assembly-zone.js"></script>
   <script src="js/menu-ui-draw.js"></script>
@@ -61,6 +62,8 @@
   <script src="js/components/victory-check.js"></script>
   <script src="js/components/victory-freeze.js"></script>
   <script src="js/components/victory-ui.js"></script>
+  <script src="js/components/travel-ui.js"></script>
+  <script src="js/components/wrist-inventory.js"></script>
   <script src="js/components/menu-world-veil.js"></script>
   <script src="js/components/menu-backdrop-vfx.js"></script>
   <script src="js/components/game-menu.js"></script>
@@ -77,6 +80,7 @@
     victory-check
     victory-freeze
     victory-ui
+    travel-ui
     game-menu
     menu-world-veil
     menu-backdrop-vfx
@@ -143,7 +147,8 @@
       <!-- Левая рука: hand-controls-local + physx-grab + дочерний коллайдер -->
       <a-entity id="leftHand"
                 hand-controls-local="hand: left; handModelStyle: lowPoly; color: #ffffff"
-                physx-grab>
+                physx-grab
+                wrist-inventory>
         <a-entity id="leftHandBody" hand-body-collider="hand: left"></a-entity>
         <a-entity id="leftMagnet" hand-magnet-vfx="hand: left">
           <a-sphere id="leftHandCollider"

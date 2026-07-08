@@ -535,10 +535,22 @@ AFRAME.registerComponent('game-menu', {
     return d;
   },
 
+  /** Локальные размеры plane (как в PNG: 512×768, портрет). */
   _cardSize: function () {
     var w = this.carouselCfg.cardWidth !== undefined ? this.carouselCfg.cardWidth : 0.30;
-    var aspect = 768 / 512;
+    var pixel = (this.assets && this.assets.cardPixelSize) || { w: 512, h: 768 };
+    var aspect = pixel.h / pixel.w;
     return { width: w, height: w * aspect };
+  },
+
+  /** Визуальный размер после cardRotationZ (для карусели и hit). */
+  _cardVisualSize: function () {
+    var s = this._cardSize();
+    var rot = this.carouselCfg.cardRotationZ !== undefined ? this.carouselCfg.cardRotationZ : 0;
+    if (Math.abs(rot) === 90 || Math.abs(rot) === 270) {
+      return { width: s.height, height: s.width };
+    }
+    return { width: s.width, height: s.height };
   },
 
   _buildUI: function () {
@@ -563,6 +575,8 @@ AFRAME.registerComponent('game-menu', {
       if (!src) continue;
 
       var slot = document.createElement('a-entity');
+      var cardRotZ = this.carouselCfg.cardRotationZ !== undefined ? this.carouselCfg.cardRotationZ : 0;
+      if (cardRotZ) slot.setAttribute('rotation', '0 0 ' + cardRotZ);
 
       var frame = this._makeNeonFrame(cardSize.width, cardSize.height);
       frame.el.setAttribute('visible', false);

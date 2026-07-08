@@ -3,9 +3,8 @@
 /**
  * outside-scenery — застройка за cyan-куполом (Фаза 3.1).
  *
- * Расстановка по схеме (вид сверху, rotation Y = 0):
- *   primary — 4 серых дома на диагоналях (±d, ±d);
- *   background — 4 зелёных на осях (±R, 0) и (0, ±R), в просветах между primary.
+ * Расстановка (вид сверху): primary — 4 дома на (±d,±d); background — 4 на осях.
+ * Фаза 4: высота × sceneryHeightMult; стены — locations[].scenery.*Walls (config.js).
  */
 AFRAME.registerComponent('outside-scenery', {
   schema: {},
@@ -17,18 +16,21 @@ AFRAME.registerComponent('outside-scenery', {
     this._buildings = [];
     this._texCache = {};
     this._loader = new THREE.TextureLoader();
+    this._onLocationChanged = this._onLocationChanged.bind(this);
+    this.el.sceneEl.addEventListener('location-changed', this._onLocationChanged);
     var self = this;
-    var cfg = this._readCfg();
-    if (!cfg.primaryPrototypes.length) {
+    var loc = this._getVisualLocation();
+    if (!(typeof CONFIG !== 'undefined' && CONFIG.room &&
+        CONFIG.room.outsideScenery &&
+        (CONFIG.room.outsideScenery.primaryPrototypes || []).length)) {
       console.error('[outside-scenery] primaryPrototypes[] пуст');
       return;
     }
-    this._preloadTextures(cfg, function () {
-      self._build(cfg);
-    });
+    this._buildForLocation(loc);
   },
 
   remove: function () {
+    this.el.sceneEl.removeEventListener('location-changed', this._onLocationChanged);
     this._disposeAll();
     if (this._root.parent) {
       this._root.parent.remove(this._root);
@@ -106,7 +108,62 @@ AFRAME.registerComponent('outside-scenery', {
     return primaryD + p.halfW + b.halfW + gap;
   },
 
-  _readCfg: function () {
+  _getVisualLocation: function () {
+    if (typeof getActiveLocation === 'function') {
+      var active = getActiveLocation();
+      if (active) return active;
+    }
+    var locs = (typeof CONFIG !== 'undefined' && CONFIG.locations) || [];
+    var i;
+    for (i = 0; i < locs.length; i++) {
+      if (locs[i].start) return locs[i];
+    }
+    return locs.length ? locs[0] : null;
+  },
+
+  _heightMultFromLocation: function (loc) {
+    if (loc && loc.sceneryHeightMult != null) return loc.sceneryHeightMult;
+    return 1;
+  },
+
+  _scalePrototypeHeights: function (cfg, mult) {
+    var lists = [cfg.primaryPrototypes, cfg.backgroundPrototypes];
+    var l;
+    var i;
+    for (l = 0; l < lists.length; l++) {
+      for (i = 0; i < lists[l].length; i++) {
+        lists[l][i].height *= mult;
+      }
+    }
+  },
+
+  _assignLocationWalls: function (prototypes, wallFiles) {
+    if (!wallFiles || !wallFiles.length) return;
+    var i;
+    for (i = 0; i < prototypes.length && i < wallFiles.length; i++) {
+      prototypes[i].wall = wallFiles[i];
+    }
+  },
+
+  _buildForLocation: function (loc) {
+    var self = this;
+    loc = loc || this._getVisualLocation();
+    var mult = this._heightMultFromLocation(loc);
+    var cfg = this._readCfg(loc);
+    this._scalePrototypeHeights(cfg, mult);
+    this._disposeAll();
+    this._texCache = {};
+    this._preloadTextures(cfg, function () {
+      self._build(cfg);
+    });
+  },
+
+  _onLocationChanged: function (evt) {
+    var loc = (evt && evt.detail && evt.detail.location) || this._getVisualLocation();
+    this._buildForLocation(loc);
+  },
+
+  _readCfg: function (loc) {
     var room = (typeof CONFIG !== 'undefined' && CONFIG.room) || {};
     var os = room.outsideScenery || {};
     var fd = room.fogDome || {};
@@ -129,6 +186,12 @@ AFRAME.registerComponent('outside-scenery', {
       os.backgroundPrototypes || [],
       '#9aa5b5'
     );
+
+    var scenery = loc && loc.scenery;
+    if (scenery) {
+      this._assignLocationWalls(primaryPrototypes, scenery.primaryWalls);
+      this._assignLocationWalls(backgroundPrototypes, scenery.backgroundWalls);
+    }
 
     var primaryAuto = this._minPrimaryAxisDistance(fogR, primaryPrototypes, clearance);
     var primaryAxis = primaryRing.axisDistance !== undefined

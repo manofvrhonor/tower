@@ -167,53 +167,26 @@ const CONFIG = {
         prototypeStep: 1,
         rotationY: 0,
       },
+      // Геометрия домов (общая). Текстуры стен — locations[].scenery.*Walls.
       primaryPrototypes: [
-        {
-          id: 'slim-tower',
-          width: 6.0, depth: 6.0, height: 25.0,
-          textureOnly: true,
-          wall: 'slim-tower-wall.jpg',
-        },
-        {
-          id: 'wide-low',
-          width: 12.0, depth: 10.0, height: 10.0,
-          textureOnly: true,
-          wall: 'wide-low-wall.jpg',
-        },
-        {
-          id: 'mid-block',
-          width: 9.0, depth: 8.0, height: 17.5,
-          textureOnly: true,
-          wall: 'mid-block-wall.jpg',
-        },
-        {
-          id: 'narrow-mid',
-          width: 7.0, depth: 11.0, height: 15.0,
-          textureOnly: true,
-          wall: 'narrow-mid-wall.jpg',
-        },
+        { id: 'slim-tower', width: 6.0, depth: 6.0, height: 25.0, textureOnly: true },
+        { id: 'wide-low', width: 12.0, depth: 10.0, height: 10.0, textureOnly: true },
+        { id: 'mid-block', width: 9.0, depth: 8.0, height: 17.5, textureOnly: true },
+        { id: 'narrow-mid', width: 7.0, depth: 11.0, height: 15.0, textureOnly: true },
       ],
       backgroundPrototypes: [
         {
-          id: 'bg-tower',
-          width: 30.0, depth: 30.0, height: 22.5,
+          id: 'bg-tower', width: 30.0, depth: 30.0, height: 22.5,
           color: '#9aa5b5',
-          wall: 'bg-tower-wall.jpg',
         },
         {
-          id: 'bg-block',
-          width: 15.0, depth: 15.0, height: 12.5,
-          color: '#a0aab8',
-          axisDistanceOffset: -1.0,
-          positionOffset: { x: -6, z: 0 },  // -4 м по оси X (вправо)
-          wall: 'bg-block-wall.jpg',
+          id: 'bg-block', width: 15.0, depth: 15.0, height: 12.5,
+          color: '#a0aab8', axisDistanceOffset: -1.0,
+          positionOffset: { x: -6, z: 0 },
         },
         {
-          id: 'bg-slim',
-          width: 27.0, depth: 27.0, height: 17.5,
-          color: '#8898a8',
-          axisDistanceOffset: -2.0,  // ближе к центру на 2 м (R 26 → 21)
-          wall: 'bg-slim-wall.jpg',
+          id: 'bg-slim', width: 27.0, depth: 27.0, height: 17.5,
+          color: '#8898a8', axisDistanceOffset: -2.0,
         },
       ],
     },
@@ -901,7 +874,11 @@ const CONFIG = {
       core:   ['core_51.glb', 'core_63.glb', 'phase_splitter_trident.glb'],
       drum:   ['hold_8.glb', 'hold_12.glb', 'phase_modulator_ring.glb'],
       end:    ['tip_2.glb', 'tip_10.glb', 'tip_30.glb'],
-      junk:   ['pulse_capacitor_bank.glb'],
+      junk:   [
+        '01 junk.glb', '02 junk.glb', '03 junk.glb', '04 junk.glb',
+        '05 junk.glb', '06 junk.glb', '07 junk.glb', '08 junk.glb',
+        'pulse_capacitor_bank.glb',
+      ],
     },
 
     // Снеп-цепочка вдоль локальной оси ring_inner. Детали крепятся
@@ -967,25 +944,76 @@ const CONFIG = {
   // Runtime: rollAssemblySession() в init-session.js (не править вручную).
   session: null,
 
-  // Локации-комнаты. Массив произвольной длины. start: true — стартовая комната.
-  // partIds — какие детали спавнятся здесь изначально (источник истины — part.homeLocation;
-  // дублируем для удобства спавнера). fogTint — оттенок поля времени/тумана этой эпохи.
-  // fogTint — оттенок поля времени/тумана. Небо: assets/hdri/{id}.* или base.*.
+  // Локации-эпохи (Фаза 4, ADR-25). start: true — стартовая эпоха.
+  // stageIds — какие стадии assemblyChain собираются здесь (квота снепа).
+  // partsToComplete — порог travel-ready (= stageIds.length). unlocks — следующая эпоха.
+  // sceneryHeightMult — множитель высоты домов (outside-scenery).
+  // scenery.primaryWalls / backgroundWalls — JPG в assets/textures/outside-buildings/.
+  // fogTint — зарезервировано; купол/туман пока без смены по эпохе.
+  // Небо: assets/hdri/{id}.* или base.*. Старые partIds — в parts[] (не рантайм v1).
   locations: [
     {
-      id: 'future', label: 'Будущее', start: true,
-      fogTint: '#33e0ff', hazardLevel: 1,
-      partIds: ['fa_core', 'fa_coil', 'pa_future_gear', 'junk_f1', 'junk_f2'],
+      id: 'present', label: 'Настоящее', start: true,
+      fogTint: '#66ff99', hazardLevel: 1,
+      sceneryHeightMult: 1,
+      scenery: {
+        primaryWalls: [
+          'present-slim-tower-wall.jpg',
+          'present-wide-low-wall.jpg',
+          'present-mid-block-wall.jpg',
+          'present-narrow-mid-wall.jpg',
+        ],
+        backgroundWalls: [
+          'present-bg-tower-wall.jpg',
+          'present-bg-block-wall.jpg',
+          'present-bg-slim-wall.jpg',
+        ],
+      },
+      stageIds: ['A', 'B'],
+      partsToComplete: 2,
+      unlocks: 'past',
     },
     {
       id: 'past', label: 'Прошлое',
       fogTint: '#ffb066', hazardLevel: 2,
-      partIds: ['pa_past_rod', 'pa_past_plate', 'fin_past_lens', 'junk_p1', 'junk_p2'],
+      sceneryHeightMult: 0.4,
+      scenery: {
+        primaryWalls: [
+          'past-slim-tower-wall.jpg',
+          'past-wide-low-wall.jpg',
+          'past-mid-block-wall.jpg',
+          'past-narrow-mid-wall.jpg',
+        ],
+        backgroundWalls: [
+          'past-bg-tower-wall.jpg',
+          'past-bg-block-wall.jpg',
+          'past-bg-slim-wall.jpg',
+        ],
+      },
+      stageIds: ['C', 'D'],
+      partsToComplete: 2,
+      unlocks: 'future',
     },
     {
-      id: 'present', label: 'Настоящее',
-      fogTint: '#66ff99', hazardLevel: 3,
-      partIds: ['fin_pres_frame', 'fin_pres_crystal', 'junk_n1', 'junk_n2'],
+      id: 'future', label: 'Будущее',
+      fogTint: '#33e0ff', hazardLevel: 3,
+      sceneryHeightMult: 2.5,
+      scenery: {
+        primaryWalls: [
+          'future-slim-tower-wall.jpg',
+          'future-wide-low-wall.jpg',
+          'future-mid-block-wall.jpg',
+          'future-narrow-mid-wall.jpg',
+        ],
+        backgroundWalls: [
+          'future-bg-tower-wall.jpg',
+          'future-bg-block-wall.jpg',
+          'future-bg-slim-wall.jpg',
+        ],
+      },
+      stageIds: ['E'],
+      partsToComplete: 1,
+      unlocks: null,
     },
   ],
 
@@ -1043,15 +1071,16 @@ const CONFIG = {
     },
   },
 
-  // Граф маршрутов: какой собранный механизм какую локацию открывает.
-  // Стартовая локация — та, у которой start: true. Добавление уровня = дополнить
-  // locations + parts + mechanisms + edges, БЕЗ правок кода движка.
+  // Маршрут эпох (Фаза 4). Источник истины v1 — locations[].stageIds + unlocks.
+  // route — линейный порядок для UI. Legacy edges/mechanisms — не в рантайм v1.
   progression: {
+    route: ['present', 'past', 'future'],
+    victoryLocation: 'future',
     edges: [
       { requiresMechanism: 'pastActivation',    unlocksLocation: 'past' },
       { requiresMechanism: 'presentActivation', unlocksLocation: 'present' },
     ],
-    finalMechanism: 'final',  // собран в 'present' → запуск машины = победа
+    finalMechanism: 'final',
   },
 
   /**
@@ -1103,15 +1132,13 @@ const CONFIG = {
     defaultDifficulty: 'medium',
     // Порядок карусели меню (game-menu.js).
     difficultyOrder: ['easy', 'normal', 'medium', 'hard', 'hardcore'],
-    // preAssembled — стадии цепочки, уже стоящие на старте (несбиваемые шаром).
-    // Собрать нужно оставшиеся стадии A→B→C→D→E по порядку.
-    //   easy: стоят ABC → собрать D,E | normal: AB → CDE | medium: A → BCDE
-    //   hard/hardcore: пусто → собрать всё. hardcore: больше мусора + быстрее ring_inner.
+    // Фаза 4: во всех режимах пустая машина (preAssembled: []).
+    // Разница — только ballCount и junkCount. Hardcore: ringInnerSpinMult.
     difficulties: {
-      easy:     { label: 'Easy',     ballCount: 1, preAssembled: ['A', 'B', 'C'], junkCount: 5 },
-      normal:   { label: 'Normal',   ballCount: 2, preAssembled: ['A', 'B'],      junkCount: 6 },
-      medium:   { label: 'Medium',   ballCount: 3, preAssembled: ['A'],           junkCount: 7 },
-      hard:     { label: 'Hard',     ballCount: 4, preAssembled: [],              junkCount: 9 },
+      easy:     { label: 'Easy',     ballCount: 1, preAssembled: [], junkCount: 5 },
+      normal:   { label: 'Normal',   ballCount: 2, preAssembled: [], junkCount: 6 },
+      medium:   { label: 'Medium',   ballCount: 3, preAssembled: [], junkCount: 7 },
+      hard:     { label: 'Hard',     ballCount: 4, preAssembled: [], junkCount: 9 },
       hardcore: {
         label: 'Hardcore',
         ballCount: 5,
@@ -1134,7 +1161,7 @@ const CONFIG = {
     menu: {
       worldPosition: { x: 0, y: 1.55, z: -0.65 },
       handPressRadius: 0.18,
-      handPressRadiusCard: 0.32,
+      handPressRadiusCard: 0.42,
       startText: 'Start',
       wireframeOnText: 'Wireframe: ON',
       wireframeOffText: 'Wireframe: OFF',
@@ -1143,14 +1170,14 @@ const CONFIG = {
       assets: {
         basePath: 'assets/ui/menu/',
         cards: {
-          easy:     'card_easy.png',      // 512×768 px
-          normal:   'card_normal.png',    // 512×768 px
-          medium:   'card_medium.png',    // 512×768 px
-          hard:     'card_hard.png',      // 512×768 px
-          hardcore: 'card_hardcore.png',  // 512×768 px
+          easy:     'card_easy.png',      // 666×998 px (портрет, вертикально в VR)
+          normal:   'card_normal.png',    // 666×998 px
+          medium:   'card_medium.png',    // 666×998 px
+          hard:     'card_hard.png',      // 666×998 px
+          hardcore: 'card_hardcore.png',  // 666×998 px
         },
-        cardPixelSize:   { w: 512, h: 768 },
-        cardSafeMargin:  36,   // отступ от края под срезанные углы (chamfer ~24 px)
+        cardPixelSize:   { w: 666, h: 998 },
+        cardSafeMargin:  47,   // отступ от края под срезанные углы (chamfer ~31 px)
         startIdle:       'btn_start_idle.png',   // 1024×288 px, серая
         startHover:      'btn_start_hover.png',  // 1024×288 px, cyan + glow
         startPixelSize:  { w: 1024, h: 288 },
@@ -1161,9 +1188,10 @@ const CONFIG = {
       },
       // Карусель / кнопки (метры, локально от game-menu root).
       carousel: {
-        cardWidth:   0.30,
-        cardSpacing: 0.235,    // ближнее кольцо (offset 1) — раздвинуто, меньше перекрытия
-        farSpacingStep: 0.165, // offset 2: cardSpacing + step = 0.40 м от центра
+        cardWidth:   0.39,     // +30% от 0.30 м (ширина PNG в VR)
+        cardRotationZ: 0,      // вертикально (портрет 666×998)
+        cardSpacing: 0.31,     // ближнее кольцо (offset 1), под вертикальные карточки
+        farSpacingStep: 0.215, // offset 2: cardSpacing + step
         carouselY:   0.14,
         sideScale:   0.78,     // ближние (offset 1)
         sideScaleFar: 0.50,    // дальние (offset 2) — ~36% меньше ближних
@@ -1261,6 +1289,106 @@ const CONFIG = {
         btnHeight:    0.165,
         btnFontSize:  60,
         title:        { height: 0.12, fontSize: 72 },
+      },
+    },
+  },
+
+  // === Инвентарь запястья (Фаза 4, wrist-inventory.js на #leftHand) ===
+  wristInventory: {
+    slotCount: 2,
+    // Радиус/высота цилиндра-кармана. store — деталь внутри (dist <= pocketRadius).
+    pocketRadius: 0.038,
+    pocketHeight: 0.055,
+    // Дальность лучей-притяжения (только удерживаемая деталь).
+    rayRadius: 0.16,
+    retrieveRadius: 0.12,
+    storedScale: 0.45,
+    storedOpacity: 0.42,
+    // Белые разряды как у assembly-sphere-visual / купола.
+    pocketVisual: {
+      shape: 'cylinder',
+      height: 0.055,
+      color: '#e8eef5',
+      glowColor: '#ffffff',
+      coreColor: '#ffffff',
+      baseOpacity: 0.82,
+      voidOpacity: 0.04,
+      streakOpacity: 0.95,
+      fogContrast: 2.4,
+      noiseScale: 1.35,
+      scrollSpeed: 0.42,
+      streakSharpness: 4.2,
+      fresnelStrength: 0.62,
+      fogOverlay: 0.45,
+      widthSegments: 24,
+      heightSegments: 12,
+      renderOrder: 8,
+    },
+    // Голубое мерцание занятого кармана (только если внутри есть деталь).
+    occupiedVisual: {
+      color: '#18b8d8',
+      glowColor: '#66f5ff',
+      coreColor: '#d4feff',
+    },
+    // Голубые разряды на детали внутри кармана.
+    storedEnergy: {
+      color: '#18b8d8',
+      glowColor: '#66f5ff',
+      coreColor: '#d4feff',
+      energyIntensity: 0.88,
+      energyTint: 0.9,
+      boltCount: 5,
+    },
+    slotVisual: {
+      intensityIdle: 0.92,
+      intensityNear: 1.0,
+      intensityInside: 1.08,
+      intensityOccupied: 0.88,
+      intensityRetrieve: 1.05,
+      occupiedPulseSpeed: 0.007,
+      occupiedPulseAmp: 0.22,
+      rayColor: '#f0f8ff',
+      rayOpacity: 0.48,
+      rayCount: 12,
+    },
+    // Local #leftHand: X=вбок, Y=вперёд (−), Z=вверх. Калибровка — Quest QA.
+    slots: [
+      { position: { x: 0.0, y: 0.2, z: -0.01 } },
+      { position: { x: 0.0, y: 0.13, z: -0.01 } },
+    ],
+  },
+
+  // === Прыжок между эпохами (Фаза 4, travel-ready) ===
+  travel: {
+    freezeWorldOnReady: true,
+    ringSpinBoostMult: 5,
+    ringInnerSpinBoostMult: 5,
+    // veil + искры при выборе эпохи (travel-ui → menu-world-veil / menu-backdrop-vfx).
+    transition: {
+      coverDurationMs: 450,
+      sparkDurationMs: 2500,
+      revealDurationMs: 1500,
+      orbitCenterId: 'assembly-hub',
+      orbitSpeed: 3.5,
+      orbitSpeedSpread: 0.35,
+      hubShellRadiusMin: 1.0,
+      hubShellRadiusMax: 2.8,
+      hubYMin: -0.55,
+      hubYMax: 1.15,
+      hubBobAmp: 0.08,
+    },
+    // travel-ui.js — комикс-панель + кнопки эпох. PNG: assets/ui/travel/
+    ui: {
+      handPressRadius: 0.18,
+      titleText: 'Прыжок',
+      comicWidth: 1.1,
+      comicHeight: 0.75,
+      btnWidth: 0.42,
+      btnHeight: 0.14,
+      btnFontSize: 48,
+      assets: {
+        basePath: 'assets/ui/travel/',
+        comic: null,
       },
     },
   },

@@ -38,7 +38,11 @@ AFRAME.registerComponent('machine-rig', {
     this._initPhysxMaterial();
 
     this._onGameStarted = this._onGameStarted.bind(this);
+    this._onTravelReady = this._onTravelReady.bind(this);
+    this._onLocationChanged = this._onLocationChanged.bind(this);
     this.el.sceneEl.addEventListener('game-started', this._onGameStarted);
+    this.el.sceneEl.addEventListener('travel-ready', this._onTravelReady);
+    this.el.sceneEl.addEventListener('location-changed', this._onLocationChanged);
 
     this._loadVisual(this.el, this._cfg.machineModel);
     this._loadCollider(this.el, this._cfg.machineCollider);
@@ -52,6 +56,8 @@ AFRAME.registerComponent('machine-rig', {
 
   remove: function () {
     this.el.sceneEl.removeEventListener('game-started', this._onGameStarted);
+    this.el.sceneEl.removeEventListener('travel-ready', this._onTravelReady);
+    this.el.sceneEl.removeEventListener('location-changed', this._onLocationChanged);
   },
 
   _initPhysxMaterial: function () {
@@ -99,12 +105,31 @@ AFRAME.registerComponent('machine-rig', {
     if (diff.ringInnerSpinMult) mult = diff.ringInnerSpinMult;
 
     this._innerSpinDeg = this._innerBaseDeg * mult * sign;
+    this._spinBoost = 1;
+    this._innerBoost = 1;
     console.log('[machine-rig] ring_inner spin:', letter.toUpperCase(),
       this._innerSpinDeg.toFixed(1), 'deg/s');
   },
 
   _onGameStarted: function () {
     this._rollInnerSpin();
+    this._spinBoost = 1;
+    this._innerBoost = 1;
+  },
+
+  _onTravelReady: function () {
+    var t = (typeof CONFIG !== 'undefined' && CONFIG.travel) || {};
+    this._spinBoost = t.ringSpinBoostMult || 5;
+    this._innerBoost = t.ringInnerSpinBoostMult || this._spinBoost;
+    console.log('[machine-rig] travel spin boost:', this._spinBoost + 'x');
+  },
+
+  _onLocationChanged: function (evt) {
+    var d = evt.detail || {};
+    if (d.reason === 'travel' || d.reason === 'reset') {
+      this._spinBoost = 1;
+      this._innerBoost = 1;
+    }
   },
 
   _loadVisual: function (targetEl, url) {
@@ -173,12 +198,14 @@ AFRAME.registerComponent('machine-rig', {
 
   tick: function (time, timeDelta) {
     var dt = Math.min((timeDelta || 16) / 1000, 0.1);
+    var ringBoost = this._spinBoost || 1;
+    var innerBoost = this._innerBoost || 1;
     if (this._ringEl && this._ringSpinDeg) {
-      var a = THREE.MathUtils.degToRad(this._ringSpinDeg) * dt;
+      var a = THREE.MathUtils.degToRad(this._ringSpinDeg * ringBoost) * dt;
       this._ringEl.object3D.rotateOnAxis(this._ringSpinAxis, a);
     }
     if (this._ringInnerEl && this._innerSpinDeg) {
-      var b = THREE.MathUtils.degToRad(this._innerSpinDeg) * dt;
+      var b = THREE.MathUtils.degToRad(this._innerSpinDeg * innerBoost) * dt;
       this._ringInnerEl.object3D.rotateOnAxis(this._innerSpinAxis, b);
     }
   },

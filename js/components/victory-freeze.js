@@ -1,11 +1,11 @@
 /* global AFRAME, CONFIG, THREE */
 
 /**
- * victory-freeze — пауза физики/движения мира при победе.
+ * victory-freeze — пауза физики/движения мира при победе и travel-ready.
  *
- * На 'victory': стоп волн шаров, сброс velocity, sleep dynamic-тел.
+ * На 'victory' / 'travel-ready': стоп волн шаров, сброс velocity, sleep dynamic-тел.
  * Кольца (machine-rig tick) и co-rotation снепнутых деталей — продолжают.
- * Сброс на 'game-started' / 'return-to-menu'.
+ * Сброс на 'game-started' / 'return-to-menu' / 'location-changed' (reason travel).
  */
 AFRAME.registerComponent('victory-freeze', {
   schema: {},
@@ -13,16 +13,22 @@ AFRAME.registerComponent('victory-freeze', {
   init: function () {
     this._frozen = false;
     this._onVictory = this._onVictory.bind(this);
+    this._onTravelReady = this._onTravelReady.bind(this);
     this._onUnfreeze = this._onUnfreeze.bind(this);
+    this._onLocationChanged = this._onLocationChanged.bind(this);
     this.el.sceneEl.addEventListener('victory', this._onVictory);
+    this.el.sceneEl.addEventListener('travel-ready', this._onTravelReady);
     this.el.sceneEl.addEventListener('game-started', this._onUnfreeze);
     this.el.sceneEl.addEventListener('return-to-menu', this._onUnfreeze);
+    this.el.sceneEl.addEventListener('location-changed', this._onLocationChanged);
   },
 
   remove: function () {
     this.el.sceneEl.removeEventListener('victory', this._onVictory);
+    this.el.sceneEl.removeEventListener('travel-ready', this._onTravelReady);
     this.el.sceneEl.removeEventListener('game-started', this._onUnfreeze);
     this.el.sceneEl.removeEventListener('return-to-menu', this._onUnfreeze);
+    this.el.sceneEl.removeEventListener('location-changed', this._onLocationChanged);
   },
 
   isFrozen: function () {
@@ -35,17 +41,32 @@ AFRAME.registerComponent('victory-freeze', {
 
   _onVictory: function () {
     if (this._cfg().freezeWorldOnVictory === false) return;
+    this._applyFreeze('victory');
+  },
+
+  _onTravelReady: function () {
+    var travel = (typeof CONFIG !== 'undefined' && CONFIG.travel) || {};
+    if (travel.freezeWorldOnReady === false) return;
+    this._applyFreeze('travel-ready');
+  },
+
+  _applyFreeze: function (reason) {
     this._frozen = true;
     this._releaseGrabs();
     if (window.ballWaveManager && typeof window.ballWaveManager.stopWaves === 'function') {
       window.ballWaveManager.stopWaves();
     }
     this._freezeGameplayBodies();
-    console.log('[victory-freeze] world paused (rings still spin)');
+    console.log('[victory-freeze] world paused (' + reason + ', rings still spin)');
   },
 
   _onUnfreeze: function () {
     this._frozen = false;
+  },
+
+  _onLocationChanged: function (evt) {
+    var d = evt.detail || {};
+    if (d.reason === 'travel') this._frozen = false;
   },
 
   _releaseGrabs: function () {
@@ -78,7 +99,7 @@ AFRAME.registerComponent('victory-freeze', {
     if (el.hasAttribute('data-machine-ring-segment')) return false;
     if (el.components['machine-rig'] || el.components['machine-ring-collider']) return false;
     var fc = el.components['floating-cube'];
-    if (fc && fc.state === 'snapped') return false;
+    if (fc && (fc.state === 'snapped' || fc._snappedSlotId)) return false;
     return !!(el.components['red-ball'] || el.components['ball-bat'] ||
       (fc && fc.state !== 'snapped'));
   },

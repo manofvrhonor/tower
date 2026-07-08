@@ -1,17 +1,23 @@
 /* global AFRAME, CONFIG, THREE */
 
 /**
- * assembly-sphere-visual — белая энергосфера ядра (Фаза 2.x).
- * Шейдер как room-fog-dome, полная сфера, CONFIG.assemblyZone.visual.
+ * assembly-sphere-visual — энергосфера с белыми разрядами (Фаза 2.x).
+ * Шейдер как room-fog-dome. preset: assembly | wrist (карманы запястья).
  */
 AFRAME.registerComponent('assembly-sphere-visual', {
-  schema: {},
+  schema: {
+    radius: { type: 'number', default: 0 },
+    preset: { type: 'string', default: 'assembly' },
+    shape: { type: 'string', default: 'sphere' },
+  },
 
   init: function () {
     this._mesh = null;
     this._uniforms = null;
     this._cfg = this._readCfg();
-    this._buildSphere();
+    this._colorSchemes = this._buildColorSchemes();
+    this._activeScheme = 'empty';
+    this._buildMesh();
   },
 
   remove: function () {
@@ -29,11 +35,30 @@ AFRAME.registerComponent('assembly-sphere-visual', {
   },
 
   _readCfg: function () {
+    var preset = this.data.preset || 'assembly';
     var az = (typeof CONFIG !== 'undefined' && CONFIG.assemblyZone) || {};
     var v = az.visual || {};
     var R = az.radius !== undefined ? az.radius : 0.30;
+    var shape = this.data.shape || 'sphere';
+    var height = R * 2;
+
+    if (preset === 'wrist') {
+      var wi = (typeof CONFIG !== 'undefined' && CONFIG.wristInventory) || {};
+      var wv = wi.pocketVisual || {};
+      R = this.data.radius > 0 ? this.data.radius
+        : (wi.pocketRadius !== undefined ? wi.pocketRadius : 0.045);
+      v = wv;
+      shape = this.data.shape || wv.shape || 'cylinder';
+      height = wv.height !== undefined ? wv.height
+        : (wi.pocketHeight !== undefined ? wi.pocketHeight : 0.055);
+    } else if (this.data.radius > 0) {
+      R = this.data.radius;
+    }
+
     return {
       radius: R,
+      height: height,
+      shape: shape,
       color: new THREE.Color(v.color || '#e8eef5'),
       glowColor: new THREE.Color(v.glowColor || '#ffffff'),
       coreColor: new THREE.Color(v.coreColor || '#ffffff'),
@@ -60,13 +85,51 @@ AFRAME.registerComponent('assembly-sphere-visual', {
       fogHazeContrast: v.fogHazeContrast !== undefined ? v.fogHazeContrast : 1.45,
       fogHazeSpeed: v.fogHazeSpeed !== undefined ? v.fogHazeSpeed : 0.14,
       fogHazeWindowStrength: v.fogHazeWindowStrength !== undefined ? v.fogHazeWindowStrength : 0.38,
-      widthSegments: v.widthSegments !== undefined ? v.widthSegments : 48,
-      heightSegments: v.heightSegments !== undefined ? v.heightSegments : 32,
-      renderOrder: v.renderOrder !== undefined ? v.renderOrder : 12,
+      widthSegments: v.widthSegments !== undefined ? v.widthSegments : 32,
+      heightSegments: v.heightSegments !== undefined ? v.heightSegments : 24,
+      renderOrder: v.renderOrder !== undefined ? v.renderOrder : 8,
     };
   },
 
-  _buildSphere: function () {
+  _buildColorSchemes: function () {
+    var c = this._cfg;
+    var wi = (typeof CONFIG !== 'undefined' && CONFIG.wristInventory) || {};
+    var ov = wi.occupiedVisual || {};
+    return {
+      empty: {
+        color: c.color.clone(),
+        glowColor: c.glowColor.clone(),
+        coreColor: c.coreColor.clone(),
+      },
+      occupied: {
+        color: new THREE.Color(ov.color || '#18b8d8'),
+        glowColor: new THREE.Color(ov.glowColor || '#66f5ff'),
+        coreColor: new THREE.Color(ov.coreColor || '#d4feff'),
+      },
+    };
+  },
+
+  /** empty = белые разряды; occupied = голубые + мерцание (wrist-inventory). */
+  setColorScheme: function (scheme, force) {
+    if (!this._uniforms || !this._colorSchemes) return;
+    var key = scheme === 'occupied' ? 'occupied' : 'empty';
+    if (!force && this._activeScheme === key) return;
+    this._activeScheme = key;
+    var pal = this._colorSchemes[key];
+    this._uniforms.uColor.value.copy(pal.color);
+    this._uniforms.uGlowColor.value.copy(pal.glowColor);
+    this._uniforms.uCoreColor.value.copy(pal.coreColor);
+  },
+
+  /** Множитель яркости (wrist-inventory: near / inside / occupied pulse). */
+  setIntensity: function (mult) {
+    if (!this._uniforms || !this._cfg) return;
+    var m = mult !== undefined ? mult : 1;
+    this._uniforms.uBaseOpacity.value = this._cfg.baseOpacity * m;
+    this._uniforms.uStreakOpacity.value = Math.min(this._cfg.streakOpacity * m * 1.08, 1);
+  },
+
+  _buildMesh: function () {
     var c = this._cfg;
     this._uniforms = {
       uTime: { value: 0 },
@@ -165,9 +228,16 @@ AFRAME.registerComponent('assembly-sphere-visual', {
       '}',
     ].join('\n');
 
-    var geo = new THREE.SphereGeometry(
-      c.radius, c.widthSegments, c.heightSegments
-    );
+    var geo;
+    if (c.shape === 'cylinder') {
+      geo = new THREE.CylinderGeometry(
+        c.radius, c.radius, c.height, c.widthSegments, 1, true
+      );
+    } else {
+      geo = new THREE.SphereGeometry(
+        c.radius, c.widthSegments, c.heightSegments
+      );
+    }
     var mat = new THREE.ShaderMaterial({
       uniforms: this._uniforms,
       vertexShader: vertexShader,

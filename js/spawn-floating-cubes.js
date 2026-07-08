@@ -5,6 +5,95 @@
  * respawnFloatingCubes() — для «Заново» без reload.
  */
 (function () {
+  function getVisualLocation() {
+    if (typeof getActiveLocation === 'function') {
+      var active = getActiveLocation();
+      if (active) return active;
+    }
+    var locs = (typeof CONFIG !== 'undefined' && CONFIG.locations) || [];
+    var i;
+    for (i = 0; i < locs.length; i++) {
+      if (locs[i].start) return locs[i];
+    }
+    return locs.length ? locs[0] : null;
+  }
+
+  function stageIdSetForLocation(loc) {
+    var set = {};
+    var ids = (loc && loc.stageIds) || [];
+    var i;
+    for (i = 0; i < ids.length; i++) set[ids[i]] = true;
+    return set;
+  }
+
+  function isStageSnappedOnCore(stage) {
+    var coreEl = document.getElementById('assembly-core');
+    var core = coreEl && coreEl.components['assembly-core'];
+    if (!core || !stage.slotId) return false;
+    return core.isSlotOccupied(stage.slotId);
+  }
+
+  function partAlreadySpawned(stage) {
+    return !!document.getElementById('part-' + stage.partId);
+  }
+
+  function stagesForLocation(loc, session) {
+    var allowed = stageIdSetForLocation(loc);
+    var stages = (session && session.stages) || [];
+    var out = [];
+    var i;
+    for (i = 0; i < stages.length; i++) {
+      var st = stages[i];
+      if (!allowed[st.stageId]) continue;
+      if (isStageSnappedOnCore(st)) continue;
+      if (partAlreadySpawned(st)) continue;
+      out.push(st);
+    }
+    return out;
+  }
+
+  function collectPlacedFromRoot(root) {
+    var placed = [];
+    if (!root) return placed;
+    var spawn = (typeof CONFIG !== 'undefined' && CONFIG.spawn) || {};
+    var fallbackR = spawn.fallbackRadius !== undefined ? spawn.fallbackRadius : 0.05;
+    var i;
+    for (i = 0; i < root.children.length; i++) {
+      var el = root.children[i];
+      var r = fallbackR;
+      if (el.dataset && el.dataset.spawnRadius) {
+        r = parseFloat(el.dataset.spawnRadius) || r;
+      }
+      var p = el.object3D && el.object3D.position;
+      if (!p) continue;
+      placed.push({ x: p.x, y: p.y, z: p.z, r: r });
+    }
+    return placed;
+  }
+
+  function bindLocationSpawn() {
+    var scene = document.querySelector('a-scene');
+    if (!scene || scene._spawnLocationBound) return;
+    scene._spawnLocationBound = true;
+    scene.addEventListener('location-changed', function (evt) {
+      var d = evt.detail || {};
+      if (d.reason !== 'travel') return;
+      spawnMissingForLocation(d.location);
+    });
+  }
+
+  function spawnMissingForLocation(loc) {
+    var session = (typeof CONFIG !== 'undefined' && CONFIG.session) || null;
+    if (!session) return;
+    var stages = stagesForLocation(loc || getVisualLocation(), session);
+    if (!stages.length) return;
+    var created = spawnParts(stages, session, { junk: false, posStart: null });
+    console.log('[spawn-floating-cubes] epoch parts +', created,
+      '(', loc && loc.id, '| stages:', stages.map(function (s) {
+        return s.stageId;
+      }).join(''), ')');
+  }
+
   function buildPhysxMaterialStr(ownLayer, collidesWithList, fm) {
     return 'restitution: ' + fm.restitution +
       '; staticFriction: ' + fm.staticFriction +
@@ -158,23 +247,18 @@
     return el;
   }
 
-  function spawn() {
+  function spawnParts(stages, session, opts) {
+    opts = opts || {};
     var cfg = (typeof CONFIG !== 'undefined') && CONFIG.floatingCubes;
     if (!cfg) {
       console.error('[spawn-floating-cubes] CONFIG.floatingCubes not found');
-      return;
-    }
-
-    var session = (typeof CONFIG !== 'undefined' && CONFIG.session) || null;
-    if (!session) {
-      console.error('[spawn-floating-cubes] CONFIG.session missing — rollAssemblySession first');
-      return;
+      return 0;
     }
 
     var root = document.getElementById('floating-cubes-root');
     if (!root) {
       console.error('[spawn-floating-cubes] #floating-cubes-root not found in DOM');
-      return;
+      return 0;
     }
 
     var layers = (CONFIG && CONFIG.collisionLayers) || {
@@ -200,18 +284,17 @@
     };
     var matStr = buildPhysxMaterialStr(ownLayer, collidesWithList, fm);
 
-    var stages = session.stages || [];
-    var junkItems = session.junkItems || [];
+    var junkItems = opts.junk === false ? [] : (session.junkItems || []);
     var total = stages.length + junkItems.length;
-    if (positions.length < total) {
+    var posIdx = opts.posStart != null ? opts.posStart : 0;
+    if (positions.length < posIdx + total) {
       console.warn('[spawn-floating-cubes] spawn positions:', positions.length,
-        'need', total);
+        'need', posIdx + total);
     }
 
     var created = 0;
-    var posIdx = 0;
     var i;
-    var placed = [];
+    var placed = collectPlacedFromRoot(root);
 
     for (i = 0; i < stages.length; i++) {
       if (posIdx >= positions.length) break;
@@ -235,8 +318,23 @@
       created += 1;
     }
 
+    return created;
+  }
+
+  function spawn() {
+    var session = (typeof CONFIG !== 'undefined' && CONFIG.session) || null;
+    if (!session) {
+      console.error('[spawn-floating-cubes] CONFIG.session missing — rollAssemblySession first');
+      return;
+    }
+
+    var loc = getVisualLocation();
+    var stages = stagesForLocation(loc, session);
+    var created = spawnParts(stages, session, { junk: true, posStart: 0 });
+
     console.log('[spawn-floating-cubes] spawned', created,
-      '(stages:', stages.length, 'junk:', junkItems.length + ')');
+      '(epoch:', loc && loc.id, '| stages:', stages.length,
+      'junk:', (session.junkItems || []).length + ')');
   }
 
   function clearCubes() {
@@ -280,4 +378,11 @@
   window.spawnFloatingCubes = spawn;
   window.clearFloatingCubes = clearCubes;
   window.respawnFloatingCubes = respawnFloatingCubes;
+  window.spawnLocationParts = spawnMissingForLocation;
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bindLocationSpawn);
+  } else {
+    bindLocationSpawn();
+  }
 })();

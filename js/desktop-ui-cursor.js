@@ -7,7 +7,7 @@
  * Во время игры (game-started) — убрано; после victory / return-to-menu — снова.
  */
 (function () {
-  var RAY_TARGETS = '.game-menu-clickable, .victory-ui-clickable';
+  var RAY_TARGETS = '.game-menu-clickable, .victory-ui-clickable, .travel-ui-clickable';
   var CURSOR_ID = 'game-menu-cursor';
   var CURSOR_RENDER_ORDER = 100;
 

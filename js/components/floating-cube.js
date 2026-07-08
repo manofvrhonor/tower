@@ -16,6 +16,7 @@
  *   - 'gravity'      — legacy; в зоне ядра больше не включается при release;
  *   - 'snapped' — деталь зафиксирована в слоте сборки, тело kinematic
  *                 (Фаза 1, шаг 1.3). Поза держится из object3D, tick её не трогает.
+ *   - 'wrist-stored' — в инвентаре #leftHand (wrist-inventory.js), kinematic, полупрозрачная.
  *
  * При release (physx-grab → onGrabReleased):
  *   - важная деталь (dataset.isTarget==='true') рядом со свободным слотом
@@ -353,6 +354,10 @@ AFRAME.registerComponent('floating-cube', {
    * containment-тест по CONFIG.dome → gravity или float.
    */
   onGrabReleased: function () {
+    if (this.el.dataset && this.el.dataset.wristStorePending === 'true') {
+      return;
+    }
+
     // После joint velocity в теле «полная» — сброс для корректного масштабирования.
     this._lastAppliedTimeScale = 1.0;
 
@@ -421,9 +426,35 @@ AFRAME.registerComponent('floating-cube', {
     this._forceKinematicFlag();
     core.occupySlot(slot.slotId, this.el);
     this._setPartVisual('snapped');
+    // Сразу привязать к слоту — до travel-ready / freeze в том же кадре.
+    this._followSlot();
 
     console.log('[floating-cube] snapped', this.el.id || '(no id)', '→ slot',
       slot.slotId, fixed ? '(fixed)' : '');
+
+    var stageId = this._stageIdFromSlot(slot.slotId);
+    if (stageId && this.el.sceneEl) {
+      this.el.sceneEl.emit('stage-snapped', {
+        stageId: stageId,
+        slotId: slot.slotId,
+        fixed: !!fixed,
+      }, false);
+    }
+  },
+
+  /** stageId из slotId (slot_A → A) через session или префикс. */
+  _stageIdFromSlot: function (slotId) {
+    if (!slotId) return null;
+    var session = (typeof CONFIG !== 'undefined' && CONFIG.session) || null;
+    if (session && session.assemblySlots) {
+      var i;
+      for (i = 0; i < session.assemblySlots.length; i++) {
+        var s = session.assemblySlots[i];
+        if (s.id === slotId) return s.stageId || null;
+      }
+    }
+    if (slotId.indexOf('slot_') === 0) return slotId.slice(5);
+    return null;
   },
 
   /**
@@ -1391,17 +1422,21 @@ AFRAME.registerComponent('floating-cube', {
   tick: function (time, timeDelta) {
     this._tickDeltaSec = Math.min((timeDelta || 16) / 1000, 0.1);
 
+    // Co-rotation первым: снепнутые детали крутятся с ring_inner даже при
+    // travel-freeze и до готовности rb / снятия grabbed-dynamic.
+    if (this.state === 'snapped') {
+      this._followSlot();
+      return;
+    }
+    if (this.state === 'wrist-stored') {
+      return;
+    }
+
     var rb = this._rb;
     if (!rb) return;
     if (this.el.is && this.el.is('grabbed-dynamic')) return;
 
     if (typeof window.isVictoryFrozen === 'function' && window.isVictoryFrozen()) {
-      if (this.state === 'snapped') this._followSlot();
-      return;
-    }
-
-    if (this.state === 'snapped') {
-      this._followSlot();
       return;
     }
 

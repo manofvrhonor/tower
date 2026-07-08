@@ -525,6 +525,33 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 
 ---
 
+### ADR-25: Фаза 4 — эпохи, прыжок, инвентарь запястья (с.62)
+
+**Решение (дизайн, код — следующая сессия):**
+
+- **Сложность:** все 5 режимов — одинаковая сборка; `preAssembled: []` везде; разница только `ballCount`, `junkCount`; Hardcore сохраняет `ringInnerSpinMult: 2.2`.
+- **Эпохи:** старт **Present** (`present`, `start: true`). Маршрут Present → Past → Future. Квота снепа по цепочке A→E: Present `A+B` (2), Past `C+D` (2), Future `E` (1) → победа.
+- **Источник данных v1:** `CONFIG.machine.assemblyChain` + `CONFIG.locations` (`stageIds`, `partsToComplete`, `unlocks`, `sceneryHeightMult`, `fogTint`). Старые `CONFIG.parts` / `mechanisms` — в config, **не в рантайм** до апгрейд-слотов.
+- **Прыжок:** событие `travel-ready` (квота эпохи выполнена) → freeze мира (паттерн `victory-freeze`) + spin boost колец + `travel-ui` (комикс PNG, кнопки эпох) → veil + `menu-backdrop-vfx` (2–3 с) → `travelTo(id)` → fade-in 1–2 с.
+**Перенос между эпохами:** до **2** предметов в `wrist-inventory` на `#leftHand`. **Store:** grip/trigger **up**, деталь **внутри** цилиндра-кармана (`pocketRadius`), лучи-притяжение (12) только от **ближайшего** пустого слота в `rayRadius` — **любая** рука. **Retrieve:** grip/trigger **down** **правой** рукой у занятого кармана. Карманы — цилиндры с белыми разрядами (`assembly-sphere-visual`); занятый слот мерцает **голубым**; деталь в кармане — cyan `part-snap-energy` + полупрозрачность. Позиции — `CONFIG.wristInventory.slots` (local `#leftHand`: X вбок, Y вперёд −, Z вверх). При store/retrieve — `_forceKinematicFlag` / `_resetKinematicLatch` (`floating-cube.js`, с.65). Любой `floating-cube` (механизм + мусор). **Не** перенос снепом на ядре.
+- **Пейзаж:** `outside-scenery` — множитель `height` + текстуры `{id}-*.jpg` в `locations[].scenery.*Walls`. **Купол/туман/HDR — без смены по эпохе** (с.64).
+
+**Причина:** VR-читаемый цикл «собрал → киношный прыжок → другая эпоха»; сложность = давление шаров/мусора, не разная сборка; запястье готовит апгрейд-слоты позже.
+
+**Не делать (v1):**
+- Боковые апгрейд-слоты на снепнутых деталях.
+- Convex `_COL` на кольцах.
+- Подключать `CONFIG.mechanisms` / `fa_core` головоломку в рантайм.
+- Менять цвет купола/тумана/HDR по эпохе (только дома).
+
+**План:** `.cursor/plans/phase4_locations.plan.md` (10 микро-шагов).
+
+**Junk GLB:** список в `assets/models/machine-manifest.json` (ключ `junk`); после добавления файлов — `scripts/refresh-machine-manifest.ps1` + reload.
+
+**Реализация:** шаги **1–10 ✅** (с.63–65). **Фаза 4 закрыта** (Quest QA с.65).
+
+---
+
 ## ДОРОЖНАЯ КАРТА
 
 Этапы **0–8 ✅** (MVP). Стильная игра: Фазы **0–3 ✅**, **3.5A ✅**. Детали — `PROJECT_LOG_ARCHIVE.md`, `PROJECT_START.md`.
@@ -535,8 +562,8 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 
 - **MVP ✅** (с.29–31): меню, сложность, купол R=2 m, Quest-прогон без блокеров.
 - **Стильная игра:** Фазы 0–3 ✅, **3.5B ✅** `ba9ecdd`.
-- **Сейчас:** **Фаза 4** (локации). Переделка сборки ✅ (с.57–61, ADR-24).
-- **Дальше:** **Фаза 4** (локации); техдолг: clamp спавна по `_COL`.
+- **Сейчас:** **Фаза 4 ✅** (с.65). **Дальше:** **Фаза 5** — опасности, таймер петли (мастер-план).
+- **Дальше:** `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md` (Фаза 5).
 - **Не делаем:** VR-виньетка slo-mo. **Пропускаем:** захват «отлёт при тряске» (с.29).
 - **Тест:** Quest Link + localhost.
 

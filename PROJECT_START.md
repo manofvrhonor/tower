@@ -39,9 +39,10 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 ## Где мы
 
 - Этапы 0–8 (MVP) ✅. Стильная игра: Фазы **0–3 ✅** (outside-scenery, floor-fog, HDR sky).
-- **Сейчас:** **Переделка сборки ✅** (с.61). **След.:** **Фаза 4** (локации).
-- **Дальше:** **Фаза 4** (локации); техдолг: clamp спавна по `_COL`.
+- **Сейчас:** **Фаза 4 ✅** (с.65): эпохи, прыжок, wrist-inventory (Quest QA).
+- **Дальше:** **Фаза 5** — опасности + таймер петли ([мастер-план](.cursor/plans/tower_stylish_game_c39f4c3b.plan.md)).
 - Мастер-план: `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md`
+- **План Фазы 4:** `.cursor/plans/phase4_locations.plan.md`
 - **Не делаем:** VR-виньетка slo-mo. **Пропускаем:** захват «отлёт при тряске» (с.29).
 
 ---
@@ -70,6 +71,7 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 | 22 | body collider рук, grab joint | hand-body-collider, physx-grab |
 | 23 | GLB vis + _COL collider | part-entity, parts[].colliderModel |
 | 24 | GLB-машина, снеп-цепочка A→E, ring_inner spin | machine-rig, assembly-core, init-session |
+| 25 | Фаза 4: эпохи, прыжок, запястье | location-manager, travel-ui, wrist-inventory |
 
 ---
 
@@ -106,6 +108,10 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 | 59 | position A–E, containment split, hand↔ball, machine _COL ⚠️ ring collider | init-session, room-containment, machine-rig, red-ball; commit cd7c328 |
 | 60 | ring _COL откат, WAVE_BALL machine, convex-пробка | machine-rig; кольца без PhysX → сегменты |
 | 61 | Сегменты колец + victory-freeze + Quest QA ✅ | machine-ring-collider, victory-freeze, config |
+| 62 | Меню карточки + план Фазы 4 (дизайн, ADR-25) | game-menu, config, phase4_locations.plan |
+| 63 | Фаза 4 шаги 1–6: travel-ready, travel-ui, veil | location-manager, travel-ui, victory-freeze, menu-backdrop-vfx |
+| 64 | Фаза 4 шаги 7–9: пейзаж домов, spawn, wrist ⚠️ QA | outside-scenery, spawn-floating-cubes, wrist-inventory, machine-manifest |
+| 65 | Фаза 4 шаг 10 + wrist QA ✅: цилиндры, store/retrieve, collider fix | wrist-inventory, assembly-sphere-visual, part-snap-energy, config |
 
 ---
 

@@ -7,6 +7,7 @@ alwaysApply: true
 
 > Единственный источник правил поведения агента.
 > При старте сессии: **`AGENTS.md` + `PROJECT_START.md` + `CURRENT_TASK.md`**.
+> Если в `CURRENT_TASK.md` указан план — **прочитать его по полному пути** (см. §1).
 > `PROJECT_LOG.md` (ADR) и `PROJECT_LOG_ARCHIVE.md` — grep/read по триггерам из START.
 
 ---
@@ -25,6 +26,15 @@ alwaysApply: true
 - Текущая задача — `CURRENT_TASK.md`.
 - ADR — `PROJECT_LOG.md`. Сессии — `PROJECT_LOG_ARCHIVE.md`.
 - Если нет `PROJECT_START.md` или `CURRENT_TASK.md` — **попросить приложить**, не править код.
+
+**Планы (файлы в репозитории, папка `.cursor/` скрытая — не полагаться на glob):**
+
+| План | Путь | Когда читать |
+|---|---|---|
+| **Фаза 4** (текущая) | `.cursor/plans/phase4_locations.plan.md` | `CURRENT_TASK` = Фаза 4; grep `phase4_locations` |
+| Мастер-план | `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md` | обзор фаз 0–7 |
+
+План из UI Cursor вне репо (`%USERPROFILE%\.cursor\plans\…`) — **не** источник истины; только копия в `Tower/.cursor/plans/`.
 
 **Стек зафиксирован.** Без явного запроса не предлагать смену физики, фреймворка, CDN, TypeScript, сборщиков, npm.
 
