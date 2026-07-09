@@ -8,29 +8,37 @@ alwaysApply: true
 
 # CURRENT_TASK.md — Текущая задача
 
-## Задача: Фаза 5 — опасности и таймер петли
+## Задача: Фаза 5 — таймер петли
 
-**Статус:** не начата. **Пульт + живое меню эпох ✅** (с.66, Quest QA).
+**Статус:** план готов, код не начат. **С.68 закрыта** (cyan-шары, пулы, призрак, deflect).
 
-**План:** [`.cursor/plans/tower_stylish_game_c39f4c3b.plan.md`](.cursor/plans/tower_stylish_game_c39f4c3b.plan.md) → § «Фаза 5».
+**План следующей сессии:** [`.cursor/plans/phase5_loop_timer.plan.md`](.cursor/plans/phase5_loop_timer.plan.md)
 
-**ADR:** Фаза 4 — **ADR-25** (`PROJECT_LOG.md`).
+**Мастер-план:** [`.cursor/plans/tower_stylish_game_c39f4c3b.plan.md`](.cursor/plans/tower_stylish_game_c39f4c3b.plan.md) → § «Фаза 5».
 
 ### Старт сессии
 
-1. `PROJECT_START.md` → «Где мы».
-2. Мастер-план → Фаза 5 (hazardLevel, таймер, бита).
-3. Уточнить у пользователя: с чего начать (таймер / угрозы / бита).
+1. Прочитать план `phase5_loop_timer.plan.md`.
+2. Микро-шаги: config → `loop-timer.js` → defeat UI → QA.
 
-### Закрыто с.66
+### Закрыто с.68 (до таймера)
 
-- Wrist-travel-remote на `#rightHand`; живое меню всех эпох; forced slo-mo.
-- Цепочка A→E: каскадный unsnap; time-lock при прыжке и победе.
-- Quest QA: пульт, travel, victory lock.
+- [x] Cyan-шары + fade in/out (spawn 6.5 м, outStart 3 м)
+- [x] Рука / grip → redirect как бита (детали/мусор)
+- [x] junk/decoy per location по сложности (4+3 / 6+4 / 8+5)
+- [x] Призрак схемы: только следующий слот
+- [x] План таймера петли зафиксирован
+
+### Дальше (после таймера)
+
+- [ ] hazardLevel → число/скорость шаров
+- [ ] (бита — только по явному запросу)
+
+### Не трогать без запроса
+
+- Бита / `ball-bat` (выключена).
 
 ### Не делать
 
 - Convex `_COL` на кольцах (DECISIONS LOCK).
 - Боковые апгрейд-слоты (ADR-25, v1).
-
----

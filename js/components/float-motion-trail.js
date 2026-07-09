@@ -176,6 +176,11 @@ AFRAME.registerComponent('float-motion-trail', {
 
     var trailVis = this._getTrailVisibility(tsSys.getScale());
 
+    // Wave-шар: хвост гаснет вместе с fade scale/opacity.
+    if (ballComp && ballComp._fadeT !== undefined && ballComp._fadeT < 0.999) {
+      trailVis *= Math.max(0, ballComp._fadeT);
+    }
+
     if (isFloat && !isGrabbed && this._grabFadeOutActive) {
       this._endGrabFadeOut();
     }

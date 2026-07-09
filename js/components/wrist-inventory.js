@@ -389,6 +389,8 @@ AFRAME.registerComponent('wrist-inventory', {
     var fc = partEl.components['floating-cube'];
     if (!fc) return false;
     if (fc.state === 'snapped' || fc.state === 'wrist-stored') return false;
+    if (fc.state === 'location-stashed') return false;
+    if (partEl.dataset.locationStashed === 'true') return false;
     return true;
   },
 

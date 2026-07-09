@@ -45,7 +45,9 @@
 
     var radius = cfg.radius !== undefined ? cfg.radius : 0.07;
     var mass = cfg.mass !== undefined ? cfg.mass : 0.5;
-    var color = cfg.color || '#E04040';
+    var color = cfg.color || '#33e0ff';
+    var emissive = cfg.emissive || '#66f5ff';
+    var ei = cfg.emissiveIntensity !== undefined ? cfg.emissiveIntensity : 1.35;
     var speedMin = cfg.speedMultiplierMin !== undefined ? cfg.speedMultiplierMin : 2.0;
     var speedMax = cfg.speedMultiplierMax !== undefined ? cfg.speedMultiplierMax : 3.0;
     if (speedMax < speedMin) { var tmp = speedMin; speedMin = speedMax; speedMax = tmp; }
@@ -63,7 +65,12 @@
       var el = document.createElement('a-entity');
       el.setAttribute('id', 'red-ball-' + (i + 1));
       el.setAttribute('geometry', 'primitive: sphere; radius: ' + radius);
-      el.setAttribute('material', 'color: ' + color);
+      el.setAttribute('material',
+        'color: ' + color +
+        '; emissive: ' + emissive +
+        '; emissiveIntensity: ' + ei +
+        '; transparent: true; opacity: 1' +
+        '; metalness: 0.15; roughness: 0.25; shader: standard');
       el.setAttribute('position', p.x + ' ' + p.y + ' ' + p.z);
       el.setAttribute('physx-body', 'type: dynamic; mass: ' + mass + '; emitCollisionEvents: true');
       el.setAttribute('physx-material',

@@ -1,10 +1,10 @@
 /* global AFRAME, CONFIG, THREE */
 
 /**
- * red-ball — красный шар-угроза (Этап 6).
+ * red-ball — шар-угроза «атом времени» (Этап 6 / Фаза 5).
  *
- * Float-физика, слой BALL, скорости ×2 от кубиков, timeScale.
- * Не хватается. Не сталкивается с DOME — пролетает к башне.
+ * Float-физика, слой BALL / WAVE_BALL, скорости ×2 от кубиков, timeScale.
+ * Не хватается. Wave: пролёт сквозь купол; fade scale+opacity у границы.
  * После отскока от стен комнаты — разворот к куполу; задержка 0/1/2 отскока
  * заново бросается после каждого такого разворота (цикл).
  * После отскока от пола — разворот к башне (steerBounceDelays).
@@ -40,6 +40,8 @@ AFRAME.registerComponent('red-ball', {
     this._waveMode = !!(this.el.dataset && this.el.dataset.waveMode === '1');
     this._retired = false;
     this._waveState = 'incoming';
+    this._fadeT = 1;
+    this._fadeApplied = -1;
     if (this._waveMode) {
       var ax = parseFloat(this.el.dataset.waveAimX);
       var ay = parseFloat(this.el.dataset.waveAimY);
@@ -49,6 +51,9 @@ AFRAME.registerComponent('red-ball', {
       } else {
         this._waveMode = false;
       }
+      // Wave: старт с нулевого fade — догоним в первом tick по дистанции.
+      this._fadeT = 0;
+      this._applyFadeVisual(0);
     }
 
     this._onContactBegin = this._onContactBegin.bind(this);
@@ -944,14 +949,79 @@ AFRAME.registerComponent('red-ball', {
     if (this._retired) return;
     this._retired = true;
     this._waveState = 'retiring';
+    this._applyFadeVisual(0);
     if (this.el.sceneEl) {
       this.el.sceneEl.emit('ball-retired', { el: this.el }, false);
     }
   },
 
+  _fogRadius: function () {
+    var room = (typeof CONFIG !== 'undefined' && CONFIG.room) || {};
+    return (room.fogDome && room.fogDome.radius !== undefined) ? room.fogDome.radius : 2.0;
+  },
+
+  /**
+   * 0..1 видимость по дистанции снаружи купола.
+   * Incoming: набор за inDistance к куполу.
+   * Outgoing: до outStartDistance от купола — полная видимость; дальше спад за outDistance.
+   * Внутри купола — всегда 1.
+   */
+  _fadeTForDistance: function (dist) {
+    var fogR = this._fogRadius();
+    var outside = dist - fogR;
+    if (outside <= 0) return 1;
+    var fade = this.cfg.fade || {};
+    if (this._waveState === 'incoming') {
+      var inD = fade.inDistance !== undefined ? fade.inDistance : 1.0;
+      if (inD <= 0) return 1;
+      return Math.max(0, Math.min(1, 1 - outside / inD));
+    }
+    var outStart = fade.outStartDistance !== undefined ? fade.outStartDistance : 3.0;
+    if (outside <= outStart) return 1;
+    var outD = fade.outDistance !== undefined ? fade.outDistance : 2.0;
+    if (outD <= 0) return 0;
+    return Math.max(0, Math.min(1, 1 - (outside - outStart) / outD));
+  },
+
+  /** Scale + opacity (+ emissive). Коллайдер PhysX не трогаем. */
+  _applyFadeVisual: function (t) {
+    if (Math.abs(t - this._fadeApplied) < 0.008) {
+      this._fadeT = t;
+      return;
+    }
+    this._fadeT = t;
+    this._fadeApplied = t;
+
+    var s = Math.max(0.001, t);
+    this.el.object3D.scale.set(s, s, s);
+
+    var mesh = this.el.getObject3D('mesh');
+    if (mesh && mesh.material) {
+      var mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      var i;
+      for (i = 0; i < mats.length; i++) {
+        mats[i].transparent = true;
+        mats[i].opacity = t;
+        mats[i].depthWrite = t > 0.85;
+        mats[i].needsUpdate = true;
+      }
+      return;
+    }
+    // Mesh ещё не готов — через attribute (первый кадр).
+    var color = this.cfg.color || '#33e0ff';
+    var emissive = this.cfg.emissive || '#66f5ff';
+    var ei = this.cfg.emissiveIntensity !== undefined ? this.cfg.emissiveIntensity : 1.35;
+    this.el.setAttribute('material',
+      'color: ' + color +
+      '; emissive: ' + emissive +
+      '; emissiveIntensity: ' + ei +
+      '; transparent: true; opacity: ' + t +
+      '; metalness: 0.15; roughness: 0.25; shader: standard');
+  },
+
   /**
    * Tick для wave-режима: без containment/homing/floorEscape. Летит сквозь туман,
-   * бьёт детали, отбивается битой/кубом; деспавн за despawnRadius → 'ball-retired'.
+   * бьёт детали, отбивается битой/кубом; fade out → 'ball-retired'.
    */
   _waveTick: function (rb) {
     if (this._retired) return;
@@ -966,16 +1036,28 @@ AFRAME.registerComponent('red-ball', {
       this._worldPos.y * this._worldPos.y +
       this._worldPos.z * this._worldPos.z
     );
-    var room = (typeof CONFIG !== 'undefined' && CONFIG.room) || {};
-    var fogR = (room.fogDome && room.fogDome.radius !== undefined) ? room.fogDome.radius : 2.0;
+    var fogR = this._fogRadius();
     if (this._waveState === 'incoming' && dist < fogR) {
       this._waveState = 'active';
     } else if (this._waveState === 'active' && dist > fogR) {
       this._waveState = 'retiring';
     }
 
+    var t = this._fadeTForDistance(dist);
+    this._applyFadeVisual(t);
+
+    var fade = this.cfg.fade || {};
+    var outStart = fade.outStartDistance !== undefined ? fade.outStartDistance : 3.0;
+    var outD = fade.outDistance !== undefined ? fade.outDistance : 2.0;
+    var outside = dist - fogR;
+    // Исчезновение доиграло — респавн (не ждать жёсткий despawnRadius).
+    if (this._waveState !== 'incoming' && outside >= outStart + outD && t <= 0.02) {
+      this._retire();
+      return;
+    }
+
     var w = this.cfg.waves || {};
-    var despawnR = w.despawnRadius !== undefined ? w.despawnRadius : 3.6;
+    var despawnR = w.despawnRadius !== undefined ? w.despawnRadius : 7.0;
     if (dist > despawnR) { this._retire(); return; }
 
     // Поддержка минимальной скорости (только магнитуда, без редиректа) — чтобы не зависал.

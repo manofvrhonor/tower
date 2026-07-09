@@ -629,6 +629,75 @@ AFRAME.registerComponent('floating-cube', {
     return true;
   },
 
+  /**
+   * Убрать деталь из текущей эпохи (travel stash): kinematic + invisible.
+   * Запоминает мировую позу — restoreFromStash вернёт на то же место.
+   * Не трогает snapped / wrist-stored / time-locked / уже спрятанные.
+   */
+  stashAway: function () {
+    if (this.state === 'snapped' || this.state === 'wrist-stored') return false;
+    if (this._isFixed) return false;
+    if (this.state === 'location-stashed') return false;
+
+    if (this.el.is && this.el.is('grabbed-dynamic')) {
+      this.el.removeState('grabbed-dynamic');
+    }
+
+    var obj = this.el.object3D;
+    var wp = new THREE.Vector3();
+    var wq = new THREE.Quaternion();
+    obj.updateMatrixWorld(true);
+    obj.getWorldPosition(wp);
+    obj.getWorldQuaternion(wq);
+    this._stashedPose = {
+      x: wp.x, y: wp.y, z: wp.z,
+      qx: wq.x, qy: wq.y, qz: wq.z, qw: wq.w,
+    };
+
+    this.state = 'location-stashed';
+    this.el.dataset.locationStashed = 'true';
+    this.el.setAttribute('visible', false);
+    this.el.setAttribute('physx-body', 'type: kinematic');
+    this._forceKinematicFlag();
+    this._zeroBodyMotion(this._rb);
+    return true;
+  },
+
+  /** Вернуть деталь после travel — на ту же мировую позу, что при уходе. */
+  restoreFromStash: function () {
+    if (this.state !== 'location-stashed' && !this.el.dataset.locationStashed) {
+      return false;
+    }
+    delete this.el.dataset.locationStashed;
+
+    var pose = this._stashedPose;
+    if (pose) {
+      var wp = new THREE.Vector3(pose.x, pose.y, pose.z);
+      var wq = new THREE.Quaternion(pose.qx, pose.qy, pose.qz, pose.qw);
+      this._setObjWorldPose(wp, wq);
+      this._stashedPose = null;
+    }
+
+    this.el.setAttribute('visible', true);
+    this.state = 'float';
+    this._lastAppliedTimeScale = 1.0;
+    this.el.setAttribute('physx-body', 'type: dynamic');
+    this._resetKinematicLatch();
+
+    var body = this.el.components['physx-body'];
+    if (body && typeof body.resetBodyPose === 'function') {
+      body.resetBodyPose();
+    }
+    this._zeroBodyMotion(this._rb);
+
+    this._applyCubeMaterial('float');
+    if (typeof this._setCollisionLayer === 'function') {
+      this._setCollisionLayer('FLOAT_CUBE');
+    }
+    this._setPartVisual('floating');
+    return true;
+  },
+
   /** Вернуть деталь под #floating-cubes-root, сохранив мировую позу. */
   _reparentToFloatingRoot: function () {
     var root = document.getElementById('floating-cubes-root');
@@ -691,8 +760,8 @@ AFRAME.registerComponent('floating-cube', {
       this._applyGrabbedStrikeToVictim(otherComp, otherEl);
     }
 
-    // Victim-side (backup): slo-mo — только перенаправление от grabbed-удара.
-    if (otherEl && this._isGrabbedStriker(otherEl) && this._rb && this._isWorldSlowMo()) {
+    // Victim: рука или grip-объект — перенаправление (как бита), без разгона.
+    if (this._shouldDeflectFromStriker(otherEl)) {
       this.receiveGrabbedStrikerHit();
     }
 
@@ -1024,6 +1093,16 @@ AFRAME.registerComponent('floating-cube', {
     return !!(el.components['floating-cube'] || el.components['ball-bat']);
   },
 
+  /** Жертва должна перенаправить удар (не frozen / не в кармане / не frozen-snap). */
+  _shouldDeflectFromStriker: function (otherEl) {
+    if (!otherEl || !this._rb) return false;
+    if (this.state === 'snapped' || this.state === 'wrist-stored' ||
+        this.state === 'location-stashed') return false;
+    if (this.el.is && this.el.is('grabbed-dynamic')) return false;
+    if (otherEl.components && otherEl.components['hand-body-collider']) return true;
+    return this._isGrabbedStriker(otherEl);
+  },
+
   /** «Мировая» скорость до timeScale-масштабирования. */
   _currentWorldSpeed: function (rb) {
     if (!rb || typeof rb.getLinearVelocity !== 'function') return 0;
@@ -1043,8 +1122,8 @@ AFRAME.registerComponent('floating-cube', {
   },
 
   /**
-   * Slo-mo: отскок от grabbed-куба/биты — направление солвера, величина до удара.
-   * Kinematic-рука разгоняет жертву несколько кадров — держим clamp в tick.
+   * Отскок от руки / grip-объекта / биты: направление солвера, скорость = до удара.
+   * Kinematic-взмах разгоняет жертву несколько кадров — держим clamp в tick.
    */
   _deflectOffGrabbedStriker: function (rb) {
     if (!rb || typeof rb.getLinearVelocity !== 'function') return;
@@ -1052,16 +1131,24 @@ AFRAME.registerComponent('floating-cube', {
       var lv = rb.getLinearVelocity();
       if (!lv) return;
 
-      var rawSpeed = Math.sqrt(lv.x * lv.x + lv.y * lv.y + lv.z * lv.z);
+      var prev = this._lastAppliedTimeScale;
+      if (!prev || prev < 0.001) prev = 1.0;
+      var invPrev = 1 / prev;
+
+      var wx = lv.x * invPrev;
+      var wy = lv.y * invPrev;
+      var wz = lv.z * invPrev;
+      var solverWorld = Math.sqrt(wx * wx + wy * wy + wz * wz);
+
       var nx; var ny; var nz;
-      if (rawSpeed > 1e-5) {
-        nx = lv.x / rawSpeed; ny = lv.y / rawSpeed; nz = lv.z / rawSpeed;
+      if (solverWorld > 1e-5) {
+        nx = wx / solverWorld; ny = wy / solverWorld; nz = wz / solverWorld;
       } else {
         nx = 0; ny = 1; nz = 0;
       }
 
       var target = this._preHitWorldSpeed;
-      if (target < 0) target = 0;
+      if (!target || target < 0) target = 0;
 
       if (typeof rb.setLinearVelocity === 'function') {
         rb.setLinearVelocity({ x: nx * target, y: ny * target, z: nz * target }, false);
@@ -1069,8 +1156,10 @@ AFRAME.registerComponent('floating-cube', {
       }
       if (typeof rb.wakeUp === 'function') rb.wakeUp();
 
-      var clampMs = this._strikeCfg.sloMoDeflectClampMs !== undefined
-        ? this._strikeCfg.sloMoDeflectClampMs : 250;
+      var clampMs = this._strikeCfg.clampMs !== undefined
+        ? this._strikeCfg.clampMs
+        : (this._strikeCfg.sloMoDeflectClampMs !== undefined
+          ? this._strikeCfg.sloMoDeflectClampMs : 250);
       this._strikerClampSpeed = target;
       this._strikerClampUntilMs = performance.now() + clampMs;
     } catch (e) {
@@ -1081,7 +1170,7 @@ AFRAME.registerComponent('floating-cube', {
     }
   },
 
-  /** Окно после slo-mo удара: удерживаем доударную скорость, направление — от солвера. */
+  /** Окно после удара: удерживаем доударную скорость, направление — от солвера. */
   _clampStrikerDeflect: function (rb) {
     if (performance.now() >= this._strikerClampUntilMs) return false;
     if (!rb || typeof rb.getLinearVelocity !== 'function') return false;
@@ -1118,10 +1207,9 @@ AFRAME.registerComponent('floating-cube', {
     if (this._rb) this._deflectOffGrabbedStriker(this._rb);
   },
 
-  /** Grabbed-куб/бита в руке ударила dynamic-жертву в slo-mo. */
+  /** Grabbed-куб/бита в руке ударила dynamic-жертву — перенаправление (как бита). */
   _applyGrabbedStrikeToVictim: function (otherComp, otherEl) {
     if (!otherEl || !otherComp || otherComp.data.type === 'static') return;
-    if (!this._isWorldSlowMo()) return;
     if (otherEl.components['red-ball']) return;
 
     var fc = otherEl.components['floating-cube'];
@@ -1540,7 +1628,7 @@ AFRAME.registerComponent('floating-cube', {
       this._followSlot();
       return;
     }
-    if (this.state === 'wrist-stored') {
+    if (this.state === 'wrist-stored' || this.state === 'location-stashed') {
       return;
     }
 

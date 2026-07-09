@@ -82,7 +82,7 @@
   /** Случайная точка на сфере за туманом + направление подлёта к столу (cone-разброс). */
   function computeSpawnAndAim() {
     var w = wavesCfg();
-    var R = w.spawnRadius !== undefined ? w.spawnRadius : 3.2;
+    var R = w.spawnRadius !== undefined ? w.spawnRadius : 6.5;
     var pitchMin = (w.spawnPitchMinDeg !== undefined ? w.spawnPitchMinDeg : 8) * DEG2RAD;
     var pitchMax = (w.spawnPitchMaxDeg !== undefined ? w.spawnPitchMaxDeg : 78) * DEG2RAD;
 
@@ -122,6 +122,18 @@
     return { x: v.x, y: v.y, z: v.z };
   }
 
+  function ballMaterialStr(balls, opacity) {
+    var color = balls.color || '#33e0ff';
+    var emissive = balls.emissive || '#66f5ff';
+    var ei = balls.emissiveIntensity !== undefined ? balls.emissiveIntensity : 1.35;
+    var op = opacity !== undefined ? opacity : 1;
+    return 'color: ' + color +
+      '; emissive: ' + emissive +
+      '; emissiveIntensity: ' + ei +
+      '; transparent: true; opacity: ' + op +
+      '; metalness: 0.15; roughness: 0.25; shader: standard';
+  }
+
   function spawnOne() {
     var root = document.getElementById('red-balls-root');
     if (!root) {
@@ -132,18 +144,19 @@
     var sa = computeSpawnAndAim();
     var radius = balls.radius !== undefined ? balls.radius : 0.04;
     var mass = balls.mass !== undefined ? balls.mass : 2.0;
-    var color = balls.color || '#E04040';
 
     _seq++;
     var el = document.createElement('a-entity');
     el.setAttribute('id', 'wave-ball-' + _seq);
     el.setAttribute('geometry', 'primitive: sphere; radius: ' + radius);
-    el.setAttribute('material', 'color: ' + color);
+    // Старт невидимый — red-ball догонит fade по дистанции в первом tick.
+    el.setAttribute('material', ballMaterialStr(balls, 0));
     el.setAttribute('position', sa.pos.x + ' ' + sa.pos.y + ' ' + sa.pos.z);
     el.setAttribute('physx-body', 'type: dynamic; mass: ' + mass + '; emitCollisionEvents: true');
     el.setAttribute('physx-material', physxMaterialStr());
     el.setAttribute('red-ball', 'speedMultiplier: ' + speedMult().toFixed(3));
     el.setAttribute('float-motion-trail', '');
+    el.object3D.scale.set(0.001, 0.001, 0.001);
 
     // Метаданные для red-ball (микро-шаг 3): режим волны и направление подлёта.
     el.dataset.waveMode = '1';

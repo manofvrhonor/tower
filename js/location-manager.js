@@ -4,7 +4,9 @@
  * location-manager.js — эпохи, живая квота, travel gate (Фаза 4+).
  *
  * visitedIds — старт + куда реально прыгали (кнопка всегда активна).
- * Следующая эпоха (current.unlocks) — активна только пока живая квота собрана.
+ * unlockedIds — эпохи, открытые квотой (можно прыгать, даже если ещё не visited).
+ * Квота = живые слоты на машине (assembly-core), не «где снепнули».
+ * Принёс C в Present и поставил — Past-квота тоже видит C.
  * stage-snapped / stage-unsnapped → travel-availability-changed.
  * Auto-меню: до autoMenuMaxPerLocation раз на эпоху (first / rebuilt).
  */
@@ -149,6 +151,7 @@
   }
 
   function markStageSnapped(stageId, locId) {
+    // Пишем в комнату для отладки/бэклога; квота читает live core.
     var room = getRoomState(locId);
     if (!room || !stageId) return;
     room.snappedStages[stageId] = true;
@@ -158,19 +161,13 @@
     var room = getRoomState(locId);
     if (!room || !stageId) return;
     delete room.snappedStages[stageId];
-  }
-
-  function countSnappedStages(locId) {
-    var loc = findLocation(locId || activeLocationId);
-    if (!loc || !loc.stageIds) return 0;
-    var room = getRoomState(locId);
-    if (!room) return 0;
-    var count = 0;
-    var i;
-    for (i = 0; i < loc.stageIds.length; i++) {
-      if (room.snappedStages[loc.stageIds[i]]) count++;
+    // Снять метку и с других комнат — стадия одна на всю машину.
+    var id;
+    for (id in rooms) {
+      if (rooms[id] && rooms[id].snappedStages) {
+        delete rooms[id].snappedStages[stageId];
+      }
     }
-    return count;
   }
 
   function getAssemblyCore() {
@@ -178,29 +175,35 @@
     return (el && el.components && el.components['assembly-core']) || null;
   }
 
-  /** Макс. order среди stageIds локации (session.assemblySlots). */
-  function maxOrderForLocation(loc) {
-    if (!loc || !loc.stageIds) return -1;
-    var session = (typeof CONFIG !== 'undefined' && CONFIG.session) || null;
-    var slots = (session && session.assemblySlots) || [];
-    var max = -1;
+  /** stageId → true по живым занятым слотам машины. */
+  function liveSnappedStageSet() {
+    var set = {};
+    var core = getAssemblyCore();
+    if (!core || typeof core.getLiveOccupiedStages !== 'function') return set;
+    var live = core.getLiveOccupiedStages();
     var i;
-    var j;
-    for (i = 0; i < loc.stageIds.length; i++) {
-      var sid = loc.stageIds[i];
-      for (j = 0; j < slots.length; j++) {
-        if (slots[j].stageId === sid) {
-          var o = slots[j].order !== undefined ? slots[j].order : j;
-          if (o > max) max = o;
-        }
-      }
+    for (i = 0; i < live.length; i++) {
+      if (live[i].stageId) set[live[i].stageId] = true;
     }
-    return max;
+    return set;
+  }
+
+  /** Сколько stageIds локации сейчас на машине (live). */
+  function countSnappedStages(locId) {
+    var loc = findLocation(locId || activeLocationId);
+    if (!loc || !loc.stageIds) return 0;
+    var live = liveSnappedStageSet();
+    var count = 0;
+    var i;
+    for (i = 0; i < loc.stageIds.length; i++) {
+      if (live[loc.stageIds[i]]) count++;
+    }
+    return count;
   }
 
   /**
-   * Квота эпохи: все stageIds на месте И нет «лишних» стадий выше по цепочке
-   * (мусор/следующая деталь до прыжка ломает машину).
+   * Квота эпохи: все stageIds этой эпохи стоят на машине.
+   * Где снепнули — не важно (можно принести с запястья в другую эпоху).
    */
   function isLocationQuotaMet(locId) {
     var loc = findLocation(locId || activeLocationId);
@@ -208,29 +211,18 @@
     var need = loc.partsToComplete != null
       ? loc.partsToComplete
       : (loc.stageIds || []).length;
-    if (countSnappedStages(locId) < need) return false;
-
-    var maxOrder = maxOrderForLocation(loc);
-    if (maxOrder < 0) return true;
-
-    var core = getAssemblyCore();
-    if (!core || typeof core.getLiveOccupiedStages !== 'function') return true;
-    var live = core.getLiveOccupiedStages();
-    var i;
-    for (i = 0; i < live.length; i++) {
-      if (live[i].order > maxOrder) return false;
-    }
-    return true;
+    return countSnappedStages(locId) >= need;
   }
 
   /**
    * Можно ли прыгнуть в id прямо сейчас.
-   * Текущая — нет. Visited/start — да. Следующая (unlocks) — только живая квота.
+   * Текущая — нет. Visited / уже unlocked — да.
+   * Следующая (unlocks) ещё не открыта — только пока квота текущей собрана.
    */
   function canTravelTo(id) {
     if (!id || !findLocation(id)) return false;
     if (id === activeLocationId) return false;
-    if (isVisited(id)) return true;
+    if (isVisited(id) || isLocationUnlocked(id)) return true;
     var cur = getActiveLocation();
     if (cur && cur.unlocks === id) return isLocationQuotaMet(activeLocationId);
     return false;
@@ -294,39 +286,60 @@
     return locked;
   }
 
-  /** Закрепить «временем» стадии текущей эпохи (при прыжке вперёд). */
-  function lockEpochPartsOnTravel(fromLocId) {
-    var loc = findLocation(fromLocId);
-    if (!loc || !loc.stageIds) return;
+  /**
+   * Закрепить «временем» все стадии эпох, чья квота уже собрана на машине.
+   * Не зависит от того, в какой локации снепнули (Present с C+D → Past-квота → lock CD).
+   */
+  function lockCompletedEpochPartsOnTravel() {
     var core = getAssemblyCore();
     if (!core || typeof core.getLiveOccupiedStages !== 'function') return;
+    var locs = getLocations();
     var allowed = {};
+    var labels = [];
     var i;
-    for (i = 0; i < loc.stageIds.length; i++) allowed[loc.stageIds[i]] = true;
+    var j;
+    for (i = 0; i < locs.length; i++) {
+      var loc = locs[i];
+      if (!isLocationQuotaMet(loc.id)) continue;
+      var ids = loc.stageIds || [];
+      for (j = 0; j < ids.length; j++) allowed[ids[j]] = true;
+      if (ids.length) labels.push(loc.id + ':' + ids.join(''));
+    }
+    if (!labels.length) return;
     var live = core.getLiveOccupiedStages();
     var toLock = [];
     for (i = 0; i < live.length; i++) {
       if (allowed[live[i].stageId]) toLock.push(live[i]);
     }
-    _lockOccupiedEntries(toLock, 'from ' + fromLocId + ' (' + loc.stageIds.join('') + ')');
+    _lockOccupiedEntries(toLock, '(' + labels.join(' | ') + ')');
   }
 
-  /** Финальная победа: закрепить ВСЕ снепнутые детали машины (A→E). */
+  /** Финальная победа: закрепить ВСЕ снепнутые детали машины. */
   function lockAllSnappedPartsOnVictory() {
     var core = getAssemblyCore();
     if (!core || typeof core.getLiveOccupiedStages !== 'function') return;
     _lockOccupiedEntries(core.getLiveOccupiedStages(), '(victory)');
   }
 
-  function checkTravelReady() {
-    var loc = getActiveLocation();
-    if (!loc) return;
-    if (!loc.unlocks) return;
-    if (!isLocationQuotaMet()) return;
+  /**
+   * Квота locId только что собрана → unlock следующей + опц. auto-меню,
+   * если игрок сейчас в этой эпохе (или квота собрана «чужой» деталью здесь).
+   */
+  function onQuotaNewlyMet(locId) {
+    var loc = findLocation(locId);
+    if (!loc || !loc.unlocks) {
+      emitAvailability();
+      return;
+    }
 
     unlockLocation(loc.unlocks);
 
-    var locId = activeLocationId;
+    // Auto-меню только если квота текущей эпохи (не спамить при сборке чужой).
+    if (locId !== activeLocationId) {
+      emitAvailability();
+      return;
+    }
+
     var count = autoPopupCount[locId] || 0;
     var max = autoMenuMax();
     var shouldAuto = autoMenuEnabled() && count < max;
@@ -351,36 +364,49 @@
       console.log('[location-manager] travel-ready:', locId,
         '→ next:', loc.unlocks,
         '| comic:', comicKey,
-        '| snapped:', countSnappedStages(), '/', loc.partsToComplete);
+        '| snapped:', countSnappedStages(locId), '/', loc.partsToComplete);
       emitOnScene('travel-ready', detail);
       emitAvailability();
     });
+  }
+
+  /** Пересчитать квоты всех эпох (снеп мог закрыть «чужую» квоту). */
+  function refreshAllQuotas() {
+    var locs = getLocations();
+    var i;
+    var anyNew = false;
+    for (i = 0; i < locs.length; i++) {
+      var id = locs[i].id;
+      var met = isLocationQuotaMet(id);
+      var wasMet = !!quotaWasMet[id];
+      quotaWasMet[id] = met;
+      if (met && !wasMet) {
+        anyNew = true;
+        onQuotaNewlyMet(id);
+      }
+    }
+    if (!anyNew) emitAvailability();
   }
 
   function onStageSnapped(evt) {
     var d = evt.detail || {};
     if (!d.stageId) return;
     markStageSnapped(d.stageId);
-    var met = isLocationQuotaMet();
-    var locId = activeLocationId;
-    var wasMet = !!quotaWasMet[locId];
-    quotaWasMet[locId] = met;
-    if (met && !wasMet) {
-      checkTravelReady();
-    } else {
-      emitAvailability();
-    }
+    refreshAllQuotas();
   }
 
   function onStageUnsnapped(evt) {
     var d = evt.detail || {};
     if (!d.stageId) return;
     markStageUnsnapped(d.stageId, d.locationId);
-    var locId = activeLocationId;
-    var met = isLocationQuotaMet();
-    quotaWasMet[locId] = met;
+    var locs = getLocations();
+    var i;
+    for (i = 0; i < locs.length; i++) {
+      var id = locs[i].id;
+      quotaWasMet[id] = isLocationQuotaMet(id);
+    }
     console.log('[location-manager] stage-unsnapped:', d.stageId,
-      '| quotaMet:', met);
+      '| activeQuota:', isLocationQuotaMet());
     emitAvailability();
   }
 
@@ -398,10 +424,8 @@
     var prev = activeLocationId;
     if (prev) {
       markVisited(prev);
-      // Закрепить детали эпохи только при прыжке вперёд (квота жива).
-      if (isLocationQuotaMet(prev)) {
-        lockEpochPartsOnTravel(prev);
-      }
+      // Любые эпохи с выполненной квотой — time-lock (даже если собрали «не дома»).
+      lockCompletedEpochPartsOnTravel();
     }
 
     activeLocationId = id;
@@ -421,6 +445,11 @@
 
   function onVictory() {
     lockAllSnappedPartsOnVictory();
+  }
+
+  /** Публичный хук: пересчитать квоты (после внешнего снепа). */
+  function checkTravelReady() {
+    refreshAllQuotas();
   }
 
   function bindSceneEvents() {

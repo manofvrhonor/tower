@@ -83,6 +83,10 @@
   }
 
   function spawn() {
+    if (!isBatEnabled()) {
+      clearBat();
+      return;
+    }
     var root = document.getElementById('ball-bat-root');
     if (!root) {
       console.error('[spawn-ball-bat] #ball-bat-root not found');
@@ -93,7 +97,16 @@
     console.log('[spawn-ball-bat] spawned ball-bat');
   }
 
+  function isBatEnabled() {
+    var cfg = (typeof CONFIG !== 'undefined') && CONFIG.bat;
+    return !!(cfg && cfg.enabled !== false);
+  }
+
   function respawnBallBat() {
+    if (!isBatEnabled()) {
+      clearBat();
+      return;
+    }
     var existing = document.getElementById('ball-bat');
     if (existing) {
       var comp = existing.components['ball-bat'];

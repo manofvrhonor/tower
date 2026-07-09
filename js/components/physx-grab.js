@@ -106,6 +106,7 @@ AFRAME.registerComponent('physx-grab', {
     // Красные шары — не хватаем (Этап 6; отбивание — Этап 7).
     if (hitEl && hitEl.components['red-ball']) return;
     if (hitEl && hitEl.dataset && hitEl.dataset.inWristInventory === 'true') return;
+    if (hitEl && hitEl.dataset && hitEl.dataset.locationStashed === 'true') return;
     // Time-locked / preAssembled — не хватаем (иначе joint срывает co-rotation).
     if (this._isTimeLockedPart(hitEl)) return;
     if (!hitEl || hitEl.is(this.GRABBED_STATE) || !this.grabbing || this.hitEl) { return; }

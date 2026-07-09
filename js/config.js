@@ -27,7 +27,7 @@ const CONFIG = {
       GRAVITY_CUBE: '#ffcc00',  // куб на столе
       GRABBED_CUBE: '#ff8800',  // куб в руке
       FLOAT_INSIDE: '#aaddff',  // куб внутри сферы ядра
-      BALL:         '#ff3333',  // красный шар
+      BALL:         '#33e0ff',  // шар-угроза (cyan)
       BAT:          '#cc9900',  // бита-сковородка
       HAND:         '#aa44ff',  // сфера руки
       KINEMATIC:    '#ffffff',  // прочее kinematic
@@ -474,6 +474,9 @@ const CONFIG = {
     separationGap: 0.06,
     // Запас к радиусу _COL для clamp/разведения (convex ≥ bbox).
     radiusSafetyMult: 1.1,
+    // Fallback, если в difficulties нет junkPerLocation / decoyPerLocation.
+    junkPerLocation: 4,
+    decoyPerLocation: 3,
   },
 
   // Плавающие кубики (свойство float — невесомость + инерция).
@@ -578,7 +581,20 @@ const CONFIG = {
     count: 3,
     radius: 0.04,
     mass: 2.0,
-    color: '#E04040',
+    // Яркий cyan «атом времени» (Фаза 5).
+    color: '#33e0ff',
+    emissive: '#66f5ff',
+    emissiveIntensity: 1.35,
+
+    // Wave fade: scale+opacity по дистанции снаружи купола (м полёта).
+    // Появление: набор за inDistance к куполу.
+    // Исчезновение: старт на outStartDistance от поверхности купола,
+    // спад за outDistance дальше наружу.
+    fade: {
+      inDistance: 1.0,
+      outStartDistance: 3.0,
+      outDistance: 2.0,
+    },
 
     // Импульс в куб при ударе (× «полной» скорости шара). Масса шара > куба.
     cubeHitImpulseMultiplier: 2.8,
@@ -645,10 +661,10 @@ const CONFIG = {
       // Случайный разброс точки прицеливания вокруг цели (м, по всем осям).
       targetJitter: 0.12,
 
-      // Спавн на сфере радиуса spawnRadius вокруг точки-цели (> fogDome.radius=2.0,
+      // Спавн на сфере радиуса spawnRadius вокруг центра комнаты (> fogDome.radius=2.0,
       // т.е. снаружи тумана). Угол места (elevation) ограничен снизу, чтобы шары
       // приходили сверху/сбоку, а не из-под пола.
-      spawnRadius: 3.2,
+      spawnRadius: 6.5,
       spawnPitchMinDeg: 8,    // нижняя граница над горизонтом точки-цели
       spawnPitchMaxDeg: 78,   // верхняя граница (почти сверху)
 
@@ -659,9 +675,8 @@ const CONFIG = {
       // Скорость подлёта к столу (м/с, до умножения на timeScale).
       incomingSpeed: 1.4,
 
-      // Деспавн: за этим радиусом от центра комнаты шар (улетевший/отбитый) удаляется.
-      // Должен быть ≥ spawnRadius, чтобы отбитый шар успел уйти наружу.
-      despawnRadius: 3.6,
+      // Деспавн: ≥ fogDome.radius + fade.outStartDistance + fade.outDistance.
+      despawnRadius: 7.0,
 
       // Задержка перед спавном замены после деспавна (мс).
       respawnDelayMs: 600,
@@ -703,16 +718,19 @@ const CONFIG = {
     },
   },
 
-  // Удары кубом/битой в захвате (сессия 28).
-  // Slo-mo: dynamic-жертва (куб/бита) — только перенаправление, как шар.
+  // Удары рукой / grip-объектом по деталям и мусору (как batDeflect у шаров).
+  // Направление — от солвера; скорость — доударная (без разгона от kinematic-взмаха).
+  // clampMs — окно удержания в tick (рука/grip докручивают несколько кадров).
   inHandStrike: {
-    sloMoDeflectClampMs: 250,
+    clampMs: 250,
     worldSlowMoThreshold: 0.5,
     recentMinWindowMs: 600,
   },
 
   // Бита-сковородка (Этап 7). Float вне купола, gravity внутри — как кубы.
+  // enabled:false — не спавнить (код ball-bat / spawn-ball-bat остаётся).
   bat: {
+    enabled: false,
     mass: 0.85,
     panRadius: 0.11,
     panThickness: 0.018,
@@ -1133,17 +1151,19 @@ const CONFIG = {
     // Порядок карусели меню (game-menu.js).
     difficultyOrder: ['easy', 'normal', 'medium', 'hard', 'hardcore'],
     // Фаза 4: во всех режимах пустая машина (preAssembled: []).
-    // Разница — только ballCount и junkCount. Hardcore: ringInnerSpinMult.
+    // junkPerLocation / decoyPerLocation — на КАЖДУЮ эпоху (не сумма на игру).
+    // Hardcore: ringInnerSpinMult.
     difficulties: {
-      easy:     { label: 'Easy',     ballCount: 1, preAssembled: [], junkCount: 5 },
-      normal:   { label: 'Normal',   ballCount: 2, preAssembled: [], junkCount: 6 },
-      medium:   { label: 'Medium',   ballCount: 3, preAssembled: [], junkCount: 7 },
-      hard:     { label: 'Hard',     ballCount: 4, preAssembled: [], junkCount: 9 },
+      easy:     { label: 'Easy',     ballCount: 1, preAssembled: [], junkPerLocation: 4, decoyPerLocation: 3 },
+      normal:   { label: 'Normal',   ballCount: 2, preAssembled: [], junkPerLocation: 6, decoyPerLocation: 4 },
+      medium:   { label: 'Medium',   ballCount: 3, preAssembled: [], junkPerLocation: 6, decoyPerLocation: 4 },
+      hard:     { label: 'Hard',     ballCount: 4, preAssembled: [], junkPerLocation: 8, decoyPerLocation: 5 },
       hardcore: {
         label: 'Hardcore',
         ballCount: 5,
         preAssembled: [],
-        junkCount: 12,
+        junkPerLocation: 8,
+        decoyPerLocation: 5,
         ringInnerSpinMult: 2.2,
       },
     },

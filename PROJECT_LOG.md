@@ -530,11 +530,13 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 **Решение (дизайн, код — следующая сессия):**
 
 - **Сложность:** все 5 режимов — одинаковая сборка; `preAssembled: []` везде; разница только `ballCount`, `junkCount`; Hardcore сохраняет `ringInnerSpinMult: 2.2`.
-- **Эпохи:** старт **Present** (`present`, `start: true`). Маршрут Present → Past → Future. Квота снепа по цепочке A→E: Present `A+B` (2), Past `C+D` (2), Future `E` (1) → победа.
+- **Эпохи:** старт **Present** (`present`, `start: true`). Маршрут Present → Past → Future. Квота снепа по цепочке A→E: Present `A+B` (2), Past `C+D` (2), Future `E` (1).
 - **Источник данных v1:** `CONFIG.machine.assemblyChain` + `CONFIG.locations` (`stageIds`, `partsToComplete`, `unlocks`, `sceneryHeightMult`, `fogTint`). Старые `CONFIG.parts` / `mechanisms` — в config, **не в рантайм** до апгрейд-слотов.
-- **Прыжок:** живая квота эпохи → `travel-ready` (auto-меню до 2 раз: first / rebuilt) или пульт `wrist-travel-remote` на `#rightHand` (открытие **левой** рукой). Меню всегда показывает **все** эпохи; `canTravelTo`: visited — всегда, следующая (`unlocks`) — только пока квота жива. Пока меню открыто — **forced slo-mo** (`time-scale.setTravelMenuSlowMo`), не `victory-freeze`. Закрытие без прыжка (Close / пульт) снимает slo-mo; сборка не «сохранена», пока не `travelTo`. `victory-freeze` — только финальная победа. Переход: veil + `menu-backdrop-vfx` → `travelTo(id)` → fade-in.
+- **Прыжок:** живая квота эпохи → `travel-ready` (auto-меню до 2 раз: first / rebuilt) или пульт `wrist-travel-remote` на `#rightHand` (открытие **левой** рукой). Меню всегда показывает **все** эпохи; `canTravelTo`: visited / unlocked — всегда, следующая (`unlocks`) — только пока квота жива. Пока меню открыто — **forced slo-mo** (`time-scale.setTravelMenuSlowMo`), не `victory-freeze`. Закрытие без прыжка (Close / пульт) снимает slo-mo; сборка не «сохранена», пока не `travelTo`. `victory-freeze` — только финальная победа. Переход: veil + `menu-backdrop-vfx` → `travelTo(id)` → fade-in.
 **Перенос между эпохами:** до **2** предметов в `wrist-inventory` на `#leftHand`. **Store:** grip/trigger **up**, деталь **внутри** цилиндра-кармана (`pocketRadius`), лучи-притяжение (12) только от **ближайшего** пустого слота в `rayRadius` — **любая** рука. **Retrieve:** grip/trigger **down** **правой** рукой у занятого кармана. Карманы — цилиндры с белыми разрядами (`assembly-sphere-visual`); занятый слот мерцает **голубым**; деталь в кармане — cyan `part-snap-energy` + полупрозрачность. Позиции — `CONFIG.wristInventory.slots` (local `#leftHand`: X вбок, Y вперёд −, Z вверх). При store/retrieve — `_forceKinematicFlag` / `_resetKinematicLatch` (`floating-cube.js`, с.65). Любой `floating-cube` (механизм + мусор). **Не** перенос снепом на ядре.
 - **Пейзаж:** `outside-scenery` — множитель `height` + текстуры `{id}-*.jpg` в `locations[].scenery.*Walls`. **Купол/туман/HDR — без смены по эпохе** (с.64).
+
+**Дополнение (с.67):** пер-локационные пулы + travel stash/restore; победа и промежуточные квоты — от **живой машины**, не от текущей эпохи; time-lock при travel — все эпохи с выполненной квотой; бита `CONFIG.bat.enabled: false`.
 
 **Причина:** VR-читаемый цикл «собрал → киношный прыжок → другая эпоха»; сложность = давление шаров/мусора, не разная сборка; запястье готовит апгрейд-слоты позже.
 
@@ -548,7 +550,7 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 
 **Junk GLB:** список в `assets/models/machine-manifest.json` (ключ `junk`); после добавления файлов — `scripts/refresh-machine-manifest.ps1` + reload.
 
-**Реализация:** шаги **1–10 ✅** (с.63–65). **Фаза 4 закрыта** (Quest QA с.65).
+**Реализация:** шаги **1–10 ✅** (с.63–65). **Фаза 4 закрыта** (Quest QA с.65). Hotfix пулов/победы/квот ✅ (с.67).
 
 ---
 
@@ -562,7 +564,7 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 
 - **MVP ✅** (с.29–31): меню, сложность, купол R=2 m, Quest-прогон без блокеров.
 - **Стильная игра:** Фазы 0–3 ✅, **3.5B ✅** `ba9ecdd`.
-- **Сейчас:** **Фаза 4 ✅** + пульт/живое меню (с.66). **Дальше:** **Фаза 5** — опасности, таймер петли (мастер-план).
+- **Сейчас:** **Фаза 5** (с.68: шары/пулы/призрак ✅). **Дальше:** таймер петли — `.cursor/plans/phase5_loop_timer.plan.md`.
 - **Дальше:** `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md` (Фаза 5).
 - **Не делаем:** VR-виньетка slo-mo. **Пропускаем:** захват «отлёт при тряске» (с.29).
 - **Тест:** Quest Link + localhost.

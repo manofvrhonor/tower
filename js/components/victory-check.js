@@ -1,10 +1,11 @@
 /* global AFRAME, CONFIG */
 
 /**
- * victory-check — победа после финальной эпохи (Фаза 4, шаг 8).
+ * victory-check — победа при полной сборке машины (все слоты сессии заняты).
  *
- * Победа только в Future (unlocks == null): все слоты A→E снепнуты,
- * квота эпохи выполнена. Present/Past → travel-ready, не victory.
+ * Не зависит от текущей эпохи: собрал ABCDE в Past с принесённой E — тоже победа.
+ * Порядок/набор слотов задаёт rollAssemblySession (сейчас A→E; позже может быть
+ * другой chain на сложности). Travel-ready по квоте эпохи — отдельно в location-manager.
  */
 AFRAME.registerComponent('victory-check', {
   schema: {},
@@ -79,13 +80,11 @@ AFRAME.registerComponent('victory-check', {
     this.el.sceneEl.emit('victory', detail, false);
   },
 
+  /**
+   * Победа = все слоты текущей сессии заняты и детали стабильно снепнуты.
+   * Эпоха / unlocks / квота локации не проверяются.
+   */
   _evaluate: function () {
-    var loc = typeof getActiveLocation === 'function' ? getActiveLocation() : null;
-    // Present/Past — квота эпохи → travel-ready (location-manager), не победа.
-    if (loc && loc.unlocks != null) {
-      return { ok: false };
-    }
-
     var core = this._getAssemblyCore();
     if (!core || typeof core.areAllSlotsOccupied !== 'function') {
       return { ok: false };
@@ -96,10 +95,6 @@ AFRAME.registerComponent('victory-check', {
     if (slotCount < 1) return { ok: false };
 
     if (!core.areAllSlotsOccupied()) {
-      return { ok: false };
-    }
-
-    if (loc && typeof isLocationQuotaMet === 'function' && !isLocationQuotaMet()) {
       return { ok: false };
     }
 

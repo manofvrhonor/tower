@@ -34,6 +34,8 @@
 | outside-scenery epoch, spawn quota, wrist-inventory | 64 | Фаза 4 шаги 7–9; **не** fog/HDR по эпохе |
 | wrist-inventory QA, cylinder pockets, collider fix | 65 | Фаза 4 шаг 10 ✅; retrieve правая рука |
 | wrist-travel-remote, live travel menu, cascade lock | 66 | forced slo-mo; time-lock travel/victory |
+| locationPools, stash/restore, victory/quota live machine | 67 | bat.enabled false; time-lock all quotas |
+| cyan balls fade, junk/decoy per loc, next-slot ghost, loop-timer plan | 68 | phase5_loop_timer.plan; deflect hand/grip |
 
 ## Хронология (одной строкой)
 
@@ -57,7 +59,9 @@
 | 64 | ✅ | Фаза 4 шаги 7–9: пейзаж домов, спавн по эпохе, wrist-inventory |
 | 65 | ✅ | Фаза 4 шаг 10: wrist QA, цилиндры, collider fix — **фаза закрыта** |
 | 66 | ✅ | Пульт прыжка + живое меню эпох, cascade/time-lock — Quest QA |
-| → | — | **Фаза 5** — опасности, таймер петли |
+| 67 | ✅ | Пер-локационные пулы, stash/restore, победа/квота от машины, bat off |
+| 68 | ✅ | Фаза 5 старт: cyan-шары, пулы, призрак, deflect; план таймера петли |
+| → | — | **Таймер петли** — `.cursor/plans/phase5_loop_timer.plan.md` |
 
 ---
 
@@ -1338,3 +1342,56 @@
 **Фаза 5** — опасности, таймер петли.
 
 **Commit сессии:** `f368fbf`
+
+---
+
+## Сессия 67 — Пер-локационные пулы + победа/квота от машины ✅
+
+**Дата:** 2026-07-09
+
+### Сделано
+
+- **Пулы по эпохам:** `locationPools` в `rollAssemblySession` — Present A+B, Past C+D, Future E + доля junk + decoy; не один общий набор floaters.
+- **Travel stash/restore:** при уходе — поза мира + hide; при возврате — те же места; уже спрятанные не перезаписывают `stashedAt`.
+- **Победа:** `victory-check` — все слоты сессии заняты, **без** привязки к Future.
+- **Промежуточная квота:** live occupancy ядра (принёс C в Present → Past-квота ок); unlock следующей эпохи из любой локации.
+- **Time-lock:** при travel — стадии **всех** эпох с выполненной квотой (не только уходящей).
+- **Бита:** `CONFIG.bat.enabled: false` (код `ball-bat` / spawn сохранён).
+
+### Файлы
+
+`init-session.js`, `spawn-floating-cubes.js`, `floating-cube.js`, `location-manager.js`, `victory-check.js`, `physx-grab.js`, `wrist-inventory.js`, `spawn-ball-bat.js`, `config.js`, `CURRENT_TASK.md`, `PROJECT_LOG*.md`, `PROJECT_START.md`.
+
+### Следующая сессия
+
+**Фаза 5** — опасности, таймер петли (продолжено в с.68).
+
+**Commit сессии:** _(в общем коммите с.68)_
+
+---
+
+## Сессия 68 — Фаза 5 старт: шары, пулы, призрак, deflect ✅
+
+**Дата:** 2026-07-09
+
+### Сделано
+
+- **Cyan-шары:** цвет/emissive; fade scale+opacity (in ~1 м к куполу; outStart 3 м + out 2 м); `spawnRadius` 6.5 м.
+- **Пулы:** `junkPerLocation` / `decoyPerLocation` на эпоху по сложности (4+3 / 6+4 / 8+5); repeats GLB; без цветных кубов; decoy ≠ snap-схема.
+- **Призрак:** только следующий слот (`assembly-core._updateGhostVisibility`).
+- **Deflect:** рука / grip по деталям и мусору — redirect+clamp как бита (не только slo-mo).
+- **План следующей сессии:** `.cursor/plans/phase5_loop_timer.plan.md` (один таймер на забег, UI на `#rightHand`, × timeScale, defeat).
+
+### Не трогать
+
+- Бита — только по явному запросу (`CONFIG.bat.enabled: false`).
+
+### Файлы
+
+`red-ball.js`, `ball-wave-manager.js`, `spawn-red-balls.js`, `float-motion-trail.js`, `init-session.js`, `spawn-floating-cubes.js`, `assembly-core.js`, `floating-cube.js`, `location-manager.js`, `victory-check.js`, `physx-grab.js`, `wrist-inventory.js`, `spawn-ball-bat.js`, `game-lifecycle.js`, `config.js`, `.cursor/plans/phase5_loop_timer.plan.md`, `CURRENT_TASK.md`, `PROJECT_LOG*.md`, `PROJECT_START.md`.
+
+### Следующая сессия
+
+**Таймер петли** — план `phase5_loop_timer.plan.md`.
+
+**Commit сессии:** _(после push)_

@@ -6,8 +6,12 @@
  * rollAssemblySession(): по одной случайной GLB из каждой папки стадии
  * (attach/box/core/drum/end) → упорядоченная цепочка вдоль оси ring_inner
  * (CONFIG.machine.assemblyChain). Сложность задаёт, какие стадии уже стоят
- * (preAssembled, несбиваемые). Мусор — из junk/, добор неиспользованными
- * вариантами деталей стадий.
+ * (preAssembled, несбиваемые).
+ *
+ * Пер-эпоха: locationPools[locId] = { stages, junkItems }.
+ * junkPerLocation / decoyPerLocation — на КАЖДУЮ эпоху (difficulties).
+ * Нехватка GLB → повтор из пула (без цветных кубов).
+ * Decoy никогда не берёт файлы из snap-схемы сессии.
  *
  * Вызывается из game-lifecycle spawnWorld(), не при load. Manifest
  * предзагружается при старте страницы.
@@ -80,6 +84,141 @@
     return { position: pos, rotation: { x: rot.x || 0, y: rot.y || 0, z: rot.z || 0 } };
   }
 
+  function getLocations() {
+    return (typeof CONFIG !== 'undefined' && CONFIG.locations) || [];
+  }
+
+  function spawnCfg() {
+    return (typeof CONFIG !== 'undefined' && CONFIG.spawn) || {};
+  }
+
+  function makeGlbJunk(id, path, file) {
+    return {
+      type: 'glb',
+      id: id,
+      model: path + file,
+      colliderModel: colliderUrl(path, file),
+    };
+  }
+
+  /**
+   * Взять count элементов из pool с повторами (циклически), каждый раз shuffle.
+   * pool: [{ path, file }, ...]
+   */
+  function takeWithRepeats(pool, count) {
+    var out = [];
+    if (!pool.length || count <= 0) return out;
+    var bag = [];
+    var i;
+    for (i = 0; i < count; i++) {
+      if (!bag.length) bag = shuffleArray(pool);
+      out.push(bag.shift());
+    }
+    return out;
+  }
+
+  /**
+   * Пер-локационные пулы: stages эпохи + junk + decoy на каждую эпоху.
+   * schemeFileKeys — map «folder/file» snap-схемы; decoy их не берёт.
+   */
+  function buildLocationPools(stages, leftovers, preset, schemeFileKeys) {
+    var locs = getLocations();
+    var sc = spawnCfg();
+    var mc = machineCfg();
+    var junkFolder = mc.junkPath || 'assets/models/junk/';
+
+    var junkPer = preset.junkPerLocation !== undefined
+      ? preset.junkPerLocation
+      : (sc.junkPerLocation !== undefined ? sc.junkPerLocation : 4);
+    var decoyPer = preset.decoyPerLocation !== undefined
+      ? preset.decoyPerLocation
+      : (sc.decoyPerLocation !== undefined ? sc.decoyPerLocation : 3);
+
+    var junkPool = (manifestCache.junk || []).map(function (f) {
+      return { path: junkFolder, file: f };
+    });
+
+    // Decoy: leftover + любые stage-GLB, кроме файлов текущей snap-схемы.
+    var decoyPool = [];
+    var seen = {};
+    function addDecoyCandidate(folder, file) {
+      var key = folder + '/' + file;
+      if (schemeFileKeys[key]) return;
+      if (seen[key]) return;
+      seen[key] = true;
+      decoyPool.push({ path: mc.basePath + folder + '/', file: file });
+    }
+    leftovers.forEach(function (l) { addDecoyCandidate(l.folder, l.file); });
+    var chain = mc.assemblyChain || {};
+    var stagesCfg = chain.stages || [];
+    var si;
+    for (si = 0; si < stagesCfg.length; si++) {
+      var folder = stagesCfg[si].folder;
+      var files = manifestCache[folder] || [];
+      var fi;
+      for (fi = 0; fi < files.length; fi++) {
+        addDecoyCandidate(folder, files[fi]);
+      }
+    }
+
+    if (!junkPool.length) {
+      console.warn('[init-session] junk pool empty — epochs get 0 junk GLB');
+    }
+    if (!decoyPool.length) {
+      console.warn('[init-session] decoy pool empty (all stage files in scheme?)');
+    }
+
+    var stageById = {};
+    stages.forEach(function (s) { stageById[s.stageId] = s; });
+
+    var pools = {};
+    var flatJunk = [];
+    var junkIdx = 0;
+    var decoyIdx = 0;
+    var li;
+
+    for (li = 0; li < locs.length; li++) {
+      var loc = locs[li];
+      var locStages = [];
+      for (si = 0; si < (loc.stageIds || []).length; si++) {
+        var st = stageById[loc.stageIds[si]];
+        if (st) locStages.push(st);
+      }
+
+      var locJunk = [];
+      var pickedJunk = takeWithRepeats(junkPool, junkPer);
+      var j;
+      for (j = 0; j < pickedJunk.length; j++) {
+        var jp = pickedJunk[j];
+        var item = makeGlbJunk('junk_glb_' + junkIdx, jp.path, jp.file);
+        junkIdx += 1;
+        locJunk.push(item);
+        flatJunk.push(item);
+      }
+
+      var pickedDecoy = takeWithRepeats(decoyPool, decoyPer);
+      for (j = 0; j < pickedDecoy.length; j++) {
+        var lp = pickedDecoy[j];
+        var decoy = makeGlbJunk('decoy_glb_' + decoyIdx, lp.path, lp.file);
+        decoyIdx += 1;
+        locJunk.push(decoy);
+        flatJunk.push(decoy);
+      }
+
+      pools[loc.id] = {
+        stages: locStages,
+        junkItems: locJunk,
+      };
+    }
+
+    return {
+      locationPools: pools,
+      junkItems: flatJunk,
+      junkPerLocation: junkPer,
+      decoyPerLocation: decoyPer,
+    };
+  }
+
   function rollAssemblySession() {
     if (!manifestCache) {
       manifestCache = machineCfg().manifest || {};
@@ -99,6 +238,8 @@
 
     var stages = [];
     var leftovers = [];
+    var pickedFiles = [];
+    var schemeFileKeys = {};
     var i;
 
     for (i = 0; i < stagesCfg.length; i++) {
@@ -110,6 +251,8 @@
       }
       var shuffled = shuffleArray(files);
       var picked = shuffled[0];
+      pickedFiles.push(stCfg.folder + '/' + picked);
+      schemeFileKeys[stCfg.folder + '/' + picked] = true;
       var k;
       for (k = 1; k < shuffled.length; k++) {
         leftovers.push({ folder: stCfg.folder, file: shuffled[k] });
@@ -147,57 +290,33 @@
     var partsById = {};
     stages.forEach(function (s) { partsById[s.partId] = s; });
 
-    // Мусор: сначала junk/, затем неиспользованные варианты стадий.
-    var junkCount = preset.junkCount || 5;
-    var junkFolder = mc.junkPath || 'assets/models/junk/';
-    var junkPool = shuffleArray((manifestCache.junk || []).map(function (f) {
-      return { path: junkFolder, file: f };
-    }));
-    var leftoverPool = shuffleArray(leftovers).map(function (l) {
-      return { path: mc.basePath + l.folder + '/', file: l.file };
-    });
-    var combined = junkPool.concat(leftoverPool);
-
-    var junkItems = [];
-    var ji;
-    for (ji = 0; ji < junkCount && ji < combined.length; ji++) {
-      var jp = combined[ji];
-      junkItems.push({
-        type: 'glb',
-        id: 'junk_glb_' + ji,
-        model: jp.path + jp.file,
-        colliderModel: colliderUrl(jp.path, jp.file),
-      });
-    }
-
-    // Добор цветными кубами, если GLB-мусора не хватило.
-    var fc = (typeof CONFIG !== 'undefined' && CONFIG.floatingCubes) || {};
-    var cubePalette = shuffleArray(
-      (fc.junkCubeColors && fc.junkCubeColors.length)
-        ? fc.junkCubeColors.slice()
-        : [fc.trashColor || '#888888']
-    );
-    for (; ji < junkCount; ji++) {
-      junkItems.push({
-        type: 'cube',
-        id: 'junk_cube_' + ji,
-        color: cubePalette[ji % cubePalette.length],
-      });
-    }
+    var built = buildLocationPools(stages, leftovers, preset, schemeFileKeys);
 
     CONFIG.session = {
       stages: stages,
       assemblySlots: assemblySlots,
       partsById: partsById,
-      junkItems: junkItems,
+      junkItems: built.junkItems,
+      locationPools: built.locationPools,
     };
 
     var preIds = stages.filter(function (s) { return s.preAssembled; })
       .map(function (s) { return s.stageId; });
+    var poolLog = [];
+    var locs = getLocations();
+    for (i = 0; i < locs.length; i++) {
+      var p = built.locationPools[locs[i].id];
+      if (!p) continue;
+      poolLog.push(locs[i].id + ':' +
+        p.stages.map(function (s) { return s.stageId; }).join('') +
+        '+j' + p.junkItems.length);
+    }
     console.log('[init-session] roll — chain:',
       stages.map(function (s) { return s.stageId; }).join(''),
+      '| files:', pickedFiles.join(', '),
       '| pre:', preIds.join('') || '(none)',
-      '| junk:', junkItems.length);
+      '| perLoc junk:', built.junkPerLocation, 'decoy:', built.decoyPerLocation,
+      '| pools:', poolLog.join(' | '));
 
     var coreEl = document.getElementById('assembly-core');
     var coreComp = coreEl && coreEl.components['assembly-core'];

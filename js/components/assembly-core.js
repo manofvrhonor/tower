@@ -5,6 +5,7 @@
  *
  * Читает CONFIG.session.assemblySlots (rollAssemblySession) или fallback
  * CONFIG.mechanisms[<mechanism>]. Призраки: wireframe по GLB слота или box.
+ * Виден только призрак следующей стадии (A→B→C…); остальные скрыты.
  *
  * Шаг 1.3: учёт занятости слотов и мировая поза для снепа (floating-cube).
  */
@@ -245,8 +246,28 @@ AFRAME.registerComponent('assembly-core', {
       this._buildSlotGhost(slots[i], vis);
     }
 
+    this._updateGhostVisibility();
     console.log('[assembly-core] building', slots.length,
-      'slot ghosts for mechanism', this._mechanismId);
+      'slot ghosts for mechanism', this._mechanismId,
+      '| next order:', this.nextRequiredOrder());
+  },
+
+  /**
+   * Показать призрак только следующей незанятой стадии (nextRequiredOrder).
+   * Занятые и «будущие» слоты скрыты — игрок видит одну подсказку за раз.
+   */
+  _updateGhostVisibility: function () {
+    var next = this.nextRequiredOrder();
+    var i;
+    for (i = 0; i < this._slotMeshes.length; i++) {
+      var m = this._slotMeshes[i];
+      var sid = m.userData.slotId;
+      if (this._occupied[sid]) {
+        m.visible = false;
+        continue;
+      }
+      m.visible = next !== null && (m.userData.order || 0) === next;
+    }
   },
 
   _meshById: function (slotId) {
@@ -372,14 +393,12 @@ AFRAME.registerComponent('assembly-core', {
 
   occupySlot: function (slotId, el) {
     this._occupied[slotId] = el || true;
-    var m = this._meshById(slotId);
-    if (m) m.visible = false;
+    this._updateGhostVisibility();
   },
 
   releaseSlot: function (slotId) {
     delete this._occupied[slotId];
-    var m = this._meshById(slotId);
-    if (m) m.visible = true;
+    this._updateGhostVisibility();
   },
 
   getMechanismId: function () {

@@ -27,7 +27,8 @@
     console.log('[game-lifecycle] difficulty:', id,
       '— balls:', preset.ballCount,
       'pre-assembled:', (preset.preAssembled || []).join('') || '(none)',
-      'junk:', preset.junkCount);
+      'junk/loc:', preset.junkPerLocation !== undefined ? preset.junkPerLocation : preset.junkCount,
+      'decoy/loc:', preset.decoyPerLocation);
     return true;
   }
 
