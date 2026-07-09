@@ -40,9 +40,11 @@ AFRAME.registerComponent('machine-rig', {
     this._onGameStarted = this._onGameStarted.bind(this);
     this._onTravelReady = this._onTravelReady.bind(this);
     this._onLocationChanged = this._onLocationChanged.bind(this);
+    this._onTravelMenuClosed = this._onTravelMenuClosed.bind(this);
     this.el.sceneEl.addEventListener('game-started', this._onGameStarted);
     this.el.sceneEl.addEventListener('travel-ready', this._onTravelReady);
     this.el.sceneEl.addEventListener('location-changed', this._onLocationChanged);
+    this.el.sceneEl.addEventListener('travel-menu-closed', this._onTravelMenuClosed);
 
     this._loadVisual(this.el, this._cfg.machineModel);
     this._loadCollider(this.el, this._cfg.machineCollider);
@@ -58,6 +60,7 @@ AFRAME.registerComponent('machine-rig', {
     this.el.sceneEl.removeEventListener('game-started', this._onGameStarted);
     this.el.sceneEl.removeEventListener('travel-ready', this._onTravelReady);
     this.el.sceneEl.removeEventListener('location-changed', this._onLocationChanged);
+    this.el.sceneEl.removeEventListener('travel-menu-closed', this._onTravelMenuClosed);
   },
 
   _initPhysxMaterial: function () {
@@ -122,6 +125,11 @@ AFRAME.registerComponent('machine-rig', {
     this._spinBoost = t.ringSpinBoostMult || 5;
     this._innerBoost = t.ringInnerSpinBoostMult || this._spinBoost;
     console.log('[machine-rig] travel spin boost:', this._spinBoost + 'x');
+  },
+
+  _onTravelMenuClosed: function () {
+    this._spinBoost = 1;
+    this._innerBoost = 1;
   },
 
   _onLocationChanged: function (evt) {

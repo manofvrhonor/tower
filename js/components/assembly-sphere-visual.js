@@ -2,7 +2,7 @@
 
 /**
  * assembly-sphere-visual — энергосфера с белыми разрядами (Фаза 2.x).
- * Шейдер как room-fog-dome. preset: assembly | wrist (карманы запястья).
+ * Шейдер как room-fog-dome. preset: assembly | wrist | travel (пульт запястья).
  */
 AFRAME.registerComponent('assembly-sphere-visual', {
   schema: {
@@ -51,6 +51,14 @@ AFRAME.registerComponent('assembly-sphere-visual', {
       shape = this.data.shape || wv.shape || 'cylinder';
       height = wv.height !== undefined ? wv.height
         : (wi.pocketHeight !== undefined ? wi.pocketHeight : 0.055);
+    } else if (preset === 'travel') {
+      var tr = (typeof CONFIG !== 'undefined' && CONFIG.wristTravelRemote) || {};
+      var tv = tr.visual || {};
+      R = this.data.radius > 0 ? this.data.radius
+        : (tv.radius !== undefined ? tv.radius : 0.032);
+      v = tv;
+      shape = this.data.shape || tv.shape || 'cylinder';
+      height = tv.height !== undefined ? tv.height : 0.045;
     } else if (this.data.radius > 0) {
       R = this.data.radius;
     }

@@ -1,10 +1,11 @@
 /* global AFRAME, CONFIG, THREE */
 
 /**
- * travel-ui — комикс-панель прыжка между эпохами (Фаза 4, шаг 5).
+ * travel-ui — меню выбора эпох (Фаза 4+).
  *
- * На travel-ready: панель + кнопки ← / → к соседним разблокированным эпохам.
- * PNG: CONFIG.travel.ui.assets (fallback — canvas). travelTo(id) по нажатию.
+ * Всегда показывает ВСЕ эпохи; кнопки enabled по canTravelTo (живая квота).
+ * Auto (travel-ready) и wrist — одно меню. Forced slo-mo пока открыто.
+ * Закрытие: кнопка «Закрыть» или пульт. victory-freeze не используется.
  */
 AFRAME.registerComponent('travel-ui', {
   schema: {},
@@ -12,13 +13,17 @@ AFRAME.registerComponent('travel-ui', {
   init: function () {
     this.cfg = this._readCfg();
     this._shown = false;
+    this._openSource = null;
+    this._comicKey = null;
     this._buttons = [];
     this._nearBtn = null;
     this._nearHintLogged = false;
     this._busy = false;
+    this._nextHint = null;
 
     this._onTravelReady = this._onTravelReady.bind(this);
     this._onHide = this._onHide.bind(this);
+    this._onAvailability = this._onAvailability.bind(this);
     this._onHandPress = this._onHandPress.bind(this);
     this._onTick = this._onTick.bind(this);
 
@@ -29,11 +34,14 @@ AFRAME.registerComponent('travel-ui', {
 
     this._buildUI();
     this._bindHands();
+    this._exposeApi();
 
     this.el.sceneEl.addEventListener('travel-ready', this._onTravelReady);
+    this.el.sceneEl.addEventListener('travel-availability-changed', this._onAvailability);
     this.el.sceneEl.addEventListener('game-started', this._onHide);
     this.el.sceneEl.addEventListener('return-to-menu', this._onHide);
     this.el.sceneEl.addEventListener('location-changed', this._onHide);
+    this.el.sceneEl.addEventListener('victory', this._onHide);
   },
 
   play: function () {
@@ -46,11 +54,83 @@ AFRAME.registerComponent('travel-ui', {
 
   remove: function () {
     this.el.sceneEl.removeEventListener('travel-ready', this._onTravelReady);
+    this.el.sceneEl.removeEventListener('travel-availability-changed', this._onAvailability);
     this.el.sceneEl.removeEventListener('game-started', this._onHide);
     this.el.sceneEl.removeEventListener('return-to-menu', this._onHide);
     this.el.sceneEl.removeEventListener('location-changed', this._onHide);
+    this.el.sceneEl.removeEventListener('victory', this._onHide);
     this.el.sceneEl.removeEventListener('tick', this._onTick);
     this._unbindHands();
+    this._setTravelSlowMo(false);
+    if (window.openTravelMenu) delete window.openTravelMenu;
+    if (window.closeTravelMenu) delete window.closeTravelMenu;
+    if (window.isTravelMenuOpen) delete window.isTravelMenuOpen;
+  },
+
+  _exposeApi: function () {
+    var self = this;
+    window.openTravelMenu = function (opts) {
+      self.openMenu(opts || {});
+    };
+    window.closeTravelMenu = function () {
+      self.closeMenu();
+    };
+    window.isTravelMenuOpen = function () {
+      return self._shown;
+    };
+  },
+
+  _isBlocked: function () {
+    if (this._busy) return true;
+    if (typeof window.isVictoryFrozen === 'function' && window.isVictoryFrozen()) return true;
+    var scene = this.el.sceneEl;
+    var menu = scene && scene.components['game-menu'];
+    if (menu && menu._visible) return true;
+    var vui = scene && scene.components['victory-ui'];
+    if (vui && vui._shown) return true;
+    return false;
+  },
+
+  openMenu: function (opts) {
+    if (!this._root || this._isBlocked()) return;
+    var source = (opts && opts.source) || 'wrist';
+    var comicKey = (opts && opts.comicKey) || null;
+
+    this._openSource = source;
+    this._comicKey = comicKey;
+    this._shown = true;
+    this._nearBtn = null;
+    this._nearHintLogged = false;
+    if (opts && opts.nextLocationId) this._nextHint = opts.nextLocationId;
+
+    this._setTravelSlowMo(true);
+
+    var pos = this._getMenuPosition();
+    this._root.setAttribute('position', pos.x + ' ' + pos.y + ' ' + pos.z);
+    this._root.setAttribute('visible', true);
+    this._updateComicVisibility();
+    this._rebuildLocationButtons();
+    this._layoutPanel();
+    this._setClickable(true);
+    this._facePlayer();
+
+    if (typeof window.enableDesktopUiCursor === 'function') {
+      window.enableDesktopUiCursor();
+    }
+    console.log('[travel-ui] меню эпох открыто (' + source +
+      (comicKey ? ', comic:' + comicKey : '') + ')');
+  },
+
+  closeMenu: function () {
+    if (!this._shown) return;
+    this._hidePanel(true);
+  },
+
+  _setTravelSlowMo: function (on) {
+    var sys = this.el.sceneEl && this.el.sceneEl.systems['time-scale'];
+    if (sys && typeof sys.setTravelMenuSlowMo === 'function') {
+      sys.setTravelMenuSlowMo(on);
+    }
   },
 
   _readCfg: function () {
@@ -74,6 +154,7 @@ AFRAME.registerComponent('travel-ui', {
     this._btnAccentHover = th.btnAccentHover || '#66f5ff';
     this._btnAccentNear = th.btnAccentNear || '#b8ffff';
     this._btnDisabled = '#1a1a22';
+    this._btnCurrent = '#2a3540';
     this._panelColor = th.panel || '#0a1018';
     this._titleColor = th.titleAccent || '#66f5ff';
   },
@@ -121,16 +202,20 @@ AFRAME.registerComponent('travel-ui', {
     return { el: plane, canvas: canvas, ctx: ctx, label: text, fontSize: opts.fontSize || 44 };
   },
 
-  _drawComicFallback: function (canvas, w, h) {
+  _drawComicFallback: function (canvas, w, h, comicKey) {
     var ctx = canvas.getContext('2d');
     ctx.fillStyle = '#0a1018';
     ctx.fillRect(0, 0, w, h);
     ctx.strokeStyle = '#33e0ff';
     ctx.lineWidth = Math.max(4, w * 0.008);
     ctx.strokeRect(ctx.lineWidth, ctx.lineWidth, w - ctx.lineWidth * 2, h - ctx.lineWidth * 2);
+    var title = comicKey === 'rebuilt' ? 'AGAIN' : 'TIME JUMP';
+    var sub = comicKey === 'rebuilt'
+      ? 'Machine works again'
+      : (comicKey === 'first' ? 'Choose an era' : '···');
     if (typeof window.menuUiDrawCenteredText === 'function') {
-      window.menuUiDrawCenteredText(ctx, 'TIME JUMP', w, h * 0.45, Math.round(h * 0.14), '#66f5ff');
-      window.menuUiDrawCenteredText(ctx, '···', w, h * 0.72, Math.round(h * 0.2), '#33e0ff');
+      window.menuUiDrawCenteredText(ctx, title, w, h * 0.4, Math.round(h * 0.12), '#66f5ff');
+      window.menuUiDrawCenteredText(ctx, sub, w, h * 0.68, Math.round(h * 0.08), '#33e0ff');
     }
   },
 
@@ -172,6 +257,8 @@ AFRAME.registerComponent('travel-ui', {
       disabledBg: meta.disabledBg || this._btnDisabled,
       enabled: meta.enabled !== false,
       onPress: meta.onPress,
+      locationId: meta.locationId || null,
+      isClose: !!meta.isClose,
     };
     this._buttons.push(entry);
 
@@ -192,95 +279,142 @@ AFRAME.registerComponent('travel-ui', {
     return entry;
   },
 
-  _locationLabel: function (id) {
-    if (!id) return '?';
-    var loc = (typeof window.getLocationById === 'function')
-      ? window.getLocationById(id) : null;
-    return (loc && loc.label) ? loc.label : id;
+  _menuLocations: function () {
+    if (typeof window.getTravelMenuLocations === 'function') {
+      return window.getTravelMenuLocations();
+    }
+    return [];
   },
 
-  _findTravelTarget: function (dir) {
-    var route = (typeof window.getLocationRoute === 'function')
-      ? window.getLocationRoute() : [];
-    var current = (typeof window.getActiveLocationId === 'function')
-      ? window.getActiveLocationId() : null;
-    var unlocked = (typeof window.getUnlockedLocationIds === 'function')
-      ? window.getUnlockedLocationIds() : [];
-    var idx = route.indexOf(current);
-    if (idx < 0) return null;
-
-    var i = idx + dir;
-    while (i >= 0 && i < route.length) {
-      var id = route[i];
-      if (unlocked.indexOf(id) >= 0 && id !== current) return id;
-      i += dir;
+  _clearDynamicButtons: function () {
+    var i;
+    for (i = 0; i < this._buttons.length; i++) {
+      var el = this._buttons[i].data.el;
+      if (el.parentNode) el.parentNode.removeChild(el);
     }
-    return null;
+    this._buttons.length = 0;
+    this._nearBtn = null;
   },
 
-  _refreshNavButtons: function () {
-    var leftId = this._findTravelTarget(-1);
-    var rightId = this._findTravelTarget(1);
+  _rebuildLocationButtons: function () {
+    this._clearDynamicButtons();
+    if (!this._locBtnRoot) return;
 
-    this._leftEntry.enabled = !!leftId;
-    this._rightEntry.enabled = !!rightId;
+    var ui = this.cfg;
+    var btnW = ui.locBtnWidth !== undefined ? ui.locBtnWidth : 0.88;
+    var btnH = ui.locBtnHeight !== undefined ? ui.locBtnHeight : 0.12;
+    var btnGap = ui.locBtnGap !== undefined ? ui.locBtnGap : 0.04;
+    var closeH = ui.closeBtnHeight !== undefined ? ui.closeBtnHeight : 0.1;
+    var btnFs = ui.btnFontSize !== undefined ? Math.round(ui.btnFontSize * 0.82) : 40;
+    var locs = this._menuLocations();
+    var self = this;
+    var count = locs.length;
+    var idx;
 
-    var leftLabel = leftId
-      ? ('← ' + this._locationLabel(leftId))
-      : (this.cfg.leftDisabledText || '←');
-    var rightLabel = rightId
-      ? (this._locationLabel(rightId) + ' →')
-      : (this.cfg.rightDisabledText || '→');
+    for (idx = 0; idx < count; idx++) {
+      var info = locs[idx];
+      var isCurrent = !!info.isCurrent;
+      var enabled = !!info.enabled;
+      var isHint = info.id === this._nextHint && enabled;
+      var label = info.label || info.id;
+      if (isCurrent) label = '● ' + label;
 
-    this._leftEntry.data.label = leftLabel;
-    this._rightEntry.data.label = rightLabel;
+      var normalBg = isCurrent ? this._btnCurrent
+        : (!enabled ? this._btnDisabled
+          : (isHint ? this._btnAccent : this._btnNormal));
+      var hoverBg = isHint ? this._btnAccentHover : this._btnHover;
+      var nearBg = isHint ? this._btnAccentNear : this._btnNear;
 
-    this._leftEntry.normalBg = this._btnNormal;
-    this._leftEntry.hoverBg = this._btnHover;
-    this._leftEntry.nearBg = this._btnNear;
+      var btnData = this._makeTextPlane(label, btnW, btnH, {
+        fontSize: btnFs,
+        bg: normalBg,
+      });
+      btnData.fontSize = btnFs;
+      btnData.label = label;
+      var y = -idx * (btnH + btnGap);
+      btnData.el.setAttribute('position', '0 ' + y + ' 0.01');
+      this._locBtnRoot.appendChild(btnData.el);
+      this._applyMenuDrawOrder(btnData.el);
 
-    if (rightId === this._nextHint) {
-      this._rightEntry.normalBg = this._btnAccent;
-      this._rightEntry.hoverBg = this._btnAccentHover;
-      this._rightEntry.nearBg = this._btnAccentNear;
-    } else {
-      this._rightEntry.normalBg = this._btnNormal;
-      this._rightEntry.hoverBg = this._btnHover;
-      this._rightEntry.nearBg = this._btnNear;
+      (function (destId, canPress, entryLabel, nBg, hBg, nb) {
+        self._registerButton(btnData, {
+          locationId: destId,
+          enabled: canPress,
+          normalBg: nBg,
+          hoverBg: hBg,
+          nearBg: nb,
+          disabledBg: self._btnDisabled,
+          onPress: function () {
+            if (canPress) self._doTravel(destId);
+          },
+        });
+      })(info.id, enabled, label, normalBg, hoverBg, nearBg);
     }
 
-    this._redrawButton(
-      this._leftEntry.data,
-      this._leftEntry.enabled ? this._leftEntry.normalBg : this._leftEntry.disabledBg,
-      leftLabel
+    var closeLabel = ui.closeBtnText || 'Закрыть';
+    var closeY = -count * (btnH + btnGap) - 0.02;
+    var closeData = this._makeTextPlane(closeLabel, btnW, closeH, {
+      fontSize: Math.round(btnFs * 0.85),
+      bg: this._btnNormal,
+    });
+    closeData.fontSize = Math.round(btnFs * 0.85);
+    closeData.label = closeLabel;
+    closeData.el.setAttribute('position', '0 ' + closeY + ' 0.01');
+    this._locBtnRoot.appendChild(closeData.el);
+    this._applyMenuDrawOrder(closeData.el);
+    this._registerButton(closeData, {
+      isClose: true,
+      enabled: true,
+      normalBg: this._btnNormal,
+      hoverBg: this._btnHover,
+      nearBg: this._btnNear,
+      onPress: function () {
+        self.closeMenu();
+      },
+    });
+  },
+
+  _shouldShowComic: function () {
+    if (this._openSource === 'wrist') {
+      return this.cfg.showComicOnWrist === true;
+    }
+    if (this.cfg.showComicOnAuto === false) return false;
+    return !!this._comicKey;
+  },
+
+  _updateComicVisibility: function () {
+    if (!this._comicPlaneEl) return;
+    var show = this._shouldShowComic();
+    this._comicPlaneEl.setAttribute('visible', show);
+    if (show) this._refreshComicCanvas();
+  },
+
+  _refreshComicCanvas: function () {
+    if (!this._comicCanvas) return;
+    this._drawComicFallback(
+      this._comicCanvas,
+      this._comicCanvas.width,
+      this._comicCanvas.height,
+      this._comicKey
     );
-    this._redrawButton(
-      this._rightEntry.data,
-      this._rightEntry.enabled ? this._rightEntry.normalBg : this._rightEntry.disabledBg,
-      rightLabel
-    );
+    this._tryLoadComicImage(this._comicCanvas, this._comicKey);
+    if (this._comicPlaneEl) {
+      var mesh = this._comicPlaneEl.getObject3D('mesh');
+      if (mesh && mesh.material && mesh.material.map) {
+        mesh.material.map.needsUpdate = true;
+      } else {
+        this._applyCanvasTexture(this._comicPlaneEl, this._comicCanvas);
+      }
+    }
   },
 
   _buildUI: function () {
     var ui = this.cfg;
     var comicW = ui.comicWidth !== undefined ? ui.comicWidth : 1.1;
     var comicH = ui.comicHeight !== undefined ? ui.comicHeight : 0.75;
-    var btnW = ui.btnWidth !== undefined ? ui.btnWidth : 0.42;
-    var btnH = ui.btnHeight !== undefined ? ui.btnHeight : 0.14;
-    var btnFs = ui.btnFontSize !== undefined ? ui.btnFontSize : 48;
     var titleH = ui.titleHeight !== undefined ? ui.titleHeight : 0.1;
     var pos = this._getMenuPosition();
     var self = this;
-
-    var layout = (typeof window.menuUiComputeLayout === 'function')
-      ? window.menuUiComputeLayout({
-        title: { width: comicW, height: titleH },
-        rows: [
-          { buttons: [{ width: comicW, height: comicH }] },
-          { buttons: [{ width: btnW, height: btnH }, { width: btnW, height: btnH }] },
-        ],
-      })
-      : null;
 
     this._root = document.createElement('a-entity');
     this._root.setAttribute('id', 'travel-ui-root');
@@ -288,11 +422,13 @@ AFRAME.registerComponent('travel-ui', {
     this._root.setAttribute('visible', false);
 
     var panel = document.createElement('a-plane');
-    panel.setAttribute('width', layout ? layout.panel.width : comicW + 0.12);
-    panel.setAttribute('height', layout ? layout.panel.height : 1.15);
+    panel.setAttribute('id', 'travel-ui-panel');
+    panel.setAttribute('width', comicW + 0.12);
+    panel.setAttribute('height', 1.15);
     panel.setAttribute('color', this._panelColor);
     panel.setAttribute('material',
       'shader: flat; opacity: 0.96; transparent: true; side: front; depthTest: false; depthWrite: false; renderOrder: 50');
+    this._panelEl = panel;
 
     var titleText = ui.titleText || 'Прыжок';
     var titleFs = (typeof window.menuUiFontSizeForButton === 'function')
@@ -301,80 +437,85 @@ AFRAME.registerComponent('travel-ui', {
     var titleData = this._makeTextPlane(titleText, comicW, titleH, {
       fontSize: titleFs, color: this._titleColor,
     });
-    if (layout && layout.title) {
-      var tp = layout.title;
-      titleData.el.setAttribute('position', tp.x + ' ' + tp.y + ' ' + tp.z);
-    }
+    titleData.el.setAttribute('position', '0 0.5 0.01');
+    this._titleEl = titleData.el;
 
     var comicCanvas = document.createElement('canvas');
     comicCanvas.width = 1024;
     comicCanvas.height = 698;
-    this._drawComicFallback(comicCanvas, comicCanvas.width, comicCanvas.height);
-    this._tryLoadComicImage(comicCanvas);
+    this._comicCanvas = comicCanvas;
+    this._drawComicFallback(comicCanvas, comicCanvas.width, comicCanvas.height, null);
 
     var comicPlane = document.createElement('a-plane');
     comicPlane.setAttribute('width', comicW);
     comicPlane.setAttribute('height', comicH);
+    comicPlane.setAttribute('visible', false);
     var comicApply = function () {
       self._applyCanvasTexture(comicPlane, comicCanvas);
     };
     comicPlane.addEventListener('loaded', comicApply);
     if (comicPlane.hasLoaded) comicApply();
     this._comicPlaneEl = comicPlane;
-    if (layout && layout.rows[0] && layout.rows[0].buttons[0]) {
-      var cp = layout.rows[0].buttons[0];
-      comicPlane.setAttribute('position', cp.x + ' ' + cp.y + ' ' + cp.z);
-    }
+    comicPlane.setAttribute('position', '0 0.22 0.01');
 
-    var navFs = Math.round(btnFs * 0.85);
-    var leftData = this._makeTextPlane('←', btnW, btnH, { fontSize: navFs, bg: this._btnNormal });
-    leftData.fontSize = navFs;
-    var rightData = this._makeTextPlane('→', btnW, btnH, { fontSize: navFs, bg: this._btnAccent });
-    rightData.fontSize = navFs;
-
-    if (layout && layout.rows[1] && layout.rows[1].buttons.length >= 2) {
-      var lp = layout.rows[1].buttons[0];
-      var rp = layout.rows[1].buttons[1];
-      leftData.el.setAttribute('position', lp.x + ' ' + lp.y + ' ' + lp.z);
-      rightData.el.setAttribute('position', rp.x + ' ' + rp.y + ' ' + rp.z);
-    }
-
-    this._leftEntry = this._registerButton(leftData, {
-      onPress: function () {
-        var id = self._findTravelTarget(-1);
-        if (id) self._doTravel(id);
-      },
-    });
-    this._rightEntry = this._registerButton(rightData, {
-      normalBg: this._btnAccent,
-      hoverBg: this._btnAccentHover,
-      nearBg: this._btnAccentNear,
-      onPress: function () {
-        var id = self._findTravelTarget(1);
-        if (id) self._doTravel(id);
-      },
-    });
+    this._locBtnRoot = document.createElement('a-entity');
+    this._locBtnRoot.setAttribute('id', 'travel-ui-loc-btns');
+    this._locBtnRoot.setAttribute('position', '0 -0.18 0');
 
     this._root.appendChild(panel);
     this._root.appendChild(titleData.el);
     this._root.appendChild(comicPlane);
-    this._root.appendChild(leftData.el);
-    this._root.appendChild(rightData.el);
+    this._root.appendChild(this._locBtnRoot);
     this.el.sceneEl.appendChild(this._root);
 
     this._applyMenuDrawOrder(panel);
     this._applyMenuDrawOrder(titleData.el);
     this._applyMenuDrawOrder(comicPlane);
-    this._applyMenuDrawOrder(leftData.el);
-    this._applyMenuDrawOrder(rightData.el);
 
     this._btnPos = new THREE.Vector3();
     this._handPos = new THREE.Vector3();
   },
 
-  _tryLoadComicImage: function (canvas) {
+  _layoutPanel: function () {
+    if (!this._panelEl) return;
+    var ui = this.cfg;
+    var comicW = ui.comicWidth !== undefined ? ui.comicWidth : 1.1;
+    var comicH = ui.comicHeight !== undefined ? ui.comicHeight : 0.75;
+    var titleH = ui.titleHeight !== undefined ? ui.titleHeight : 0.1;
+    var btnH = ui.locBtnHeight !== undefined ? ui.locBtnHeight : 0.12;
+    var btnGap = ui.locBtnGap !== undefined ? ui.locBtnGap : 0.04;
+    var closeH = ui.closeBtnHeight !== undefined ? ui.closeBtnHeight : 0.1;
+    var locs = this._menuLocations();
+    var btnBlock = locs.length * btnH + Math.max(0, locs.length - 1) * btnGap
+      + closeH + 0.06;
+    var showComic = this._shouldShowComic();
+    var panelH = titleH + (showComic ? comicH + 0.08 : 0) + btnBlock + 0.2;
+
+    this._panelEl.setAttribute('width', comicW + 0.12);
+    this._panelEl.setAttribute('height', panelH);
+
+    var topY = panelH * 0.5 - titleH * 0.5 - 0.04;
+    if (this._titleEl) this._titleEl.setAttribute('position', '0 ' + topY + ' 0.01');
+
+    var comicY = topY - titleH * 0.5 - comicH * 0.5 - 0.04;
+    if (this._comicPlaneEl) {
+      this._comicPlaneEl.setAttribute('position', '0 ' + comicY + ' 0.01');
+    }
+
+    var btnTop = showComic
+      ? comicY - comicH * 0.5 - 0.04
+      : topY - titleH * 0.5 - 0.06;
+    if (this._locBtnRoot) {
+      this._locBtnRoot.setAttribute('position', '0 ' + btnTop + ' 0');
+    }
+  },
+
+  _tryLoadComicImage: function (canvas, comicKey) {
     var assets = this.cfg.assets || {};
-    var file = assets.comic;
+    var file = null;
+    if (comicKey === 'rebuilt') file = assets.comicRebuilt;
+    else if (comicKey === 'first') file = assets.comicFirst;
+    if (!file && assets.comic) file = assets.comic;
     if (!file) return;
     var base = assets.basePath || 'assets/ui/travel/';
     var url = base + file;
@@ -481,7 +622,7 @@ AFRAME.registerComponent('travel-ui', {
         this._redrawButton(near.data, near.nearBg);
         if (!this._nearHintLogged) {
           this._nearHintLogged = true;
-          console.log('[travel-ui] рука у кнопки эпохи — grip или trigger');
+          console.log('[travel-ui] рука у кнопки — grip или trigger');
         }
       } else {
         this._nearHintLogged = false;
@@ -503,20 +644,30 @@ AFRAME.registerComponent('travel-ui', {
     }
   },
 
-  _hidePanel: function () {
+  _stopTravelOrbit: function () {
+    var vfx = this._getBackdropVfx();
+    if (vfx && typeof vfx.stopTravelOrbit === 'function') vfx.stopTravelOrbit();
+  },
+
+  _hidePanel: function (resumeWorld) {
+    var wasShown = this._shown;
     this._shown = false;
+    this._openSource = null;
+    this._comicKey = null;
     this._nearBtn = null;
     this._nearHintLogged = false;
     this._setClickable(false);
     if (this._root) this._root.setAttribute('visible', false);
-    for (var i = 0; i < this._buttons.length; i++) {
-      if (this._buttons[i].enabled) {
-        this._buttons[i].data.el.setAttribute('scale', '1 1 1');
-        this._redrawButton(this._buttons[i].data, this._buttons[i].normalBg);
-      }
-    }
+    this._clearDynamicButtons();
     if (typeof window.disableDesktopUiCursor === 'function') {
       window.disableDesktopUiCursor();
+    }
+    if (resumeWorld !== false) {
+      this._setTravelSlowMo(false);
+      this._stopTravelOrbit();
+      if (wasShown) {
+        this.el.sceneEl.emit('travel-menu-closed', {}, false);
+      }
     }
   },
 
@@ -535,9 +686,17 @@ AFRAME.registerComponent('travel-ui', {
 
   _doTravel: function (destId) {
     if (this._busy || !destId) return;
+    if (typeof window.canTravelTo === 'function' && !window.canTravelTo(destId)) {
+      console.warn('[travel-ui] travel blocked:', destId);
+      this._rebuildLocationButtons();
+      this._layoutPanel();
+      return;
+    }
     this._busy = true;
     console.log('[travel-ui] travel →', destId);
-    this._hidePanel();
+    this._hidePanel(false);
+    this._setTravelSlowMo(false);
+    this._stopTravelOrbit();
     if (typeof window.disableDesktopUiCursor === 'function') {
       window.disableDesktopUiCursor();
     }
@@ -577,33 +736,31 @@ AFRAME.registerComponent('travel-ui', {
     }
   },
 
+  _onAvailability: function () {
+    if (!this._shown) return;
+    this._rebuildLocationButtons();
+    this._layoutPanel();
+    this._setClickable(true);
+  },
+
   _onHide: function (evt) {
     if (evt && evt.type === 'location-changed') {
       var d = evt.detail || {};
       if (d.reason !== 'travel' && d.reason !== 'reset') return;
     }
-    if (this._shown) this._hidePanel();
+    if (this._shown) this._hidePanel(true);
+    else this._setTravelSlowMo(false);
   },
 
   _onTravelReady: function (evt) {
-    if (!this._root) return;
     var d = evt.detail || {};
     this._nextHint = d.nextLocationId || null;
-    this._shown = true;
-    this._nearBtn = null;
-    this._nearHintLogged = false;
-
-    var pos = this._getMenuPosition();
-    this._root.setAttribute('position', pos.x + ' ' + pos.y + ' ' + pos.z);
-    this._root.setAttribute('visible', true);
-    this._refreshNavButtons();
-    this._setClickable(true);
-    this._facePlayer();
-
-    if (typeof window.enableDesktopUiCursor === 'function') {
-      window.enableDesktopUiCursor();
-    }
-    console.log('[travel-ui] панель прыжка — ← / → эпохи',
-      '(next:', this._nextHint || '?', ')');
+    this.openMenu({
+      source: 'auto',
+      comicKey: d.comicKey || 'first',
+      nextLocationId: d.nextLocationId || null,
+    });
+    console.log('[travel-ui] travel-ready — auto menu',
+      '(next:', this._nextHint || '?', ', comic:', d.comicKey || 'first', ')');
   },
 });

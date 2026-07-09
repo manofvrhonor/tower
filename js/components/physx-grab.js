@@ -106,10 +106,19 @@ AFRAME.registerComponent('physx-grab', {
     // Красные шары — не хватаем (Этап 6; отбивание — Этап 7).
     if (hitEl && hitEl.components['red-ball']) return;
     if (hitEl && hitEl.dataset && hitEl.dataset.inWristInventory === 'true') return;
+    // Time-locked / preAssembled — не хватаем (иначе joint срывает co-rotation).
+    if (this._isTimeLockedPart(hitEl)) return;
     if (!hitEl || hitEl.is(this.GRABBED_STATE) || !this.grabbing || this.hitEl) { return; }
     hitEl.addState(this.GRABBED_STATE);
     this.hitEl = hitEl;
     this.addJoint(hitEl, evt.target, evt);
+  },
+
+  _isTimeLockedPart: function (el) {
+    if (!el) return false;
+    if (el.dataset && el.dataset.fixed === 'true') return true;
+    var fc = el.components && el.components['floating-cube'];
+    return !!(fc && fc._isFixed);
   },
 
   addJoint(el, target, contactEvt) {

@@ -66,6 +66,11 @@ AFRAME.registerComponent('victory-check', {
     console.log('[victory-check] MECHANISM COMPLETE:', mechId,
       '— slots:', result.slotCount);
 
+    // Сразу закрепить машину — до UI/freeze, чтобы последнюю деталь нельзя было сорвать.
+    if (typeof window.lockAllSnappedPartsOnVictory === 'function') {
+      window.lockAllSnappedPartsOnVictory();
+    }
+
     var detail = {
       mechanismId: mechId,
       slotCount: result.slotCount,

@@ -125,6 +125,7 @@ AFRAME.registerComponent('assembly-core', {
     slotRoot.userData.acceptPartId = slot.acceptPartId || '';
     slotRoot.userData.role = slot.role || '';
     slotRoot.userData.order = slot.order !== undefined ? slot.order : 0;
+    slotRoot.userData.stageId = slot.stageId || null;
     return slotRoot;
   },
 
@@ -318,6 +319,55 @@ AFRAME.registerComponent('assembly-core', {
 
   isSlotOccupied: function (slotId) {
     return !!this._occupied[slotId];
+  },
+
+  getSlotOrder: function (slotId) {
+    var m = this._meshById(slotId);
+    return m ? (m.userData.order || 0) : 0;
+  },
+
+  /**
+   * Занятые слоты с order > afterOrder (для каскада A→ снимает B+).
+   * Сортировка по order убыв. — сначала кончик цепочки.
+   */
+  getOccupiedAboveOrder: function (afterOrder) {
+    var out = [];
+    var i;
+    for (i = 0; i < this._slotMeshes.length; i++) {
+      var m = this._slotMeshes[i];
+      var sid = m.userData.slotId;
+      if (!this._occupied[sid]) continue;
+      var o = m.userData.order || 0;
+      if (o > afterOrder) {
+        out.push({
+          slotId: sid,
+          el: this._occupied[sid],
+          order: o,
+          stageId: m.userData.stageId || null,
+        });
+      }
+    }
+    out.sort(function (a, b) { return b.order - a.order; });
+    return out;
+  },
+
+  /** Живые занятые стадии: [{ slotId, stageId, order, el }]. */
+  getLiveOccupiedStages: function () {
+    var out = [];
+    var i;
+    for (i = 0; i < this._slotMeshes.length; i++) {
+      var m = this._slotMeshes[i];
+      var sid = m.userData.slotId;
+      if (!this._occupied[sid]) continue;
+      out.push({
+        slotId: sid,
+        stageId: m.userData.stageId || null,
+        order: m.userData.order || 0,
+        el: this._occupied[sid],
+      });
+    }
+    out.sort(function (a, b) { return a.order - b.order; });
+    return out;
   },
 
   occupySlot: function (slotId, el) {

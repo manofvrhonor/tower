@@ -33,6 +33,7 @@
 | location-manager, travel-ready, travel-ui | 63 | Фаза 4 шаги 1–6; co-rotation freeze fix |
 | outside-scenery epoch, spawn quota, wrist-inventory | 64 | Фаза 4 шаги 7–9; **не** fog/HDR по эпохе |
 | wrist-inventory QA, cylinder pockets, collider fix | 65 | Фаза 4 шаг 10 ✅; retrieve правая рука |
+| wrist-travel-remote, live travel menu, cascade lock | 66 | forced slo-mo; time-lock travel/victory |
 
 ## Хронология (одной строкой)
 
@@ -55,6 +56,7 @@
 | 63 | ✅ | Фаза 4 шаги 1–6: config, location-manager, travel-ready, travel-ui, veil |
 | 64 | ✅ | Фаза 4 шаги 7–9: пейзаж домов, спавн по эпохе, wrist-inventory |
 | 65 | ✅ | Фаза 4 шаг 10: wrist QA, цилиндры, collider fix — **фаза закрыта** |
+| 66 | ✅ | Пульт прыжка + живое меню эпох, cascade/time-lock — Quest QA |
 | → | — | **Фаза 5** — опасности, таймер петли |
 
 ---
@@ -1311,3 +1313,28 @@
 **Фаза 5** — опасности, отбивание, таймер петли (мастер-план `tower_stylish_game_c39f4c3b.plan.md`).
 
 **Commit сессии:** _(нет)_
+
+---
+
+## Сессия 66 — Пульт прыжка + живое меню эпох ✅
+
+**Дата:** 2026-07-09
+
+### Сделано
+
+- **`wrist-travel-remote`** на `#rightHand` (позиция как второй карман слева); открытие **левой** рукой; toggle Close.
+- **`travel-ui`:** всегда все эпохи; кнопки по `canTravelTo` (живая квота); Close; auto 1–2 раза (first/rebuilt); forced slo-mo вместо victory-freeze на travel.
+- **Живая квота:** `stage-unsnapped`; лишняя стадия выше tip эпохи гасит переход; visited — всегда доступны.
+- **Цепочка A→E:** каскадный unsnap (снял A → B+ отваливаются).
+- **Time-lock:** при прыжке вперёд — стадии эпохи; при победе — все A→E; `physx-grab` не хватает fixed.
+- **Quest QA:** пульт, travel туда-обратно, cascade, victory lock.
+
+### Файлы
+
+`wrist-travel-remote.js`, `travel-ui.js`, `location-manager.js`, `floating-cube.js`, `assembly-core.js`, `physx-grab.js`, `time-scale.js`, `victory-freeze.js`, `victory-check.js`, `machine-rig.js`, `assembly-sphere-visual.js`, `config.js`, `index.html`, `CURRENT_TASK.md`, `PROJECT_LOG.md`, `PROJECT_START.md`, `PROJECT_LOG_ARCHIVE.md`.
+
+### Следующая сессия
+
+**Фаза 5** — опасности, таймер петли.
+
+**Commit сессии:** _(после push)_

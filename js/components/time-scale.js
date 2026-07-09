@@ -31,6 +31,7 @@ AFRAME.registerSystem('time-scale', {
     this._debugLastLog = 0;
     this._recentMinScale = 1.0;
     this._recentMinSince = 0;
+    this._travelMenuSlowMo = false;
 
     var player = document.getElementById('player');
     this.tracked = {
@@ -41,10 +42,32 @@ AFRAME.registerSystem('time-scale', {
   },
 
   /**
+   * Forced slo-mo пока открыто travel-меню (независимо от движения игрока).
+   */
+  setTravelMenuSlowMo: function (on) {
+    this._travelMenuSlowMo = !!on;
+    if (on) {
+      var travel = (typeof CONFIG !== 'undefined' && CONFIG.travel) || {};
+      var forced = travel.menuSlowMoScale !== undefined ? travel.menuSlowMoScale : 0.12;
+      this.scale = forced;
+      this._recentMinScale = forced;
+      this._recentMinSince = performance.now();
+    }
+  },
+
+  isTravelMenuSlowMo: function () {
+    return !!this._travelMenuSlowMo;
+  },
+
+  /**
    * Текущий коэффициент времени для скриптового/«мирового» движения.
    * @returns {number}
    */
   getScale: function () {
+    if (this._travelMenuSlowMo) {
+      var travel = (typeof CONFIG !== 'undefined' && CONFIG.travel) || {};
+      return travel.menuSlowMoScale !== undefined ? travel.menuSlowMoScale : 0.12;
+    }
     return this.scale;
   },
 
@@ -67,6 +90,15 @@ AFRAME.registerSystem('time-scale', {
 
     var dtSec = dt / 1000;
     var rawSpeed = this._measureMaxSpeed(dtSec);
+
+    if (this._travelMenuSlowMo) {
+      var travel = (typeof CONFIG !== 'undefined' && CONFIG.travel) || {};
+      this.scale = travel.menuSlowMoScale !== undefined ? travel.menuSlowMoScale : 0.12;
+      this._trackRecentMin();
+      this._hasPrev = true;
+      this._debugLog(time);
+      return;
+    }
 
     if (this._hasPrev) {
       var cfg = this.cfg;

@@ -64,6 +64,7 @@
   <script src="js/components/victory-ui.js"></script>
   <script src="js/components/travel-ui.js"></script>
   <script src="js/components/wrist-inventory.js"></script>
+  <script src="js/components/wrist-travel-remote.js"></script>
   <script src="js/components/menu-world-veil.js"></script>
   <script src="js/components/menu-backdrop-vfx.js"></script>
   <script src="js/components/game-menu.js"></script>
@@ -164,7 +165,8 @@
       <!-- Правая рука: hand-controls-local + physx-grab + дочерний коллайдер -->
       <a-entity id="rightHand"
                 hand-controls-local="hand: right; handModelStyle: lowPoly; color: #ffffff"
-                physx-grab>
+                physx-grab
+                wrist-travel-remote>
         <a-entity id="rightHandBody" hand-body-collider="hand: right"></a-entity>
         <a-entity id="rightMagnet" hand-magnet-vfx="hand: right">
           <a-sphere id="rightHandCollider"

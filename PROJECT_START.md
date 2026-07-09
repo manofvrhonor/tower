@@ -39,8 +39,8 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 ## Где мы
 
 - Этапы 0–8 (MVP) ✅. Стильная игра: Фазы **0–3 ✅** (outside-scenery, floor-fog, HDR sky).
-- **Сейчас:** **Фаза 4 ✅** (с.65): эпохи, прыжок, wrist-inventory (Quest QA).
-- **Дальше:** **Фаза 5** — опасности + таймер петли ([мастер-план](.cursor/plans/tower_stylish_game_c39f4c3b.plan.md)).
+- **Сейчас:** **Фаза 4 ✅** + пульт/живое меню (с.66). **Дальше:** **Фаза 5** — опасности + таймер петли.
+- **Дальше:** [мастер-план](.cursor/plans/tower_stylish_game_c39f4c3b.plan.md) → Фаза 5.
 - Мастер-план: `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md`
 - **План Фазы 4:** `.cursor/plans/phase4_locations.plan.md`
 - **Не делаем:** VR-виньетка slo-mo. **Пропускаем:** захват «отлёт при тряске» (с.29).
@@ -112,6 +112,7 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 | 63 | Фаза 4 шаги 1–6: travel-ready, travel-ui, veil | location-manager, travel-ui, victory-freeze, menu-backdrop-vfx |
 | 64 | Фаза 4 шаги 7–9: пейзаж домов, spawn, wrist ⚠️ QA | outside-scenery, spawn-floating-cubes, wrist-inventory, machine-manifest |
 | 65 | Фаза 4 шаг 10 + wrist QA ✅: цилиндры, store/retrieve, collider fix | wrist-inventory, assembly-sphere-visual, part-snap-energy, config |
+| 66 | Пульт прыжка + живое меню эпох, cascade/time-lock, Quest QA ✅ | wrist-travel-remote, travel-ui, location-manager, floating-cube |
 
 ---
 

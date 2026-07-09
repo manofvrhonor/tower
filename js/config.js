@@ -1358,9 +1358,45 @@ const CONFIG = {
     ],
   },
 
-  // === Прыжок между эпохами (Фаза 4, travel-ready) ===
+  // === Пульт прыжка на #rightHand (wrist-travel-remote.js) ===
+  wristTravelRemote: {
+    // Local #rightHand — как второй карман на #leftHand (slots[1]).
+    // Открытие — левая рука у пульта (не правая у своего запястья).
+    position: { x: 0.0, y: 0.13, z: -0.01 },
+    pressRadius: 0.09,
+    idleIntensity: 0.55,
+    activeIntensity: 0.95,
+    nearIntensity: 1.08,
+    pulseOnUnlockMs: 2500,
+    visual: {
+      shape: 'cylinder',
+      radius: 0.032,
+      height: 0.045,
+      color: '#ffb866',
+      glowColor: '#ff9933',
+      coreColor: '#fff0d0',
+      baseOpacity: 0.88,
+      voidOpacity: 0.05,
+      streakOpacity: 0.92,
+      fogContrast: 2.3,
+      noiseScale: 1.2,
+      scrollSpeed: 0.38,
+      streakSharpness: 4.0,
+      fresnelStrength: 0.58,
+      fogOverlay: 0.48,
+      widthSegments: 24,
+      heightSegments: 12,
+      renderOrder: 8,
+    },
+  },
+
+  // === Прыжок между эпохами (Фаза 4+, travel-ui / wrist-travel-remote) ===
   travel: {
-    freezeWorldOnReady: true,
+    // Auto-меню при квоте: 1 туториал + 1 после поломки; дальше только пульт.
+    autoMenuEnabled: true,
+    autoMenuMaxPerLocation: 2,
+    // Forced slo-mo пока открыто travel-меню (не victory-freeze).
+    menuSlowMoScale: 0.12,
     ringSpinBoostMult: 5,
     ringInnerSpinBoostMult: 5,
     // veil + искры при выборе эпохи (travel-ui → menu-world-veil / menu-backdrop-vfx).
@@ -1377,18 +1413,24 @@ const CONFIG = {
       hubYMax: 1.15,
       hubBobAmp: 0.08,
     },
-    // travel-ui.js — комикс-панель + кнопки эпох. PNG: assets/ui/travel/
+    // travel-ui.js — все эпохи; кнопки по canTravelTo. PNG: assets/ui/travel/
     ui: {
       handPressRadius: 0.18,
       titleText: 'Прыжок',
+      closeBtnText: 'Закрыть',
       comicWidth: 1.1,
       comicHeight: 0.75,
-      btnWidth: 0.42,
-      btnHeight: 0.14,
+      showComicOnAuto: true,
+      showComicOnWrist: false,
+      locBtnWidth: 0.88,
+      locBtnHeight: 0.12,
+      locBtnGap: 0.04,
       btnFontSize: 48,
+      closeBtnHeight: 0.1,
       assets: {
         basePath: 'assets/ui/travel/',
-        comic: null,
+        comicFirst: null,
+        comicRebuilt: null,
       },
     },
   },

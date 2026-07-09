@@ -132,25 +132,109 @@ AFRAME.registerComponent('floating-cube', {
     var st = (evt.detail && evt.detail.state) ? evt.detail.state : evt.detail;
     if (st !== 'grabbed-dynamic') return;
     if (this.state !== 'snapped') return;
-    if (this._isFixed) return; // предустановленную деталь рукой не снять
-    this._unsnapFromSlot();
+    if (this._isFixed) return; // предустановленную / time-locked деталь рукой не снять
+    this._unsnapFromSlot({ cascade: true });
   },
 
-  /** Снять деталь со слота: освободить слот, вернуть тело в dynamic. */
-  _unsnapFromSlot: function () {
+  /**
+   * Снять деталь со слота. cascade:true — сорвать все стадии выше по цепочке A→B→C.
+   * skipEmit:true — не слать stage-unsnapped (каскад шлёт сам по каждой).
+   */
+  _unsnapFromSlot: function (opts) {
+    opts = opts || {};
+    var slotId = this._snappedSlotId;
+    var stageId = this._stageIdFromSlot(slotId);
     var core = this._getAssemblyCore();
-    if (core && this._snappedSlotId && typeof core.releaseSlot === 'function') {
-      core.releaseSlot(this._snappedSlotId);
+    var order = 0;
+    if (core && slotId && typeof core.getSlotOrder === 'function') {
+      order = core.getSlotOrder(slotId);
+    }
+
+    if (opts.cascade && core && typeof core.getOccupiedAboveOrder === 'function') {
+      this._cascadeUnsnapAbove(core, order);
+    }
+
+    if (core && slotId && typeof core.releaseSlot === 'function') {
+      core.releaseSlot(slotId);
     }
     this._snappedSlotId = null;
+    this._isFixed = false;
+    if (this.el.dataset) delete this.el.dataset.fixed;
+
+    if (!opts.skipEmit) this._emitStageUnsnapped(stageId, slotId);
+
     this._reparentToFloatingRoot();
-    // Временное состояние; финальное (snapped/gravity/float) определит onGrabReleased.
     this.state = 'float';
     this._lastAppliedTimeScale = 1.0;
     this.el.setAttribute('physx-body', 'type: dynamic');
     this._resetKinematicLatch();
     this._setPartVisual('floating');
-    console.log('[floating-cube] un-snapped by hand', this.el.id || '(no id)');
+    console.log('[floating-cube] un-snapped', this.el.id || '(no id)',
+      opts.cascade ? '(cascade root)' : '');
+  },
+
+  /** Сорвать все детали с order > afterOrder (кончик цепочки первым). */
+  _cascadeUnsnapAbove: function (core, afterOrder) {
+    var above = core.getOccupiedAboveOrder(afterOrder);
+    var i;
+    for (i = 0; i < above.length; i++) {
+      var entry = above[i];
+      var el = entry.el;
+      if (!el || el === true || !el.components) continue;
+      var fc = el.components['floating-cube'];
+      if (!fc || fc.state !== 'snapped') continue;
+      if (fc._isFixed) continue;
+      fc._breakSnapLoose();
+    }
+  },
+
+  /**
+   * Сорвать снеп без каскада (для деталей выше по цепочке / break от шара).
+   * Импульс не даём — деталь просто отпускается в float.
+   */
+  _breakSnapLoose: function () {
+    if (this.state !== 'snapped') return;
+    if (this._isFixed) return;
+
+    var slotId = this._snappedSlotId;
+    var stageId = this._stageIdFromSlot(slotId);
+    var core = this._getAssemblyCore();
+    if (core && slotId && typeof core.releaseSlot === 'function') {
+      core.releaseSlot(slotId);
+    }
+    this._snappedSlotId = null;
+    this._emitStageUnsnapped(stageId, slotId);
+    this._reparentToFloatingRoot();
+
+    this.el.setAttribute('physx-body', 'type: dynamic');
+    this._resetKinematicLatch();
+
+    var pos = this._getWorldPosition();
+    var inside = this._isInsideDome(pos, true);
+    if (inside) {
+      this._enterFloatInsideMode(false);
+    } else {
+      this._enterFloatMode(false);
+    }
+    this._setPartVisual('floating');
+    console.log('[floating-cube] cascade unsnap', this.el.id || '(no id)');
+  },
+
+  _emitStageUnsnapped: function (stageId, slotId) {
+    if (!stageId || !this.el.sceneEl) return;
+    this.el.sceneEl.emit('stage-unsnapped', {
+      stageId: stageId,
+      slotId: slotId || null,
+    }, false);
+  },
+
+  /** Закрепить снепнутую деталь «временем» (после travel) — несбиваемая. */
+  lockToTime: function () {
+    if (this.state !== 'snapped') return false;
+    this._isFixed = true;
+    if (this.el.dataset) this.el.dataset.fixed = 'true';
+    this._setPartVisual('snapped');
+    return true;
   },
 
   /** Визуальное состояние GLB-детали (3.5B.3, part-entity). */
@@ -231,14 +315,25 @@ AFRAME.registerComponent('floating-cube', {
    */
   _breakSnapFromHit: function (otherEl) {
     if (this.state !== 'snapped') return;
+    if (this._isFixed) return;
 
     this._setPartVisual('broken');
 
+    var slotId = this._snappedSlotId;
+    var stageId = this._stageIdFromSlot(slotId);
     var core = this._getAssemblyCore();
-    if (core && this._snappedSlotId && typeof core.releaseSlot === 'function') {
-      core.releaseSlot(this._snappedSlotId);
+    var order = 0;
+    if (core && slotId && typeof core.getSlotOrder === 'function') {
+      order = core.getSlotOrder(slotId);
+    }
+    if (core && typeof core.getOccupiedAboveOrder === 'function') {
+      this._cascadeUnsnapAbove(core, order);
+    }
+    if (core && slotId && typeof core.releaseSlot === 'function') {
+      core.releaseSlot(slotId);
     }
     this._snappedSlotId = null;
+    this._emitStageUnsnapped(stageId, slotId);
     this._reparentToFloatingRoot();
 
     this.el.setAttribute('physx-body', 'type: dynamic');
@@ -355,6 +450,18 @@ AFRAME.registerComponent('floating-cube', {
    */
   onGrabReleased: function () {
     if (this.el.dataset && this.el.dataset.wristStorePending === 'true') {
+      return;
+    }
+
+    // Time-locked / уже в слоте: не уводить в float (иначе отваливается от ring).
+    if (this._isFixed && this.state === 'snapped') {
+      this._followSlot();
+      this._forceKinematicFlag();
+      return;
+    }
+    if (this.state === 'snapped' && this._snappedSlotId) {
+      this._followSlot();
+      this._forceKinematicFlag();
       return;
     }
 
@@ -505,6 +612,11 @@ AFRAME.registerComponent('floating-cube', {
     var slot = core.getSlotPose(this._snappedSlotId);
     if (!slot) return;
     this._setObjWorldPose(slot.position, slot.quaternion);
+    // Kinematic PhysX: синхрон позы тела со слотом (после неудачного grab).
+    var body = this.el.components['physx-body'];
+    if (body && typeof body.resetBodyPose === 'function') {
+      body.resetBodyPose();
+    }
   },
 
   /** Снеп напрямую в слот по id (предустановленные детали на старте). */

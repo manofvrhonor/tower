@@ -1,10 +1,11 @@
 /* global AFRAME, CONFIG, THREE */
 
 /**
- * victory-freeze — пауза физики/движения мира при победе и travel-ready.
+ * victory-freeze — пауза физики/движения мира только при финальной победе.
  *
- * На 'victory' / 'travel-ready': стоп волн шаров, сброс velocity, sleep dynamic-тел.
+ * На 'victory': стоп волн шаров, сброс velocity, sleep dynamic-тел.
  * Кольца (machine-rig tick) и co-rotation снепнутых деталей — продолжают.
+ * Travel-меню использует forced slo-mo (time-scale), не этот freeze.
  * Сброс на 'game-started' / 'return-to-menu' / 'location-changed' (reason travel).
  */
 AFRAME.registerComponent('victory-freeze', {
@@ -13,11 +14,9 @@ AFRAME.registerComponent('victory-freeze', {
   init: function () {
     this._frozen = false;
     this._onVictory = this._onVictory.bind(this);
-    this._onTravelReady = this._onTravelReady.bind(this);
     this._onUnfreeze = this._onUnfreeze.bind(this);
     this._onLocationChanged = this._onLocationChanged.bind(this);
     this.el.sceneEl.addEventListener('victory', this._onVictory);
-    this.el.sceneEl.addEventListener('travel-ready', this._onTravelReady);
     this.el.sceneEl.addEventListener('game-started', this._onUnfreeze);
     this.el.sceneEl.addEventListener('return-to-menu', this._onUnfreeze);
     this.el.sceneEl.addEventListener('location-changed', this._onLocationChanged);
@@ -25,7 +24,6 @@ AFRAME.registerComponent('victory-freeze', {
 
   remove: function () {
     this.el.sceneEl.removeEventListener('victory', this._onVictory);
-    this.el.sceneEl.removeEventListener('travel-ready', this._onTravelReady);
     this.el.sceneEl.removeEventListener('game-started', this._onUnfreeze);
     this.el.sceneEl.removeEventListener('return-to-menu', this._onUnfreeze);
     this.el.sceneEl.removeEventListener('location-changed', this._onLocationChanged);
@@ -44,14 +42,12 @@ AFRAME.registerComponent('victory-freeze', {
     this._applyFreeze('victory');
   },
 
-  _onTravelReady: function () {
-    var travel = (typeof CONFIG !== 'undefined' && CONFIG.travel) || {};
-    if (travel.freezeWorldOnReady === false) return;
-    this._applyFreeze('travel-ready');
-  },
-
   _applyFreeze: function (reason) {
     this._frozen = true;
+    // Сначала закрепить машину, потом отпустить хваты — иначе последнюю деталь ещё можно сорвать.
+    if (typeof window.lockAllSnappedPartsOnVictory === 'function') {
+      window.lockAllSnappedPartsOnVictory();
+    }
     this._releaseGrabs();
     if (window.ballWaveManager && typeof window.ballWaveManager.stopWaves === 'function') {
       window.ballWaveManager.stopWaves();
