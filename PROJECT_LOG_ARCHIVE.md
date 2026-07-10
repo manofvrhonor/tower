@@ -44,6 +44,7 @@
 | boot-intro, boot-energy-sphere UV-orb | 74 | не 3D clip/mask; плоскость=комикс; Phase Collapse |
 | boot polish sway / UV-radius / no flash | 75 | setOrbRadius; не scale entity с R>1 заранее |
 | boot back-cards, sparks 5s, sway fade | 76 | depthWrite основной; start 90°; L↑ R↓ drift |
+| menu restart boot button | 77 | icon_restart; replayIntro; слева от gear |
 
 ## Хронология (одной строкой)
 
@@ -77,6 +78,7 @@
 | 74 | ✅ | boot-intro: dark→sparks→комикс+UV-орб→лого→flash→меню |
 | 75 | ✅ | boot polish: sway bg/logo, орб UV-radius×1.15, без flash/darkOut, hold 4с |
 | 76 | ✅ | boot back-cards + depth/delays/sway; sparks 5с — **boot закрыт** |
+| 77 | ✅ | кнопка restart boot в меню (слева от gear) |
 | → | — | **start comic-карточки**; PNG эпох; QA |
 
 ---
@@ -1644,6 +1646,27 @@
 ### Файлы
 
 `boot-intro.js`, `boot-energy-sphere.js`, `config.js`, `index.html`, `assets/ui/comic/boot/logo/`, `comic-slides.js`, `game-menu.js`, `menu-backdrop-vfx.js`, `CURRENT_TASK.md`, `PROJECT_LOG*.md`, `PROJECT_START.md`.
+
+### Следующая сессия
+
+1. **Start comic-карточки.**
+2. PNG эпох / Quest QA (по желанию).
+
+---
+
+## Сессия 77 — restart boot в меню ✅
+
+**Дата:** 2026-07-10
+
+### Сделано
+
+- Кнопка `icon_restart_off/on` в `game-menu` слева от шестерёнки.
+- `boot-intro.replayIntro()` — сброс и повтор заставки; меню скрывается до конца boot.
+- CONFIG: `restartBootBtn`, assets `restartOff` / `restartOn`.
+
+### Файлы
+
+`game-menu.js`, `boot-intro.js`, `config.js`, `assets/ui/menu/icon_restart_*.png`, `CURRENT_TASK.md`, `PROJECT_LOG*.md`, `PROJECT_START.md`.
 
 ### Следующая сессия
 

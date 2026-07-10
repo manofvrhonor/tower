@@ -10,14 +10,13 @@ alwaysApply: true
 
 ## Задача: Start comic-карточки
 
-**Статус:** с.76 закрыта — boot polish + задние карточки. Дальше: start.
+**Статус:** с.77 закрыта — boot + кнопка restart в меню. Дальше: start.
 
 ### Working Context
 
-- Boot ✅ (с.74–76): `boot-intro` + `boot-energy-sphere`.
-- Поток: dark → sparks 5с → bg + backL/R → орб UV-radius → logo+sway → hold → меню.
-- Задние: `logo_bg_back` / `logo_bg_back2`, 84%, старт 90°, дрейф L↑/R↓, depthWrite у основного.
-- comic-slides: sequences `start` / travel / victory уже есть; нужна доработка **start**-карточек.
+- Boot ✅ (с.74–77): `boot-intro` + `boot-energy-sphere` + restart из меню.
+- Меню: `icon_restart_on/off` слева от шестерёнки → `boot-intro.replayIntro()`.
+- comic-slides: sequences `start` / travel / victory — нужна доработка **start**-карточек.
 
 ### Чек-лист
 

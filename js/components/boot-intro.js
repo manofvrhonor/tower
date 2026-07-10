@@ -274,6 +274,16 @@ AFRAME.registerComponent('boot-intro', {
     this._root.setAttribute('rotation', '0 0 0');
   },
 
+  /** Перезапуск заставки из меню (кнопка restart). */
+  replayIntro: function () {
+    if (this._running) return;
+    this._done = false;
+    this._running = false;
+    this._phase = 'idle';
+    console.log('[boot-intro] replay from menu');
+    this.startIntro();
+  },
+
   startIntro: function () {
     if (this._running || this._done) return;
     this._running = true;

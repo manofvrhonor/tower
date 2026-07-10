@@ -39,7 +39,7 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 ## Где мы
 
 - Этапы 0–8 (MVP) ✅. Стильная игра: Фазы **0–3 ✅** (outside-scenery, floor-fog, HDR sky).
-- **Сейчас:** **Фаза 5** + **boot-intro** ✅ (с.74–76). **Дальше:** start comic-карточки; PNG эпох; QA.
+- **Сейчас:** **Фаза 5** + **boot-intro** ✅ (с.74–77). **Дальше:** start comic-карточки.
 - **Дальше:** [мастер-план](.cursor/plans/tower_stylish_game_c39f4c3b.plan.md) → Фаза 5 / 6.
 - Мастер-план: `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md`
 - **План Фазы 4:** `.cursor/plans/phase4_locations.plan.md`
@@ -124,6 +124,7 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 | 74 | boot-intro + UV-орб в рамке комикса (Phase Collapse) | boot-intro, boot-energy-sphere, config |
 | 75 | boot polish: sway, орб UV-radius, без flash/darkOut | boot-intro, boot-energy-sphere, config |
 | 76 | boot back-cards + polish (depth, delays, sway fade) | boot-intro, config, boot/logo assets |
+| 77 | menu restart-boot button (слева от gear) | game-menu, boot-intro, config, icon_restart |
 
 ---
 

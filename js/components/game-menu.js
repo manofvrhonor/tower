@@ -1,7 +1,7 @@
 /* global AFRAME, CONFIG, THREE */
 
 /**
- * game-menu — wrap-карусель сложности (PNG) + Start + gear (Фаза 6, rewrite сессия 55).
+ * game-menu — wrap-карусель сложности (PNG) + Start + gear + restart boot.
  *
  * Макет: центр = выбранная карточка (яркая, неоновая cyan-рамка по контуру), боковые —
  * непрозрачные (opacity 1), затемнённые множителем цвета (арт серый), сдвинуты назад и
@@ -20,6 +20,7 @@ AFRAME.registerComponent('game-menu', {
     this.carouselCfg = this.cfg.carousel || {};
     this.startCfg = this.cfg.startBtn || {};
     this.gearCfg = this.cfg.gearBtn || {};
+    this.restartBootCfg = this.cfg.restartBootBtn || {};
     // Скрыто до конца boot-intro; showFromBoot() открывает.
     this._visible = false;
     this._starting = false;
@@ -632,11 +633,12 @@ AFRAME.registerComponent('game-menu', {
 
     var gearSize = this.gearCfg.size !== undefined ? this.gearCfg.size : 0.11;
     var gearY = this.gearCfg.y !== undefined ? this.gearCfg.y : -0.58;
+    var gearX = this.gearCfg.x !== undefined ? this.gearCfg.x : 0.09;
     var gearOff = this._assetUrl(this.assets.gearOff || 'icon_gear_off.png');
     var gearOn = this._assetUrl(this.assets.gearOn || 'icon_gear_on.png');
     var gearEl = this._makeImagePlane(gearOff, gearSize, gearSize);
     gearEl.setAttribute('class', 'game-menu-clickable');
-    gearEl.setAttribute('position', '0 ' + gearY + ' 0');
+    gearEl.setAttribute('position', gearX + ' ' + gearY + ' 0');
     this._gearVis = gearEl;
     this._gearOffSrc = gearOff;
     this._gearOnSrc = gearOn;
@@ -647,6 +649,24 @@ AFRAME.registerComponent('game-menu', {
       onPress: function () { self._toggleWireframe(); },
     });
     this._root.appendChild(gearEl);
+
+    // Restart boot — слева от шестерёнки.
+    var rstCfg = this.restartBootCfg;
+    var rstSize = rstCfg.size !== undefined ? rstCfg.size : gearSize;
+    var rstY = rstCfg.y !== undefined ? rstCfg.y : gearY;
+    var rstX = rstCfg.x !== undefined ? rstCfg.x : -0.09;
+    var rstOff = this._assetUrl(this.assets.restartOff || 'icon_restart_off.png');
+    var rstOn = this._assetUrl(this.assets.restartOn || 'icon_restart_on.png');
+    var rstEl = this._makeImagePlane(rstOff, rstSize, rstSize);
+    rstEl.setAttribute('class', 'game-menu-clickable');
+    rstEl.setAttribute('position', rstX + ' ' + rstY + ' 0');
+    this._restartBootEntry = this._registerFlatButton(rstEl, {
+      kind: 'restart-boot',
+      normalSrc: rstOff,
+      hoverSrc: rstOn,
+      onPress: function () { self._onRestartBoot(); },
+    });
+    this._root.appendChild(rstEl);
 
     this.el.sceneEl.appendChild(this._root);
 
@@ -851,6 +871,19 @@ AFRAME.registerComponent('game-menu', {
   showFromBoot: function () {
     this._show();
     console.log('[game-menu] show after boot intro');
+  },
+
+  /** Перезапуск boot-intro (кнопка слева от шестерёнки). */
+  _onRestartBoot: function () {
+    if (this._starting) return;
+    var boot = this.el.sceneEl.components['boot-intro'];
+    if (!boot || typeof boot.replayIntro !== 'function') {
+      console.warn('[game-menu] boot-intro.replayIntro недоступен');
+      return;
+    }
+    this._hide();
+    boot.replayIntro();
+    console.log('[game-menu] → replay boot-intro');
   },
 
   _hide: function () {

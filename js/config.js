@@ -1397,6 +1397,8 @@ const CONFIG = {
         gearOff:         'icon_gear_off.png',    // 256×256 px, серая, прозрачный фон
         gearOn:          'icon_gear_on.png',     // 256×256 px, cyan контур, прозрачный фон
         gearPixelSize:   { w: 256, h: 256 },
+        restartOff:      'icon_restart_off.png', // 256×256, перезапуск boot-intro
+        restartOn:       'icon_restart_on.png',
         sparkParticle:   'spark_particle.png',   // 128×128 px, мягкое cyan-пятно (опционально)
       },
       // Карусель / кнопки (метры, локально от game-menu root).
@@ -1442,6 +1444,12 @@ const CONFIG = {
       gearBtn: {
         size: 0.11,
         y: -0.58,
+        x: 0.09,   // справа от пары; restart слева
+      },
+      restartBootBtn: {
+        size: 0.11,
+        y: -0.58,
+        x: -0.09,
       },
       veil: {
         hideIds: [
