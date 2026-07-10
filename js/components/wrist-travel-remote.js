@@ -1,10 +1,11 @@
 /* global AFRAME, CONFIG, THREE */
 
 /**
- * wrist-travel-remote — пульт прыжка на #rightHand (Фаза 4+).
+ * wrist-travel-remote — пульт на #rightHand (Фаза 4+).
  *
  * Grip/trigger **левой** рукой у пульта → openTravelMenu / close (toggle).
- * Активен когда hasAnyTravelTarget(). На location-unlocked / availability — пульс.
+ * Открывается в любой момент игры (выход / wireframe), не только после travel-ready.
+ * Пульс ярче, когда есть доступный прыжок (hasAnyTravelTarget).
  */
 AFRAME.registerComponent('wrist-travel-remote', {
   schema: {},
@@ -19,17 +20,21 @@ AFRAME.registerComponent('wrist-travel-remote', {
     this._pulseUntil = 0;
     this._nearHand = false;
 
+    this._uiVisible = false;
     this._onLeftPress = this._onLeftPress.bind(this);
     this._onUnlock = this._onUnlock.bind(this);
     this._onAvailability = this._onAvailability.bind(this);
-    this._onReset = this._onReset.bind(this);
+    this._onGameStarted = this._onGameStarted.bind(this);
+    this._onReturnToMenu = this._onReturnToMenu.bind(this);
 
     this.el.sceneEl.addEventListener('location-unlocked', this._onUnlock);
     this.el.sceneEl.addEventListener('travel-availability-changed', this._onAvailability);
-    this.el.sceneEl.addEventListener('game-started', this._onReset);
-    this.el.sceneEl.addEventListener('return-to-menu', this._onReset);
+    this.el.sceneEl.addEventListener('game-started', this._onGameStarted);
+    this.el.sceneEl.addEventListener('return-to-menu', this._onReturnToMenu);
 
     this._buildRemote();
+    // Как руки за чёрным veil: пульт не светится в стартовом меню.
+    this._setUiVisible(false);
   },
 
   play: function () {
@@ -44,11 +49,12 @@ AFRAME.registerComponent('wrist-travel-remote', {
     this._unbindHandListeners();
     this.el.sceneEl.removeEventListener('location-unlocked', this._onUnlock);
     this.el.sceneEl.removeEventListener('travel-availability-changed', this._onAvailability);
-    this.el.sceneEl.removeEventListener('game-started', this._onReset);
-    this.el.sceneEl.removeEventListener('return-to-menu', this._onReset);
+    this.el.sceneEl.removeEventListener('game-started', this._onGameStarted);
+    this.el.sceneEl.removeEventListener('return-to-menu', this._onReturnToMenu);
   },
 
   tick: function (time) {
+    if (!this._uiVisible) return;
     this._updateVisual(time);
   },
 
@@ -85,7 +91,8 @@ AFRAME.registerComponent('wrist-travel-remote', {
     return this._visualEl && this._visualEl.components['assembly-sphere-visual'];
   },
 
-  _canUse: function () {
+  /** Есть ли сейчас доступный прыжок (для пульса пульта). */
+  _hasTravelTarget: function () {
     if (typeof window.hasAnyTravelTarget === 'function') {
       return window.hasAnyTravelTarget();
     }
@@ -100,6 +107,7 @@ AFRAME.registerComponent('wrist-travel-remote', {
   },
 
   _isBlocked: function () {
+    if (!this._uiVisible) return true;
     if (typeof window.isVictoryFrozen === 'function' && window.isVictoryFrozen()) return true;
     var scene = this.el.sceneEl;
     var menu = scene && scene.components['game-menu'];
@@ -167,8 +175,7 @@ AFRAME.registerComponent('wrist-travel-remote', {
       return;
     }
 
-    if (!this._canUse()) return;
-
+    // Всегда открываем в игре: выход / wireframe; эпохи disabled если нельзя прыгнуть.
     if (typeof window.openTravelMenu === 'function') {
       window.openTravelMenu({ source: 'wrist' });
     }
@@ -180,7 +187,7 @@ AFRAME.registerComponent('wrist-travel-remote', {
   },
 
   _onAvailability: function () {
-    if (this._canUse()) {
+    if (this._hasTravelTarget()) {
       var cfg = this._readCfg();
       var remain = this._pulseUntil - performance.now();
       if (remain < 400) {
@@ -189,29 +196,43 @@ AFRAME.registerComponent('wrist-travel-remote', {
     }
   },
 
-  _onReset: function () {
+  _setUiVisible: function (on) {
+    this._uiVisible = !!on;
+    if (this._anchorEl) this._anchorEl.setAttribute('visible', on);
+  },
+
+  _onGameStarted: function () {
     this._pulseUntil = 0;
     this._nearHand = false;
+    this._setUiVisible(true);
+  },
+
+  _onReturnToMenu: function () {
+    this._pulseUntil = 0;
+    this._nearHand = false;
+    this._setUiVisible(false);
   },
 
   _updateVisual: function (time) {
     var comp = this._visualComp();
     if (!comp) return;
     var cfg = this._readCfg();
-    var canUse = this._canUse() && !this._isBlocked();
-    var near = canUse && this._isLeftHandNearRemote();
+    var blocked = this._isBlocked();
+    var hasTravel = this._hasTravelTarget();
+    var near = !blocked && this._isLeftHandNearRemote();
     this._nearHand = near;
 
-    var intensity = cfg.idleIntensity;
-    if (!canUse) {
+    var intensity = cfg.activeIntensity;
+    if (blocked) {
       intensity = cfg.idleIntensity * 0.35;
     } else if (near) {
       intensity = cfg.nearIntensity;
-    } else if (this._pulseUntil > performance.now()) {
+    } else if (hasTravel && this._pulseUntil > performance.now()) {
       var pulse = 0.5 + 0.5 * Math.sin(time * 0.008);
       intensity = cfg.activeIntensity + pulse * 0.25;
-    } else {
-      intensity = cfg.activeIntensity;
+    } else if (!hasTravel) {
+      // Меню всё равно открывается; чуть спокойнее, пока прыгать некуда.
+      intensity = cfg.idleIntensity;
     }
 
     if (typeof comp.setIntensity === 'function') comp.setIntensity(intensity);

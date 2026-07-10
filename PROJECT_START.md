@@ -39,11 +39,11 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 ## Где мы
 
 - Этапы 0–8 (MVP) ✅. Стильная игра: Фазы **0–3 ✅** (outside-scenery, floor-fog, HDR sky).
-- **Сейчас:** **Фаза 5** в работе (с.68: шары/пулы/призрак ✅). **Дальше:** таймер петли — [план](.cursor/plans/phase5_loop_timer.plan.md).
+- **Сейчас:** **Фаза 5** (с.69 таймер ✅; с.70 PNG end/travel меню ✅). **Дальше:** hazardLevel → шары; comic-преамбула travel.
 - **Дальше:** [мастер-план](.cursor/plans/tower_stylish_game_c39f4c3b.plan.md) → Фаза 5.
 - Мастер-план: `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md`
 - **План Фазы 4:** `.cursor/plans/phase4_locations.plan.md`
-- **План таймера:** `.cursor/plans/phase5_loop_timer.plan.md`
+- **План таймера:** `.cursor/plans/phase5_loop_timer.plan.md` ✅
 - **Не делаем:** VR-виньетка slo-mo. **Пропускаем:** захват «отлёт при тряске» (с.29).
 
 ---
@@ -116,6 +116,8 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 | 66 | Пульт прыжка + живое меню эпох, cascade/time-lock, Quest QA ✅ | wrist-travel-remote, travel-ui, location-manager, floating-cube |
 | 67 | Пер-локационные пулы, stash/restore, победа/квота от машины, bat off ✅ | spawn-floating-cubes, init-session, location-manager, victory-check |
 | 68 | Фаза 5 старт: cyan-шары, пулы, призрак next-slot, deflect; план таймера | red-ball, init-session, assembly-core, floating-cube, phase5_loop_timer |
+| 69 | Таймер петли + defeat + wrist hide в меню, Quest QA ✅ | loop-timer, victory-ui, victory-freeze, wrist-inventory, wrist-travel-remote |
+| 70 | PNG end/travel: таймлайн, без text-overlay; comic не в меню | travel-ui, victory-ui, assets/ui/travel, assets/ui/end |
 
 ---
 
@@ -159,6 +161,8 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 - ❌ `victory-ui-clickable` на скрытой плашке победы — THREE-raycaster игнорирует `visible`, ломает hover меню (с.55)
 - ❌ `scene.addEventListener('tick')` для анимации меню — Event, не `(time, delta)`; `tick()` компонента (с.55)
 - ❌ Огонёк рамки отдельным mesh за PNG карточки — не виден; canvas рамки (с.55)
+- ❌ Canvas/текст-оверлей поверх PNG-кнопок travel/end — двойной текст (с.70)
+- ❌ Comic-кадры внутри travel-меню — только преамбула до меню (с.70)
 
 **Сборка / машина (Фаза 3.5B, с.57 ADR-24):**
 - ❌ Возвращать cyan `orbit-ring` как зону сборки/коллизию — заменено GLB-машиной (`machine-rig`)

@@ -1,25 +1,37 @@
 /* global AFRAME, CONFIG, THREE */
 
 /**
- * travel-ui — меню выбора эпох (Фаза 4+).
+ * travel-ui — меню прыжка эпох (Фаза 4+).
  *
- * Всегда показывает ВСЕ эпохи; кнопки enabled по canTravelTo (живая квота).
- * Auto (travel-ready) и wrist — одно меню. Forced slo-mo пока открыто.
- * Закрытие: кнопка «Закрыть» или пульт. victory-freeze не используется.
+ * Одно меню: пульт и auto (после travel-ready). Comic-преамбула — отдельно, не здесь.
+ * Панель = размер victory/defeat. Таймлайн: Прошлое — Настоящее — Будущее.
+ * Над текущей эпохой — маркер «вы тут». Внизу: домик | Закрыть | шестерёнка.
+ * Домик → confirm → returnToMenu. Шестерёнка → wireframe (как game-menu).
+ * PNG собираются один раз; open/close не пересоздаёт текстуры (Quest Link crash).
  */
 AFRAME.registerComponent('travel-ui', {
   schema: {},
 
   init: function () {
     this.cfg = this._readCfg();
+    this.assets = this.cfg.assets || {};
     this._shown = false;
-    this._openSource = null;
-    this._comicKey = null;
+    this._confirmShown = false;
     this._buttons = [];
+    this._menuButtons = [];
+    this._confirmButtons = [];
     this._nearBtn = null;
     this._nearHintLogged = false;
     this._busy = false;
     this._nextHint = null;
+    this._hereMarkerEl = null;
+    this._panelEl = null;
+    this._contentRoot = null;
+    this._confirmRoot = null;
+    this._gearVis = null;
+    this._gearEntry = null;
+    this._gearOffSrc = null;
+    this._gearOnSrc = null;
 
     this._onTravelReady = this._onTravelReady.bind(this);
     this._onHide = this._onHide.bind(this);
@@ -80,6 +92,33 @@ AFRAME.registerComponent('travel-ui', {
     };
   },
 
+  _readCfg: function () {
+    var travel = (typeof CONFIG !== 'undefined' && CONFIG.travel) || {};
+    return travel.ui || {};
+  },
+
+  _lay: function () {
+    return this.cfg.layout || {};
+  },
+
+  _assetUrl: function (file) {
+    if (!file) return null;
+    var base = this.assets.basePath || 'assets/ui/travel/';
+    return base + file;
+  },
+
+  _getMenuPosition: function () {
+    if (this.cfg.worldPosition) return this.cfg.worldPosition;
+    var menuCfg = (typeof CONFIG !== 'undefined' && CONFIG.game && CONFIG.game.menu) || {};
+    return menuCfg.worldPosition || { x: 0, y: 1.55, z: -0.65 };
+  },
+
+  _applyMenuTheme: function () {
+    var th = (typeof window.getMenuTheme === 'function') ? window.getMenuTheme() : {};
+    this._theme = th;
+    this._panelColor = th.panel || '#0a1018';
+  },
+
   _isBlocked: function () {
     if (this._busy) return true;
     if (typeof window.isVictoryFrozen === 'function' && window.isVictoryFrozen()) return true;
@@ -93,11 +132,6 @@ AFRAME.registerComponent('travel-ui', {
 
   openMenu: function (opts) {
     if (!this._root || this._isBlocked()) return;
-    var source = (opts && opts.source) || 'wrist';
-    var comicKey = (opts && opts.comicKey) || null;
-
-    this._openSource = source;
-    this._comicKey = comicKey;
     this._shown = true;
     this._nearBtn = null;
     this._nearHintLogged = false;
@@ -108,17 +142,16 @@ AFRAME.registerComponent('travel-ui', {
     var pos = this._getMenuPosition();
     this._root.setAttribute('position', pos.x + ' ' + pos.y + ' ' + pos.z);
     this._root.setAttribute('visible', true);
-    this._updateComicVisibility();
-    this._rebuildLocationButtons();
-    this._layoutPanel();
+    // Не пересоздаём PNG каждый open/close — на Quest Link это роняло runtime.
+    if (!this._menuButtons.length) this._rebuildContent();
+    else this._refreshEraButtons();
     this._setClickable(true);
     this._facePlayer();
 
     if (typeof window.enableDesktopUiCursor === 'function') {
       window.enableDesktopUiCursor();
     }
-    console.log('[travel-ui] меню эпох открыто (' + source +
-      (comicKey ? ', comic:' + comicKey : '') + ')');
+    console.log('[travel-ui] меню эпох открыто (' + ((opts && opts.source) || 'wrist') + ')');
   },
 
   closeMenu: function () {
@@ -131,423 +164,6 @@ AFRAME.registerComponent('travel-ui', {
     if (sys && typeof sys.setTravelMenuSlowMo === 'function') {
       sys.setTravelMenuSlowMo(on);
     }
-  },
-
-  _readCfg: function () {
-    var travel = (typeof CONFIG !== 'undefined' && CONFIG.travel) || {};
-    return travel.ui || {};
-  },
-
-  _getMenuPosition: function () {
-    if (this.cfg.worldPosition) return this.cfg.worldPosition;
-    var menuCfg = (typeof CONFIG !== 'undefined' && CONFIG.game && CONFIG.game.menu) || {};
-    return menuCfg.worldPosition || { x: 0, y: 1.55, z: -0.65 };
-  },
-
-  _applyMenuTheme: function () {
-    var th = (typeof window.getMenuTheme === 'function') ? window.getMenuTheme() : {};
-    this._theme = th;
-    this._btnNormal = th.btnBg || '#0c1820';
-    this._btnHover = th.btnHover || '#143040';
-    this._btnNear = th.btnNear || '#1e5068';
-    this._btnAccent = th.btnAccent || '#33e0ff';
-    this._btnAccentHover = th.btnAccentHover || '#66f5ff';
-    this._btnAccentNear = th.btnAccentNear || '#b8ffff';
-    this._btnDisabled = '#1a1a22';
-    this._btnCurrent = '#2a3540';
-    this._panelColor = th.panel || '#0a1018';
-    this._titleColor = th.titleAccent || '#66f5ff';
-  },
-
-  _buttonDrawOpts: function (bgColor) {
-    if (typeof window.menuUiButtonDrawOpts === 'function') {
-      return window.menuUiButtonDrawOpts(bgColor, this._theme);
-    }
-    return { borderColor: '#1a5070', textColor: '#ffffff' };
-  },
-
-  _makeTextPlane: function (text, planeW, planeH, options) {
-    var opts = options || {};
-    var sz = (typeof window.menuUiCanvasSize === 'function')
-      ? window.menuUiCanvasSize(planeW, planeH, opts.canvasW || 512)
-      : { w: opts.canvasW || 512, h: opts.canvasH || 128 };
-    var canvas = document.createElement('canvas');
-    canvas.width = sz.w;
-    canvas.height = sz.h;
-    var ctx = canvas.getContext('2d');
-
-    if (opts.bg) {
-      var drawOpts = this._buttonDrawOpts(opts.bg);
-      if (typeof window.menuUiDrawButton === 'function') {
-        window.menuUiDrawButton(ctx, canvas, text, opts.fontSize || 44, opts.bg, drawOpts);
-      }
-    } else {
-      ctx.clearRect(0, 0, sz.w, sz.h);
-      if (typeof window.menuUiDrawCenteredText === 'function') {
-        window.menuUiDrawCenteredText(ctx, text, sz.w, sz.h, opts.fontSize || 48, opts.color || '#ffffff');
-      }
-    }
-
-    var plane = document.createElement('a-plane');
-    plane.setAttribute('width', planeW);
-    plane.setAttribute('height', planeH);
-
-    var self = this;
-    var apply = function () {
-      self._applyCanvasTexture(plane, canvas);
-    };
-    plane.addEventListener('loaded', apply);
-    if (plane.hasLoaded) apply();
-
-    return { el: plane, canvas: canvas, ctx: ctx, label: text, fontSize: opts.fontSize || 44 };
-  },
-
-  _drawComicFallback: function (canvas, w, h, comicKey) {
-    var ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#0a1018';
-    ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = '#33e0ff';
-    ctx.lineWidth = Math.max(4, w * 0.008);
-    ctx.strokeRect(ctx.lineWidth, ctx.lineWidth, w - ctx.lineWidth * 2, h - ctx.lineWidth * 2);
-    var title = comicKey === 'rebuilt' ? 'AGAIN' : 'TIME JUMP';
-    var sub = comicKey === 'rebuilt'
-      ? 'Machine works again'
-      : (comicKey === 'first' ? 'Choose an era' : '···');
-    if (typeof window.menuUiDrawCenteredText === 'function') {
-      window.menuUiDrawCenteredText(ctx, title, w, h * 0.4, Math.round(h * 0.12), '#66f5ff');
-      window.menuUiDrawCenteredText(ctx, sub, w, h * 0.68, Math.round(h * 0.08), '#33e0ff');
-    }
-  },
-
-  _applyCanvasTexture: function (el, canvas) {
-    var mesh = el.getObject3D('mesh');
-    if (!mesh) return;
-    var tex = new THREE.CanvasTexture(canvas);
-    tex.needsUpdate = true;
-    mesh.material = new THREE.MeshBasicMaterial({
-      map: tex,
-      transparent: true,
-      side: THREE.FrontSide,
-      depthTest: false,
-      depthWrite: false,
-    });
-    mesh.renderOrder = this._menuRenderOrder;
-  },
-
-  _redrawButton: function (btnData, bgColor, label) {
-    var text = label !== undefined ? label : btnData.label;
-    if (typeof window.menuUiDrawButton === 'function') {
-      window.menuUiDrawButton(
-        btnData.ctx, btnData.canvas, text, btnData.fontSize || 44, bgColor,
-        this._buttonDrawOpts(bgColor)
-      );
-    }
-    var mesh = btnData.el.getObject3D('mesh');
-    if (mesh && mesh.material && mesh.material.map) {
-      mesh.material.map.needsUpdate = true;
-    }
-  },
-
-  _registerButton: function (btnData, meta) {
-    var entry = {
-      data: btnData,
-      normalBg: meta.normalBg || this._btnNormal,
-      hoverBg: meta.hoverBg || this._btnHover,
-      nearBg: meta.nearBg || this._btnNear,
-      disabledBg: meta.disabledBg || this._btnDisabled,
-      enabled: meta.enabled !== false,
-      onPress: meta.onPress,
-      locationId: meta.locationId || null,
-      isClose: !!meta.isClose,
-    };
-    this._buttons.push(entry);
-
-    var self = this;
-    btnData.el.addEventListener('click', function () {
-      if (self._shown && entry.enabled) entry.onPress();
-    });
-    btnData.el.addEventListener('mouseenter', function () {
-      if (self._shown && entry.enabled && self._nearBtn !== entry) {
-        self._redrawButton(btnData, entry.hoverBg);
-      }
-    });
-    btnData.el.addEventListener('mouseleave', function () {
-      if (self._shown && entry.enabled && self._nearBtn !== entry) {
-        self._redrawButton(btnData, entry.normalBg);
-      }
-    });
-    return entry;
-  },
-
-  _menuLocations: function () {
-    if (typeof window.getTravelMenuLocations === 'function') {
-      return window.getTravelMenuLocations();
-    }
-    return [];
-  },
-
-  _clearDynamicButtons: function () {
-    var i;
-    for (i = 0; i < this._buttons.length; i++) {
-      var el = this._buttons[i].data.el;
-      if (el.parentNode) el.parentNode.removeChild(el);
-    }
-    this._buttons.length = 0;
-    this._nearBtn = null;
-  },
-
-  _rebuildLocationButtons: function () {
-    this._clearDynamicButtons();
-    if (!this._locBtnRoot) return;
-
-    var ui = this.cfg;
-    var btnW = ui.locBtnWidth !== undefined ? ui.locBtnWidth : 0.88;
-    var btnH = ui.locBtnHeight !== undefined ? ui.locBtnHeight : 0.12;
-    var btnGap = ui.locBtnGap !== undefined ? ui.locBtnGap : 0.04;
-    var closeH = ui.closeBtnHeight !== undefined ? ui.closeBtnHeight : 0.1;
-    var btnFs = ui.btnFontSize !== undefined ? Math.round(ui.btnFontSize * 0.82) : 40;
-    var locs = this._menuLocations();
-    var self = this;
-    var count = locs.length;
-    var idx;
-
-    for (idx = 0; idx < count; idx++) {
-      var info = locs[idx];
-      var isCurrent = !!info.isCurrent;
-      var enabled = !!info.enabled;
-      var isHint = info.id === this._nextHint && enabled;
-      var label = info.label || info.id;
-      if (isCurrent) label = '● ' + label;
-
-      var normalBg = isCurrent ? this._btnCurrent
-        : (!enabled ? this._btnDisabled
-          : (isHint ? this._btnAccent : this._btnNormal));
-      var hoverBg = isHint ? this._btnAccentHover : this._btnHover;
-      var nearBg = isHint ? this._btnAccentNear : this._btnNear;
-
-      var btnData = this._makeTextPlane(label, btnW, btnH, {
-        fontSize: btnFs,
-        bg: normalBg,
-      });
-      btnData.fontSize = btnFs;
-      btnData.label = label;
-      var y = -idx * (btnH + btnGap);
-      btnData.el.setAttribute('position', '0 ' + y + ' 0.01');
-      this._locBtnRoot.appendChild(btnData.el);
-      this._applyMenuDrawOrder(btnData.el);
-
-      (function (destId, canPress, entryLabel, nBg, hBg, nb) {
-        self._registerButton(btnData, {
-          locationId: destId,
-          enabled: canPress,
-          normalBg: nBg,
-          hoverBg: hBg,
-          nearBg: nb,
-          disabledBg: self._btnDisabled,
-          onPress: function () {
-            if (canPress) self._doTravel(destId);
-          },
-        });
-      })(info.id, enabled, label, normalBg, hoverBg, nearBg);
-    }
-
-    var closeLabel = ui.closeBtnText || 'Закрыть';
-    var closeY = -count * (btnH + btnGap) - 0.02;
-    var closeData = this._makeTextPlane(closeLabel, btnW, closeH, {
-      fontSize: Math.round(btnFs * 0.85),
-      bg: this._btnNormal,
-    });
-    closeData.fontSize = Math.round(btnFs * 0.85);
-    closeData.label = closeLabel;
-    closeData.el.setAttribute('position', '0 ' + closeY + ' 0.01');
-    this._locBtnRoot.appendChild(closeData.el);
-    this._applyMenuDrawOrder(closeData.el);
-    this._registerButton(closeData, {
-      isClose: true,
-      enabled: true,
-      normalBg: this._btnNormal,
-      hoverBg: this._btnHover,
-      nearBg: this._btnNear,
-      onPress: function () {
-        self.closeMenu();
-      },
-    });
-  },
-
-  _shouldShowComic: function () {
-    if (this._openSource === 'wrist') {
-      return this.cfg.showComicOnWrist === true;
-    }
-    if (this.cfg.showComicOnAuto === false) return false;
-    return !!this._comicKey;
-  },
-
-  _updateComicVisibility: function () {
-    if (!this._comicPlaneEl) return;
-    var show = this._shouldShowComic();
-    this._comicPlaneEl.setAttribute('visible', show);
-    if (show) this._refreshComicCanvas();
-  },
-
-  _refreshComicCanvas: function () {
-    if (!this._comicCanvas) return;
-    this._drawComicFallback(
-      this._comicCanvas,
-      this._comicCanvas.width,
-      this._comicCanvas.height,
-      this._comicKey
-    );
-    this._tryLoadComicImage(this._comicCanvas, this._comicKey);
-    if (this._comicPlaneEl) {
-      var mesh = this._comicPlaneEl.getObject3D('mesh');
-      if (mesh && mesh.material && mesh.material.map) {
-        mesh.material.map.needsUpdate = true;
-      } else {
-        this._applyCanvasTexture(this._comicPlaneEl, this._comicCanvas);
-      }
-    }
-  },
-
-  _buildUI: function () {
-    var ui = this.cfg;
-    var comicW = ui.comicWidth !== undefined ? ui.comicWidth : 1.1;
-    var comicH = ui.comicHeight !== undefined ? ui.comicHeight : 0.75;
-    var titleH = ui.titleHeight !== undefined ? ui.titleHeight : 0.1;
-    var pos = this._getMenuPosition();
-    var self = this;
-
-    this._root = document.createElement('a-entity');
-    this._root.setAttribute('id', 'travel-ui-root');
-    this._root.setAttribute('position', pos.x + ' ' + pos.y + ' ' + pos.z);
-    this._root.setAttribute('visible', false);
-
-    var panel = document.createElement('a-plane');
-    panel.setAttribute('id', 'travel-ui-panel');
-    panel.setAttribute('width', comicW + 0.12);
-    panel.setAttribute('height', 1.15);
-    panel.setAttribute('color', this._panelColor);
-    panel.setAttribute('material',
-      'shader: flat; opacity: 0.96; transparent: true; side: front; depthTest: false; depthWrite: false; renderOrder: 50');
-    this._panelEl = panel;
-
-    var titleText = ui.titleText || 'Прыжок';
-    var titleFs = (typeof window.menuUiFontSizeForButton === 'function')
-      ? window.menuUiFontSizeForButton(titleText, comicW, titleH, { maxSize: 64, heightRatio: 0.55 })
-      : 56;
-    var titleData = this._makeTextPlane(titleText, comicW, titleH, {
-      fontSize: titleFs, color: this._titleColor,
-    });
-    titleData.el.setAttribute('position', '0 0.5 0.01');
-    this._titleEl = titleData.el;
-
-    var comicCanvas = document.createElement('canvas');
-    comicCanvas.width = 1024;
-    comicCanvas.height = 698;
-    this._comicCanvas = comicCanvas;
-    this._drawComicFallback(comicCanvas, comicCanvas.width, comicCanvas.height, null);
-
-    var comicPlane = document.createElement('a-plane');
-    comicPlane.setAttribute('width', comicW);
-    comicPlane.setAttribute('height', comicH);
-    comicPlane.setAttribute('visible', false);
-    var comicApply = function () {
-      self._applyCanvasTexture(comicPlane, comicCanvas);
-    };
-    comicPlane.addEventListener('loaded', comicApply);
-    if (comicPlane.hasLoaded) comicApply();
-    this._comicPlaneEl = comicPlane;
-    comicPlane.setAttribute('position', '0 0.22 0.01');
-
-    this._locBtnRoot = document.createElement('a-entity');
-    this._locBtnRoot.setAttribute('id', 'travel-ui-loc-btns');
-    this._locBtnRoot.setAttribute('position', '0 -0.18 0');
-
-    this._root.appendChild(panel);
-    this._root.appendChild(titleData.el);
-    this._root.appendChild(comicPlane);
-    this._root.appendChild(this._locBtnRoot);
-    this.el.sceneEl.appendChild(this._root);
-
-    this._applyMenuDrawOrder(panel);
-    this._applyMenuDrawOrder(titleData.el);
-    this._applyMenuDrawOrder(comicPlane);
-
-    this._btnPos = new THREE.Vector3();
-    this._handPos = new THREE.Vector3();
-  },
-
-  _layoutPanel: function () {
-    if (!this._panelEl) return;
-    var ui = this.cfg;
-    var comicW = ui.comicWidth !== undefined ? ui.comicWidth : 1.1;
-    var comicH = ui.comicHeight !== undefined ? ui.comicHeight : 0.75;
-    var titleH = ui.titleHeight !== undefined ? ui.titleHeight : 0.1;
-    var btnH = ui.locBtnHeight !== undefined ? ui.locBtnHeight : 0.12;
-    var btnGap = ui.locBtnGap !== undefined ? ui.locBtnGap : 0.04;
-    var closeH = ui.closeBtnHeight !== undefined ? ui.closeBtnHeight : 0.1;
-    var locs = this._menuLocations();
-    var btnBlock = locs.length * btnH + Math.max(0, locs.length - 1) * btnGap
-      + closeH + 0.06;
-    var showComic = this._shouldShowComic();
-    var panelH = titleH + (showComic ? comicH + 0.08 : 0) + btnBlock + 0.2;
-
-    this._panelEl.setAttribute('width', comicW + 0.12);
-    this._panelEl.setAttribute('height', panelH);
-
-    var topY = panelH * 0.5 - titleH * 0.5 - 0.04;
-    if (this._titleEl) this._titleEl.setAttribute('position', '0 ' + topY + ' 0.01');
-
-    var comicY = topY - titleH * 0.5 - comicH * 0.5 - 0.04;
-    if (this._comicPlaneEl) {
-      this._comicPlaneEl.setAttribute('position', '0 ' + comicY + ' 0.01');
-    }
-
-    var btnTop = showComic
-      ? comicY - comicH * 0.5 - 0.04
-      : topY - titleH * 0.5 - 0.06;
-    if (this._locBtnRoot) {
-      this._locBtnRoot.setAttribute('position', '0 ' + btnTop + ' 0');
-    }
-  },
-
-  _tryLoadComicImage: function (canvas, comicKey) {
-    var assets = this.cfg.assets || {};
-    var file = null;
-    if (comicKey === 'rebuilt') file = assets.comicRebuilt;
-    else if (comicKey === 'first') file = assets.comicFirst;
-    if (!file && assets.comic) file = assets.comic;
-    if (!file) return;
-    var base = assets.basePath || 'assets/ui/travel/';
-    var url = base + file;
-    var img = new Image();
-    var self = this;
-    img.onload = function () {
-      var ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      if (self._comicPlaneEl) {
-        var mesh = self._comicPlaneEl.getObject3D('mesh');
-        if (mesh && mesh.material && mesh.material.map) {
-          mesh.material.map.needsUpdate = true;
-        }
-      }
-    };
-    img.onerror = function () {
-      console.warn('[travel-ui] comic PNG not found:', url);
-    };
-    img.src = url;
-  },
-
-  _applyMenuDrawOrder: function (el) {
-    var order = this._menuRenderOrder;
-    var apply = function () {
-      var mesh = el.getObject3D('mesh');
-      if (!mesh || !mesh.material) return;
-      mesh.material.depthTest = false;
-      mesh.material.depthWrite = false;
-      mesh.renderOrder = order;
-    };
-    el.addEventListener('loaded', apply);
-    if (el.hasLoaded) apply();
   },
 
   _bindHands: function () {
@@ -567,6 +183,482 @@ AFRAME.registerComponent('travel-ui', {
     for (var i = 0; i < this._handEls.length; i++) {
       this._handEls[i].removeEventListener('gripdown', this._onHandPress);
       this._handEls[i].removeEventListener('triggerdown', this._onHandPress);
+    }
+  },
+
+  _applyMenuDrawOrder: function (el) {
+    var order = this._menuRenderOrder;
+    var apply = function () {
+      var mesh = el.getObject3D('mesh');
+      if (!mesh || !mesh.material) return;
+      mesh.material.depthTest = false;
+      mesh.material.depthWrite = false;
+      mesh.renderOrder = order;
+    };
+    el.addEventListener('loaded', apply);
+    if (el.hasLoaded) apply();
+  },
+
+  _makeImagePlane: function (src, planeW, planeH) {
+    var plane = document.createElement('a-plane');
+    plane.setAttribute('width', planeW);
+    plane.setAttribute('height', planeH);
+    plane.setAttribute('material', {
+      src: src,
+      transparent: true,
+      alphaTest: 0.05,
+      shader: 'flat',
+      side: 'double',
+      depthTest: false,
+      depthWrite: false,
+      renderOrder: this._menuRenderOrder,
+    });
+    this._applyMenuDrawOrder(plane);
+    return plane;
+  },
+
+  _setPlaneSrc: function (el, src) {
+    if (!el || !src) return;
+    // Не dispose() вручную — A-Frame сам держит кэш; dispose + смена src ронял Quest Link.
+    var cur = el.getAttribute('material');
+    if (cur && cur.src === src) return;
+    el.setAttribute('material', 'src', src);
+  },
+
+  /** URL PNG эпохи по id и состоянию (текст уже в картинке). */
+  _locSrc: function (locId, state) {
+    var loc = (this.assets.loc && this.assets.loc[locId]) || {};
+    var file = loc[state] || loc.idle;
+    return this._assetUrl(file);
+  },
+
+  _registerPngButton: function (el, meta) {
+    var entry = {
+      data: { el: el },
+      kind: meta.kind || 'png',
+      normalSrc: meta.normalSrc,
+      hoverSrc: meta.hoverSrc || meta.normalSrc,
+      enabled: meta.enabled !== false,
+      onPress: meta.onPress,
+      locationId: meta.locationId || null,
+      isClose: !!meta.isClose,
+    };
+    this._buttons.push(entry);
+
+    var self = this;
+    el.addEventListener('click', function () {
+      if (!self._shown || !entry.enabled) return;
+      if (self._confirmShown && entry.kind.indexOf('confirm-') !== 0) return;
+      entry.onPress();
+    });
+    el.addEventListener('mouseenter', function () {
+      if (!self._shown || !entry.enabled || self._nearBtn === entry) return;
+      if (self._confirmShown && entry.kind.indexOf('confirm-') !== 0) return;
+      if (entry.hoverSrc) self._setPlaneSrc(el, entry.hoverSrc);
+    });
+    el.addEventListener('mouseleave', function () {
+      if (!self._shown || !entry.enabled || self._nearBtn === entry) return;
+      if (entry.normalSrc) self._setPlaneSrc(el, entry.normalSrc);
+    });
+    return entry;
+  },
+
+  _menuLocationsById: function () {
+    var map = {};
+    var list = [];
+    if (typeof window.getTravelMenuLocations === 'function') {
+      list = window.getTravelMenuLocations();
+    }
+    var i;
+    for (i = 0; i < list.length; i++) {
+      map[list[i].id] = list[i];
+    }
+    return map;
+  },
+
+  /** Таймлайн: past → present → future (config.timelineOrder). */
+  _timelineLocations: function () {
+    var order = this.cfg.timelineOrder || ['past', 'present', 'future'];
+    var byId = this._menuLocationsById();
+    var out = [];
+    var i;
+    for (i = 0; i < order.length; i++) {
+      var id = order[i];
+      if (byId[id]) out.push(byId[id]);
+      else {
+        out.push({
+          id: id,
+          label: id,
+          enabled: false,
+          isCurrent: false,
+        });
+      }
+    }
+    return out;
+  },
+
+  _clearContent: function () {
+    var i;
+    for (i = 0; i < this._buttons.length; i++) {
+      var el = this._buttons[i].data.el;
+      if (el.parentNode) el.parentNode.removeChild(el);
+    }
+    this._buttons.length = 0;
+    this._menuButtons.length = 0;
+    this._nearBtn = null;
+    this._gearVis = null;
+    this._gearEntry = null;
+    if (this._hereMarkerEl && this._hereMarkerEl.parentNode) {
+      this._hereMarkerEl.parentNode.removeChild(this._hereMarkerEl);
+    }
+    this._hereMarkerEl = null;
+    // Линия таймлайна и прочие non-button дети contentRoot.
+    if (this._contentRoot) {
+      while (this._contentRoot.firstChild) {
+        this._contentRoot.removeChild(this._contentRoot.firstChild);
+      }
+    }
+  },
+
+  _buildUI: function () {
+    var lay = this._lay();
+    var panelW = lay.panelWidth !== undefined ? lay.panelWidth : 1.20;
+    var panelH = lay.panelHeight !== undefined ? lay.panelHeight : 0.80;
+    var pos = this._getMenuPosition();
+    var panelSrc = this._assetUrl(this.assets.panel || 'panel_travel.png');
+
+    this._root = document.createElement('a-entity');
+    this._root.setAttribute('id', 'travel-ui-root');
+    this._root.setAttribute('position', pos.x + ' ' + pos.y + ' ' + pos.z);
+    this._root.setAttribute('visible', false);
+
+    var panel = this._makeImagePlane(panelSrc, panelW, panelH);
+    panel.setAttribute('position', '0 0 0');
+    this._panelEl = panel;
+
+    this._contentRoot = document.createElement('a-entity');
+    this._contentRoot.setAttribute('id', 'travel-ui-content');
+
+    this._root.appendChild(panel);
+    this._root.appendChild(this._contentRoot);
+    this._buildConfirmUI();
+    this.el.sceneEl.appendChild(this._root);
+
+    this._btnPos = new THREE.Vector3();
+    this._handPos = new THREE.Vector3();
+  },
+
+  _buildConfirmUI: function () {
+    var lay = this._lay();
+    var self = this;
+    var cw = lay.confirmWidth !== undefined ? lay.confirmWidth : 0.80;
+    var ch = lay.confirmHeight !== undefined ? lay.confirmHeight : 0.33;
+    var btnW = lay.confirmBtnW !== undefined ? lay.confirmBtnW : 0.28;
+    var btnH = lay.confirmBtnH !== undefined ? lay.confirmBtnH : 0.09;
+    var gap = lay.confirmBtnGap !== undefined ? lay.confirmBtnGap : 0.06;
+    var btnY = lay.confirmBtnY !== undefined ? lay.confirmBtnY : -0.08;
+    var panelSrc = this._assetUrl(this.assets.confirmPanel || 'panel_confirm_exit.png');
+    var yesIdle = this._assetUrl(this.assets.confirmYesIdle || 'btn_confirm_yes_idle.png');
+    var yesHover = this._assetUrl(this.assets.confirmYesHover || 'btn_confirm_yes_hover.png');
+    var noIdle = this._assetUrl(this.assets.confirmNoIdle || 'btn_confirm_no_idle.png');
+    var noHover = this._assetUrl(this.assets.confirmNoHover || 'btn_confirm_no_hover.png');
+
+    this._confirmRoot = document.createElement('a-entity');
+    this._confirmRoot.setAttribute('id', 'travel-ui-confirm');
+    this._confirmRoot.setAttribute('visible', false);
+    this._confirmRoot.setAttribute('position', '0 0 0.04');
+
+    var dim = document.createElement('a-plane');
+    dim.setAttribute('width', lay.panelWidth !== undefined ? lay.panelWidth : 1.20);
+    dim.setAttribute('height', lay.panelHeight !== undefined ? lay.panelHeight : 0.80);
+    dim.setAttribute('color', '#000000');
+    dim.setAttribute('material',
+      'shader: flat; opacity: 0.72; transparent: true; side: double; depthTest: false; depthWrite: false');
+    dim.setAttribute('position', '0 0 0');
+    this._applyMenuDrawOrder(dim);
+    this._confirmRoot.appendChild(dim);
+
+    var panel = this._makeImagePlane(panelSrc, cw, ch);
+    panel.setAttribute('position', '0 0.06 0.01');
+    this._confirmRoot.appendChild(panel);
+
+    var yesEl = this._makeImagePlane(yesIdle, btnW, btnH);
+    yesEl.setAttribute('position', (-(btnW + gap) * 0.5) + ' ' + btnY + ' 0.02');
+    this._confirmRoot.appendChild(yesEl);
+
+    var noEl = this._makeImagePlane(noIdle, btnW, btnH);
+    noEl.setAttribute('position', ((btnW + gap) * 0.5) + ' ' + btnY + ' 0.02');
+    this._confirmRoot.appendChild(noEl);
+
+    this._confirmButtons = [];
+    this._confirmButtons.push(this._registerPngButton(yesEl, {
+      kind: 'confirm-yes',
+      enabled: true,
+      normalSrc: yesIdle,
+      hoverSrc: yesHover,
+      onPress: function () { self._confirmExitYes(); },
+    }));
+    this._confirmButtons.push(this._registerPngButton(noEl, {
+      kind: 'confirm-no',
+      enabled: true,
+      normalSrc: noIdle,
+      hoverSrc: noHover,
+      onPress: function () { self._confirmExitNo(); },
+    }));
+    // Убрать confirm-кнопки из основного списка — они живут в _confirmButtons.
+    this._buttons.length = 0;
+
+    this._root.appendChild(this._confirmRoot);
+  },
+
+  _rebuildContent: function () {
+    this._hideConfirm(true);
+    this._clearContent();
+    if (!this._contentRoot) return;
+
+    var lay = this._lay();
+    var panelW = lay.panelWidth !== undefined ? lay.panelWidth : 1.20;
+    var panelH = lay.panelHeight !== undefined ? lay.panelHeight : 0.80;
+    var btnW = lay.btnWidth !== undefined ? lay.btnWidth : 0.32;
+    var btnH = lay.btnHeight !== undefined ? lay.btnHeight : 0.09;
+    var btnGap = lay.btnGap !== undefined ? lay.btnGap : 0.06;
+    var btnBottomPad = lay.btnBottomPad !== undefined ? lay.btnBottomPad : 0.056;
+    var eraRowY = lay.eraRowY !== undefined ? lay.eraRowY : -0.02;
+    var markerW = lay.markerWidth !== undefined ? lay.markerWidth : 0.158;
+    var markerH = lay.markerHeight !== undefined ? lay.markerHeight : 0.292;
+    var markerGap = lay.markerGap !== undefined ? lay.markerGap : 0.012;
+    var lineH = lay.lineHeight !== undefined ? lay.lineHeight : 0.006;
+    var iconSize = lay.iconSize !== undefined ? lay.iconSize : 0.09;
+    var iconSidePad = lay.iconSidePad !== undefined ? lay.iconSidePad : 0.05;
+    var locs = this._timelineLocations();
+    var self = this;
+    var count = locs.length;
+    var i;
+
+    // Close у низа панели.
+    var panelBottom = -panelH * 0.5;
+    var closeY = panelBottom + btnBottomPad + btnH * 0.5;
+    var closeW = lay.closeWidth !== undefined ? lay.closeWidth : 0.40;
+
+    // Горизонтальный таймлайн: past — present — future (слева → направо).
+    var rowW = count * btnW + Math.max(0, count - 1) * btnGap;
+    var x0 = -rowW * 0.5 + btnW * 0.5;
+
+    // Линия за кнопками.
+    if (count > 1 && lineH > 0) {
+      var line = document.createElement('a-plane');
+      line.setAttribute('width', rowW - btnW * 0.35);
+      line.setAttribute('height', lineH);
+      line.setAttribute('color', '#33e0ff');
+      line.setAttribute('material',
+        'shader: flat; opacity: 0.55; transparent: true; side: double; depthTest: false; depthWrite: false');
+      line.setAttribute('position', '0 ' + eraRowY + ' 0.005');
+      this._applyMenuDrawOrder(line);
+      this._contentRoot.appendChild(line);
+    }
+
+    for (i = 0; i < count; i++) {
+      var info = locs[i];
+      var isCurrent = !!info.isCurrent;
+      var enabled = !!info.enabled;
+      var isHint = info.id === this._nextHint && enabled;
+
+      var normalState = isCurrent ? 'current'
+        : (!enabled ? 'disabled'
+          : (isHint ? 'hover' : 'idle'));
+      var hoverState = enabled ? 'hover' : normalState;
+      var normalSrc = this._locSrc(info.id, normalState);
+      var hoverSrc = this._locSrc(info.id, hoverState);
+
+      var x = x0 + i * (btnW + btnGap);
+      var eraEl = this._makeImagePlane(normalSrc, btnW, btnH);
+      eraEl.setAttribute('position', x + ' ' + eraRowY + ' 0.01');
+      this._contentRoot.appendChild(eraEl);
+
+      (function (destId, el, nSrc, hSrc, canPress) {
+        self._registerPngButton(el, {
+          kind: 'location',
+          locationId: destId,
+          enabled: canPress,
+          normalSrc: nSrc,
+          hoverSrc: hSrc,
+          onPress: function () {
+            if (typeof window.canTravelTo === 'function' && !window.canTravelTo(destId)) {
+              self._refreshEraButtons();
+              return;
+            }
+            self._doTravel(destId);
+          },
+        });
+      })(info.id, eraEl, normalSrc, hoverSrc, enabled && !isCurrent);
+
+      if (isCurrent) {
+        var markerSrc = this._assetUrl(this.assets.hereMarker || 'marker_here.png');
+        var marker = this._makeImagePlane(markerSrc, markerW, markerH);
+        // По центру панели (не над кнопкой эпохи).
+        marker.setAttribute('position', '0 0 0.008');
+        this._contentRoot.appendChild(marker);
+        this._hereMarkerEl = marker;
+      }
+    }
+
+    var closeIdle = this._assetUrl(this.assets.closeIdle || 'btn_close_idle.png');
+    var closeHover = this._assetUrl(this.assets.closeHover || 'btn_close_hover.png');
+    var closeEl = this._makeImagePlane(closeIdle, closeW, btnH);
+    closeEl.setAttribute('position', '0 ' + closeY + ' 0.01');
+    this._contentRoot.appendChild(closeEl);
+    this._registerPngButton(closeEl, {
+      kind: 'close',
+      isClose: true,
+      enabled: true,
+      normalSrc: closeIdle,
+      hoverSrc: closeHover,
+      onPress: function () {
+        self.closeMenu();
+      },
+    });
+
+    // Домик слева на баре — выход в главное меню (через confirm).
+    var homeOff = this._assetUrl(this.assets.homeOff || 'icon_home_off.png');
+    var homeOn = this._assetUrl(this.assets.homeOn || 'icon_home_on.png');
+    var homeX = -panelW * 0.5 + iconSidePad + iconSize * 0.5;
+    var homeEl = this._makeImagePlane(homeOff, iconSize, iconSize);
+    homeEl.setAttribute('position', homeX + ' ' + eraRowY + ' 0.01');
+    this._contentRoot.appendChild(homeEl);
+    this._registerPngButton(homeEl, {
+      kind: 'home',
+      enabled: true,
+      normalSrc: homeOff,
+      hoverSrc: homeOn,
+      onPress: function () {
+        self._showConfirmExit();
+      },
+    });
+
+    // Шестерёнка справа на баре — wireframe (как в game-menu).
+    this._gearOffSrc = this._assetUrl(this.assets.gearOff || 'icon_gear_off.png');
+    this._gearOnSrc = this._assetUrl(this.assets.gearOn || 'icon_gear_on.png');
+    var gearOn = !!(CONFIG.debug && CONFIG.debug.showColliders);
+    var gearSrc = gearOn ? this._gearOnSrc : this._gearOffSrc;
+    var gearX = panelW * 0.5 - iconSidePad - iconSize * 0.5;
+    var gearEl = this._makeImagePlane(gearSrc, iconSize, iconSize);
+    gearEl.setAttribute('position', gearX + ' ' + eraRowY + ' 0.01');
+    this._contentRoot.appendChild(gearEl);
+    this._gearVis = gearEl;
+    this._gearEntry = this._registerPngButton(gearEl, {
+      kind: 'wireframe',
+      enabled: true,
+      normalSrc: gearSrc,
+      hoverSrc: this._gearOnSrc,
+      onPress: function () {
+        self._toggleWireframe();
+      },
+    });
+
+    this._menuButtons = this._buttons.slice();
+  },
+
+  /** Обновить состояния эпох без пересоздания plane/текстур. */
+  _refreshEraButtons: function () {
+    this._hideConfirm(true);
+    var locs = this._timelineLocations();
+    var byId = {};
+    var i;
+    for (i = 0; i < locs.length; i++) byId[locs[i].id] = locs[i];
+
+    for (i = 0; i < this._menuButtons.length; i++) {
+      var entry = this._menuButtons[i];
+      if (entry.kind !== 'location' || !entry.locationId) continue;
+      var info = byId[entry.locationId] || {
+        id: entry.locationId,
+        enabled: false,
+        isCurrent: false,
+      };
+      var isCurrent = !!info.isCurrent;
+      var enabled = !!info.enabled;
+      var isHint = info.id === this._nextHint && enabled;
+      var normalState = isCurrent ? 'current'
+        : (!enabled ? 'disabled'
+          : (isHint ? 'hover' : 'idle'));
+      var hoverState = enabled ? 'hover' : normalState;
+      entry.enabled = enabled && !isCurrent;
+      entry.normalSrc = this._locSrc(info.id, normalState);
+      entry.hoverSrc = this._locSrc(info.id, hoverState);
+      this._setPlaneSrc(entry.data.el, entry.normalSrc);
+      entry.data.el.setAttribute('scale', '1 1 1');
+    }
+
+    if (this._hereMarkerEl) {
+      this._hereMarkerEl.setAttribute('visible', true);
+    }
+    this._refreshWireframeButton();
+    this._buttons = this._menuButtons.slice();
+    this._nearBtn = null;
+  },
+
+  _showConfirmExit: function () {
+    if (!this._shown || this._confirmShown || !this._confirmRoot) return;
+    this._confirmShown = true;
+    this._nearBtn = null;
+    this._confirmRoot.setAttribute('visible', true);
+    this._buttons = this._confirmButtons.slice();
+    this._setClickable(true);
+    console.log('[travel-ui] confirm: выход в главное меню?');
+  },
+
+  _hideConfirm: function (silent) {
+    if (!this._confirmRoot) return;
+    if (!this._confirmShown) {
+      this._confirmRoot.setAttribute('visible', false);
+      return;
+    }
+    this._confirmShown = false;
+    this._nearBtn = null;
+    this._confirmRoot.setAttribute('visible', false);
+    for (var i = 0; i < this._confirmButtons.length; i++) {
+      var entry = this._confirmButtons[i];
+      if (entry.normalSrc) this._setPlaneSrc(entry.data.el, entry.normalSrc);
+      entry.data.el.setAttribute('scale', '1 1 1');
+    }
+    if (this._menuButtons.length) {
+      this._buttons = this._menuButtons.slice();
+      if (!silent && this._shown) this._setClickable(true);
+    }
+  },
+
+  _confirmExitNo: function () {
+    this._hideConfirm(false);
+  },
+
+  _confirmExitYes: function () {
+    if (this._busy) return;
+    this._busy = true;
+    console.log('[travel-ui] выход в главное меню');
+    this._hideConfirm(true);
+    this._hidePanel(true);
+    if (typeof window.returnToMenu === 'function') {
+      window.returnToMenu();
+    }
+    this._busy = false;
+  },
+
+  _toggleWireframe: function () {
+    if (!CONFIG.debug) return;
+    CONFIG.debug.showColliders = !CONFIG.debug.showColliders;
+    this._refreshWireframeButton();
+    if (typeof window.applyColliderDebugVisual === 'function') {
+      window.applyColliderDebugVisual();
+    }
+  },
+
+  _refreshWireframeButton: function () {
+    if (!this._gearEntry || !this._gearVis) return;
+    var on = !!(CONFIG.debug && CONFIG.debug.showColliders);
+    var src = on ? this._gearOnSrc : this._gearOffSrc;
+    this._gearEntry.normalSrc = src;
+    this._gearEntry.hoverSrc = this._gearOnSrc;
+    if (this._nearBtn !== this._gearEntry) {
+      this._setPlaneSrc(this._gearVis, src);
     }
   },
 
@@ -614,12 +706,14 @@ AFRAME.registerComponent('travel-ui', {
     var near = this._findNearestButton();
     if (near !== this._nearBtn) {
       if (this._nearBtn && this._nearBtn.enabled) {
-        this._redrawButton(this._nearBtn.data, this._nearBtn.normalBg);
+        if (this._nearBtn.normalSrc) {
+          this._setPlaneSrc(this._nearBtn.data.el, this._nearBtn.normalSrc);
+        }
         this._nearBtn.data.el.setAttribute('scale', '1 1 1');
       }
       this._nearBtn = near;
       if (near) {
-        this._redrawButton(near.data, near.nearBg);
+        if (near.hoverSrc) this._setPlaneSrc(near.data.el, near.hoverSrc);
         if (!this._nearHintLogged) {
           this._nearHintLogged = true;
           console.log('[travel-ui] рука у кнопки — grip или trigger');
@@ -652,13 +746,12 @@ AFRAME.registerComponent('travel-ui', {
   _hidePanel: function (resumeWorld) {
     var wasShown = this._shown;
     this._shown = false;
-    this._openSource = null;
-    this._comicKey = null;
+    this._hideConfirm(true);
     this._nearBtn = null;
     this._nearHintLogged = false;
     this._setClickable(false);
     if (this._root) this._root.setAttribute('visible', false);
-    this._clearDynamicButtons();
+    // Контент оставляем — повторный open только обновляет состояния (без reload PNG).
     if (typeof window.disableDesktopUiCursor === 'function') {
       window.disableDesktopUiCursor();
     }
@@ -688,8 +781,7 @@ AFRAME.registerComponent('travel-ui', {
     if (this._busy || !destId) return;
     if (typeof window.canTravelTo === 'function' && !window.canTravelTo(destId)) {
       console.warn('[travel-ui] travel blocked:', destId);
-      this._rebuildLocationButtons();
-      this._layoutPanel();
+      this._refreshEraButtons();
       return;
     }
     this._busy = true;
@@ -738,8 +830,7 @@ AFRAME.registerComponent('travel-ui', {
 
   _onAvailability: function () {
     if (!this._shown) return;
-    this._rebuildLocationButtons();
-    this._layoutPanel();
+    this._refreshEraButtons();
     this._setClickable(true);
   },
 
@@ -755,12 +846,12 @@ AFRAME.registerComponent('travel-ui', {
   _onTravelReady: function (evt) {
     var d = evt.detail || {};
     this._nextHint = d.nextLocationId || null;
+    // Comic-преамбула (first/rebuilt) — отдельный шаг позже; сразу меню как с пульта.
     this.openMenu({
       source: 'auto',
-      comicKey: d.comicKey || 'first',
       nextLocationId: d.nextLocationId || null,
     });
-    console.log('[travel-ui] travel-ready — auto menu',
-      '(next:', this._nextHint || '?', ', comic:', d.comicKey || 'first', ')');
+    console.log('[travel-ui] travel-ready — menu',
+      '(next:', this._nextHint || '?', ')');
   },
 });

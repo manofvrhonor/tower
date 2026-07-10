@@ -1299,17 +1299,39 @@ const CONFIG = {
     checkIntervalMs:  200,
 
     // Плашка победы (victory-ui.js). Позиция = game.menu.worldPosition (общая с меню старта).
+    // ВАЖНО: метры плоскости = пропорции PNG (иначе растяжение).
     ui: {
       handPressRadius: 0.18,
       titleText:   'VICTORY',
       restartText: 'Restart',
       menuText:    'Main Menu',
       layout: {
-        contentWidth: 1.45,
-        btnHeight:    0.165,
-        btnFontSize:  60,
-        title:        { height: 0.12, fontSize: 72 },
+        // panel 1536×1024 → 3:2; кнопки PNG 400×90.
+        panelWidth:   1.20,
+        panelHeight:  0.80,   // 1.20 * 1024/1536
+        btnWidth:     0.40,
+        btnHeight:    0.09,   // 0.40 * 90/400
+        btnGap:       0.025,
+        // Отступ от низа панели (~20 px при 1024 px высоты → +0.016 м к 0.04).
+        btnBottomPad: 0.056,
       },
+      // PNG: assets/ui/end/ (заготовки → заменить финальным артом).
+      assets: {
+        basePath: 'assets/ui/end/',
+        panelVictory: 'panel_victory.png',   // 1536×1024
+        panelDefeat:  'panel_defeat.png',    // 1536×1024
+        restartIdle:  'btn_restart_idle.png',  // 400×90 (VR 0.40×0.09)
+        restartHover: 'btn_restart_hover.png',
+        menuIdle:     'btn_menu_idle.png',     // 400×90
+        menuHover:    'btn_menu_hover.png',
+      },
+    },
+  },
+
+  // === Поражение — таймер петли = 0 (loop-timer → defeat; та же плашка, что victory) ===
+  defeat: {
+    ui: {
+      titleText: 'DEFEAT',
     },
   },
 
@@ -1379,10 +1401,11 @@ const CONFIG = {
   },
 
   // === Пульт прыжка на #rightHand (wrist-travel-remote.js) ===
+  // Открывает travel-меню в любой момент игры (выход / wireframe), не только после travel-ready.
   wristTravelRemote: {
     // Local #rightHand — как второй карман на #leftHand (slots[1]).
     // Открытие — левая рука у пульта (не правая у своего запястья).
-    position: { x: 0.0, y: 0.13, z: -0.01 },
+    position: { x: 0.0, y: 0.13, z: 0.01 },
     pressRadius: 0.09,
     idleIntensity: 0.55,
     activeIntensity: 0.95,
@@ -1410,6 +1433,25 @@ const CONFIG = {
     },
   },
 
+  // === Таймер петли на #rightHand (Фаза 5, loop-timer.js) ===
+  // Один на весь забег: game-started → тик × timeScale → 0 = defeat. Travel не сбрасывает.
+  loopTimer: {
+    durationSec: 180,
+    // Local #rightHand — рядом с пультом (wristTravelRemote.position ≈ y:0.13).
+    position: { x: 0.0, y: 0.15, z: 0.01 },
+    // Кольцо: дуга remaining/duration; центр — canvas M:SS:CC (сотые в 2× мельче).
+    radius: 0.028,
+    tube: 0.004,
+    ringColor: '#33e0ff',
+    ringEmptyColor: '#0a3040',
+    textColor: '#66f5ff',
+    textBgColor: 'rgba(6, 16, 24, 0.55)',
+    textPlaneSize: 0.04,
+    fontSize: 42,
+    warnBelowSec: 30,
+    warnBlinkHz: 2,
+  },
+
   // === Прыжок между эпохами (Фаза 4+, travel-ui / wrist-travel-remote) ===
   travel: {
     // Auto-меню при квоте: 1 туториал + 1 после поломки; дальше только пульт.
@@ -1433,24 +1475,76 @@ const CONFIG = {
       hubYMax: 1.15,
       hubBobAmp: 0.08,
     },
-    // travel-ui.js — все эпохи; кнопки по canTravelTo. PNG: assets/ui/travel/
+    // travel-ui.js — то же меню с пульта и после auto.
+    // Comic (first/rebuilt) — ОТДЕЛЬНАЯ преамбула ДО меню (ещё не подключена); в меню не входит.
+    // Размер панели = victory/defeat (1536×1024 → 1.20×0.80 м).
     ui: {
       handPressRadius: 0.18,
-      titleText: 'Прыжок',
-      closeBtnText: 'Закрыть',
-      comicWidth: 1.1,
-      comicHeight: 0.75,
-      showComicOnAuto: true,
-      showComicOnWrist: false,
-      locBtnWidth: 0.88,
-      locBtnHeight: 0.12,
-      locBtnGap: 0.04,
-      btnFontSize: 48,
-      closeBtnHeight: 0.1,
+      hereMarkerText: 'вы тут',
+      // Порядок на линии слева → направо: прошлое → настоящее → будущее.
+      timelineOrder: ['past', 'present', 'future'],
+      layout: {
+        // ×2 в VR относительно прежнего 1.20×0.80 (удобнее на Quest).
+        panelWidth:   2.40,
+        panelHeight:  1.60,
+        // Эпохи/закрыть 300×90 PNG → в мире ×2.
+        btnWidth:     0.4688,  // 300 px ×2
+        btnHeight:    0.1406,  // 90 px ×2
+        btnGap:       0.08,
+        btnBottomPad: 0.16,
+        closeWidth:   0.4688,
+        eraRowY:      0.0,
+        // marker_here 202×374 ×2
+        markerWidth:  0.3156,
+        markerHeight: 0.5844,
+        markerGap:    0.020,
+        lineHeight:   0,
+        iconSize:     0.150,
+        iconSidePad:  0.1908,
+        // Confirm ×2
+        confirmWidth:  1.40,
+        confirmHeight: 0.58,
+        confirmBtnW:   0.50,
+        confirmBtnH:   0.150,
+        confirmBtnGap: 0.10,
+        confirmBtnY:  -0.12,
+      },
       assets: {
         basePath: 'assets/ui/travel/',
-        comicFirst: null,
-        comicRebuilt: null,
+        panel: 'panel_travel.png',           // 1536×1024
+        // Текст эпохи в самом PNG — код не рисует поверх.
+        loc: {
+          past: {
+            idle: 'btn_past_idle.png',
+            hover: 'btn_past_hover.png',
+            disabled: 'btn_past_disabled.png',
+            current: 'btn_past_current.png',
+          },
+          present: {
+            idle: 'btn_present_idle.png',
+            hover: 'btn_present_hover.png',
+            disabled: 'btn_present_disabled.png',
+            current: 'btn_present_current.png',
+          },
+          future: {
+            idle: 'btn_future_idle.png',
+            hover: 'btn_future_hover.png',
+            disabled: 'btn_future_disabled.png',
+            current: 'btn_future_current.png',
+          },
+        },
+        closeIdle: 'btn_close_idle.png',     // 400×90 «Закрыть»
+        closeHover: 'btn_close_hover.png',
+        hereMarker: 'marker_here.png',       // 400×50 «вы тут»
+        homeOff: 'icon_home_off.png',        // 256×256, выход в меню
+        homeOn:  'icon_home_on.png',
+        gearOff: 'icon_gear_off.png',        // как в game-menu
+        gearOn:  'icon_gear_on.png',
+        confirmPanel: 'panel_confirm_exit.png',
+        confirmYesIdle:  'btn_confirm_yes_idle.png',
+        confirmYesHover: 'btn_confirm_yes_hover.png',
+        confirmNoIdle:   'btn_confirm_no_idle.png',
+        confirmNoHover:  'btn_confirm_no_hover.png',
       },
     },
   },

@@ -4,16 +4,16 @@ overview: "Один таймер на весь забег: старт игры �
 todos:
   - id: cfg-loop-timer
     content: "CONFIG.loopTimer: durationSec, position, visual"
-    status: pending
+    status: completed
   - id: comp-loop-timer
     content: "loop-timer.js: tick × getScale, кольцо + MM:SS на #rightHand"
-    status: pending
+    status: completed
   - id: defeat-flow
     content: defeat event → victory-freeze + victory-ui DEFEAT + block remote
-    status: pending
+    status: completed
   - id: docs-qa
     content: CURRENT_TASK + чек-лист QA
-    status: pending
+    status: completed
 isProject: true
 ---
 

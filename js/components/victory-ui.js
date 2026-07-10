@@ -1,29 +1,34 @@
 /* global AFRAME, CONFIG, THREE */
 
 /**
- * victory-ui — плашка победы в VR (Этап 5, шаг 3).
+ * victory-ui — плашка победы / поражения в VR (PNG из assets/ui/end/).
  *
- * Позиция = CONFIG.game.menu.worldPosition (как стартовое меню).
- * «Заново» — сразу новая игра; «В главное меню» — returnToMenu().
+ * 'victory' → panel_victory; 'defeat' → panel_defeat.
+ * Restart / Main Menu — idle/hover PNG. Позиция = game.menu.worldPosition.
  */
 AFRAME.registerComponent('victory-ui', {
   schema: {},
 
   init: function () {
     this.cfg = (typeof CONFIG !== 'undefined' && CONFIG.victory && CONFIG.victory.ui) || {};
+    this.assets = this.cfg.assets || {};
     this._shown = false;
+    this._mode = 'victory';
     this._buttons = [];
     this._nearBtn = null;
     this._nearHintLogged = false;
+    this._panelEl = null;
     this._onVictory = this._onVictory.bind(this);
+    this._onDefeat = this._onDefeat.bind(this);
     this._onHandPress = this._onHandPress.bind(this);
     this._onTick = this._onTick.bind(this);
     this._onGameStarted = this._onGameStarted.bind(this);
 
-    this._applyMenuTheme();
     this._menuRenderOrder = 50;
+    this._pressRadius = this._getPressRadius();
 
     this.el.sceneEl.addEventListener('victory', this._onVictory);
+    this.el.sceneEl.addEventListener('defeat', this._onDefeat);
     this.el.sceneEl.addEventListener('game-started', this._onGameStarted);
     this._buildUI();
     this._bindHands();
@@ -39,12 +44,12 @@ AFRAME.registerComponent('victory-ui', {
 
   remove: function () {
     this.el.sceneEl.removeEventListener('victory', this._onVictory);
+    this.el.sceneEl.removeEventListener('defeat', this._onDefeat);
     this.el.sceneEl.removeEventListener('game-started', this._onGameStarted);
     this.el.sceneEl.removeEventListener('tick', this._onTick);
     this._unbindHands();
   },
 
-  /** Та же точка в мире, что у game-menu (z:-0.65 — комфортная дистанция в VR). */
   _getMenuPosition: function () {
     var menuCfg = (typeof CONFIG !== 'undefined' && CONFIG.game && CONFIG.game.menu) || {};
     if (this.cfg.worldPosition) return this.cfg.worldPosition;
@@ -55,6 +60,12 @@ AFRAME.registerComponent('victory-ui', {
     if (this.cfg.handPressRadius !== undefined) return this.cfg.handPressRadius;
     var menuCfg = (typeof CONFIG !== 'undefined' && CONFIG.game && CONFIG.game.menu) || {};
     return menuCfg.handPressRadius !== undefined ? menuCfg.handPressRadius : 0.18;
+  },
+
+  _assetUrl: function (file) {
+    if (!file) return null;
+    var base = this.assets.basePath || 'assets/ui/end/';
+    return base + file;
   },
 
   _bindHands: function () {
@@ -77,7 +88,7 @@ AFRAME.registerComponent('victory-ui', {
     }
   },
 
-  _applyMenuDrawOrder: function (el) {
+  _applyPlaneMaterial: function (el) {
     var order = this._menuRenderOrder;
     var apply = function () {
       var mesh = el.getObject3D('mesh');
@@ -90,225 +101,117 @@ AFRAME.registerComponent('victory-ui', {
     if (el.hasLoaded) apply();
   },
 
-  _applyMenuTheme: function () {
-    var th = (typeof window.getMenuTheme === 'function') ? window.getMenuTheme() : {};
-    this._theme = th;
-    this._btnNormal = th.btnBg || '#0c1820';
-    this._btnHover = th.btnHover || '#143040';
-    this._btnNear = th.btnNear || '#1e5068';
-    this._btnStart = th.btnAccent || '#33e0ff';
-    this._btnStartHover = th.btnAccentHover || '#66f5ff';
-    this._btnStartNear = th.btnAccentNear || '#b8ffff';
-    this._panelColor = th.panel || '#0a1018';
-  },
-
-  _buttonDrawOpts: function (bgColor) {
-    if (typeof window.menuUiButtonDrawOpts === 'function') {
-      return window.menuUiButtonDrawOpts(bgColor, this._theme);
-    }
-    return { borderColor: '#1a5070', textColor: '#ffffff' };
-  },
-
-  _makeTextPlane: function (text, planeW, planeH, options) {
-    var opts = options || {};
-    var sz = (typeof window.menuUiCanvasSize === 'function')
-      ? window.menuUiCanvasSize(planeW, planeH, opts.canvasW || 512)
-      : { w: opts.canvasW || 512, h: opts.canvasH || 128 };
-    var canvas = document.createElement('canvas');
-    canvas.width = sz.w;
-    canvas.height = sz.h;
-    var ctx = canvas.getContext('2d');
-
-    if (opts.bg) {
-      var drawOpts = this._buttonDrawOpts(opts.bg);
-      if (typeof window.menuUiDrawButton === 'function') {
-        window.menuUiDrawButton(
-          ctx, canvas, text, opts.fontSize || 44, opts.bg, drawOpts
-        );
-      }
-    } else {
-      ctx.clearRect(0, 0, sz.w, sz.h);
-      if (typeof window.menuUiDrawCenteredText === 'function') {
-        window.menuUiDrawCenteredText(ctx, text, sz.w, sz.h, opts.fontSize || 48, opts.color || '#ffffff');
-      }
-    }
-
+  _makeImagePlane: function (src, planeW, planeH) {
     var plane = document.createElement('a-plane');
     plane.setAttribute('width', planeW);
     plane.setAttribute('height', planeH);
-
-    var self = this;
-    var apply = function () {
-      self._applyCanvasTexture(plane, canvas);
-    };
-    plane.addEventListener('loaded', apply);
-    if (plane.hasLoaded) apply();
-
-    return { el: plane, canvas: canvas, ctx: ctx, label: text, fontSize: opts.fontSize || 44 };
-  },
-
-  _applyCanvasTexture: function (el, canvas) {
-    var mesh = el.getObject3D('mesh');
-    if (!mesh) return;
-    var tex = new THREE.CanvasTexture(canvas);
-    tex.needsUpdate = true;
-    mesh.material = new THREE.MeshBasicMaterial({
-      map: tex,
+    plane.setAttribute('material', {
+      src: src,
       transparent: true,
-      side: THREE.FrontSide,
+      alphaTest: 0.05,
+      shader: 'flat',
+      side: 'double',
       depthTest: false,
       depthWrite: false,
+      renderOrder: this._menuRenderOrder,
     });
-    mesh.renderOrder = this._menuRenderOrder;
+    this._applyPlaneMaterial(plane);
+    return plane;
   },
 
-  _redrawButton: function (btnData, bgColor, label) {
-    var text = label !== undefined ? label : btnData.label;
-    if (typeof window.menuUiDrawButton === 'function') {
-      window.menuUiDrawButton(
-        btnData.ctx, btnData.canvas, text, btnData.fontSize || 44, bgColor,
-        this._buttonDrawOpts(bgColor)
-      );
-    }
-    var mesh = btnData.el.getObject3D('mesh');
+  _setPlaneSrc: function (el, src) {
+    if (!el || !src) return;
+    var mesh = el.getObject3D('mesh');
     if (mesh && mesh.material && mesh.material.map) {
-      mesh.material.map.needsUpdate = true;
+      mesh.material.map.dispose();
     }
+    el.setAttribute('material', 'src', src);
   },
 
-  _registerButton: function (btnData, meta) {
+  _registerPngButton: function (el, meta) {
     var entry = {
-      data: btnData,
-      normalBg: meta.normalBg || this._btnNormal,
-      hoverBg: meta.hoverBg || this._btnHover,
-      nearBg: meta.nearBg || this._btnNear,
+      data: { el: el },
+      kind: meta.kind,
+      normalSrc: meta.normalSrc,
+      hoverSrc: meta.hoverSrc || meta.normalSrc,
       onPress: meta.onPress,
     };
     this._buttons.push(entry);
 
     var self = this;
-    btnData.el.addEventListener('click', function () {
+    el.addEventListener('click', function () {
       if (self._shown) entry.onPress();
     });
-    btnData.el.addEventListener('mouseenter', function () {
+    el.addEventListener('mouseenter', function () {
       if (self._shown && self._nearBtn !== entry) {
-        self._redrawButton(btnData, entry.hoverBg);
+        self._setPlaneSrc(el, entry.hoverSrc);
       }
     });
-    btnData.el.addEventListener('mouseleave', function () {
+    el.addEventListener('mouseleave', function () {
       if (self._shown && self._nearBtn !== entry) {
-        self._redrawButton(btnData, entry.normalBg);
+        self._setPlaneSrc(el, entry.normalSrc);
       }
     });
     return entry;
   },
 
   _buildUI: function () {
-    var ui = this.cfg;
-    var menuLay = (typeof CONFIG !== 'undefined' && CONFIG.game && CONFIG.game.menu && CONFIG.game.menu.layout) || {};
-    var lay = ui.layout || {};
-    var contentW = lay.contentWidth !== undefined ? lay.contentWidth : menuLay.contentWidth || 1.45;
-    var btnH = lay.btnHeight !== undefined ? lay.btnHeight : menuLay.btnHeight || 0.165;
-    var btnFs = lay.btnFontSize !== undefined ? lay.btnFontSize : menuLay.btnFontSize || 60;
-    var titleLay = lay.title || { height: 0.12, fontSize: 72 };
+    var lay = this.cfg.layout || {};
+    // Пропорции PNG: panel 1536×1024, buttons 1024×288 — без растяжения.
+    var panelW = lay.panelWidth !== undefined ? lay.panelWidth : 1.20;
+    var panelH = lay.panelHeight !== undefined ? lay.panelHeight : 0.80;
+    var btnW = lay.btnWidth !== undefined ? lay.btnWidth : 0.40;
+    var btnH = lay.btnHeight !== undefined ? lay.btnHeight : 0.09;
+    var btnGap = lay.btnGap !== undefined ? lay.btnGap : 0.025;
+    var btnBottomPad = lay.btnBottomPad !== undefined ? lay.btnBottomPad : 0.056;
     var pos = this._getMenuPosition();
-    this._pressRadius = this._getPressRadius();
-    var title = ui.titleText || 'VICTORY';
-    var restartText = ui.restartText || ui.buttonText || 'Restart';
-    var menuText = ui.menuText || 'Main Menu';
-
-    var buttonSpecs = [
-      { text: restartText, width: contentW, height: btnH },
-      { text: menuText, width: contentW, height: btnH },
-    ];
-    var fontScale = (typeof window.menuUiUniformFontScale === 'function')
-      ? window.menuUiUniformFontScale(buttonSpecs, contentW, btnH, btnFs)
-      : 1;
-    var effectiveFs = Math.round(btnFs * fontScale);
-
     var self = this;
-    this._menuBtnFont = function (planeW) {
-      return (typeof window.menuUiFontSizeOnPlane === 'function')
-        ? window.menuUiFontSizeOnPlane(effectiveFs, planeW, btnH, contentW, btnH)
-        : effectiveFs;
-    };
 
-    var layout = (typeof window.menuUiComputeLayout === 'function')
-      ? window.menuUiComputeLayout({
-        title: { width: contentW, height: titleLay.height },
-        rows: [
-          { buttons: [{ width: contentW, height: btnH }] },
-          { buttons: [{ width: contentW, height: btnH }] },
-        ],
-      })
-      : null;
+    var restartIdle = this._assetUrl(this.assets.restartIdle || 'btn_restart_idle.png');
+    var restartHover = this._assetUrl(this.assets.restartHover || 'btn_restart_hover.png');
+    var menuIdle = this._assetUrl(this.assets.menuIdle || 'btn_menu_idle.png');
+    var menuHover = this._assetUrl(this.assets.menuHover || 'btn_menu_hover.png');
+    var panelVictory = this._assetUrl(this.assets.panelVictory || 'panel_victory.png');
+    var panelDefeat = this._assetUrl(this.assets.panelDefeat || 'panel_defeat.png');
+    this._panelVictorySrc = panelVictory;
+    this._panelDefeatSrc = panelDefeat;
 
     this._root = document.createElement('a-entity');
     this._root.setAttribute('id', 'victory-ui-root');
     this._root.setAttribute('position', pos.x + ' ' + pos.y + ' ' + pos.z);
     this._root.setAttribute('visible', false);
 
-    var panel = document.createElement('a-plane');
-    panel.setAttribute('width', layout ? layout.panel.width : contentW + 0.1);
-    panel.setAttribute('height', layout ? layout.panel.height : 0.45);
-    panel.setAttribute('color', this._panelColor);
-    panel.setAttribute('material', 'shader: flat; opacity: 0.96; transparent: true; side: front; depthTest: false; depthWrite: false; renderOrder: 50');
+    var panel = this._makeImagePlane(panelVictory, panelW, panelH);
+    panel.setAttribute('position', '0 0 0');
+    this._panelEl = panel;
 
-    var titleColor = (this._theme && this._theme.titleAccent) || '#66f5ff';
-    var titleFs = (typeof window.menuUiFontSizeForButton === 'function')
-      ? window.menuUiFontSizeForButton(title, contentW, titleLay.height, {
-        maxSize: titleLay.fontSize, heightRatio: 0.55,
-      })
-      : titleLay.fontSize;
-    var titleData = this._makeTextPlane(title, contentW, titleLay.height, {
-      fontSize: titleFs, color: titleColor,
-    });
-    if (layout && layout.title) {
-      var tp = layout.title;
-      titleData.el.setAttribute('position', tp.x + ' ' + tp.y + ' ' + tp.z);
-    }
+    // Кнопки у нижнего края панели (Main Menu снизу, Restart над ним).
+    var panelBottom = -panelH * 0.5;
+    var btnY2 = panelBottom + btnBottomPad + btnH * 0.5;
+    var btnY1 = btnY2 + btnH + btnGap;
 
-    var restartFs = this._menuBtnFont(contentW);
-    var restartData = this._makeTextPlane(restartText, contentW, btnH, {
-      fontSize: restartFs, bg: this._btnStart,
-    });
-    restartData.fontSize = restartFs;
-    if (layout && layout.rows[0] && layout.rows[0].buttons[0]) {
-      var rp = layout.rows[0].buttons[0];
-      restartData.el.setAttribute('position', rp.x + ' ' + rp.y + ' ' + rp.z);
-    }
-    this._registerButton(restartData, {
+    var restartEl = this._makeImagePlane(restartIdle, btnW, btnH);
+    restartEl.setAttribute('position', '0 ' + btnY1 + ' 0.01');
+    this._registerPngButton(restartEl, {
       kind: 'restart',
-      normalBg: this._btnStart,
-      hoverBg: this._btnStartHover,
-      nearBg: this._btnStartNear,
+      normalSrc: restartIdle,
+      hoverSrc: restartHover,
       onPress: function () { self._doRestart(); },
     });
 
-    var menuFs = this._menuBtnFont(contentW);
-    var menuBtnData = this._makeTextPlane(menuText, contentW, btnH, {
-      fontSize: menuFs, bg: this._btnNormal,
-    });
-    menuBtnData.fontSize = menuFs;
-    if (layout && layout.rows[1] && layout.rows[1].buttons[0]) {
-      var mp = layout.rows[1].buttons[0];
-      menuBtnData.el.setAttribute('position', mp.x + ' ' + mp.y + ' ' + mp.z);
-    }
-    this._registerButton(menuBtnData, {
+    var menuEl = this._makeImagePlane(menuIdle, btnW, btnH);
+    menuEl.setAttribute('position', '0 ' + btnY2 + ' 0.01');
+    this._registerPngButton(menuEl, {
       kind: 'menu',
+      normalSrc: menuIdle,
+      hoverSrc: menuHover,
       onPress: function () { self._doMainMenu(); },
     });
 
     this._root.appendChild(panel);
-    this._root.appendChild(titleData.el);
-    this._root.appendChild(restartData.el);
-    this._root.appendChild(menuBtnData.el);
+    this._root.appendChild(restartEl);
+    this._root.appendChild(menuEl);
     this.el.sceneEl.appendChild(this._root);
-
-    this._applyMenuDrawOrder(panel);
-    this._applyMenuDrawOrder(titleData.el);
-    this._applyMenuDrawOrder(restartData.el);
-    this._applyMenuDrawOrder(menuBtnData.el);
 
     this._btnPos = new THREE.Vector3();
     this._handPos = new THREE.Vector3();
@@ -317,12 +220,10 @@ AFRAME.registerComponent('victory-ui', {
   _facePlayer: function () {
     var cam = document.querySelector('#player a-camera');
     if (!cam || !this._root) return;
-
     var camPos = new THREE.Vector3();
     var rootPos = new THREE.Vector3();
     cam.object3D.getWorldPosition(camPos);
     this._root.object3D.getWorldPosition(rootPos);
-
     var dx = camPos.x - rootPos.x;
     var dz = camPos.z - rootPos.z;
     var rotY = Math.atan2(dx, dz) * (180 / Math.PI);
@@ -356,16 +257,15 @@ AFRAME.registerComponent('victory-ui', {
 
   _onTick: function () {
     if (!this._shown) return;
-
     var near = this._findNearestButton();
     if (near !== this._nearBtn) {
       if (this._nearBtn) {
-        this._redrawButton(this._nearBtn.data, this._nearBtn.normalBg);
+        this._setPlaneSrc(this._nearBtn.data.el, this._nearBtn.normalSrc);
         this._nearBtn.data.el.setAttribute('scale', '1 1 1');
       }
       this._nearBtn = near;
       if (near) {
-        this._redrawButton(near.data, near.nearBg);
+        this._setPlaneSrc(near.data.el, near.hoverSrc);
         if (!this._nearHintLogged) {
           this._nearHintLogged = true;
           console.log('[victory-ui] рука у кнопки — grip или trigger');
@@ -374,10 +274,7 @@ AFRAME.registerComponent('victory-ui', {
         this._nearHintLogged = false;
       }
     }
-
-    if (near) {
-      near.data.el.setAttribute('scale', '1.08 1.08 1');
-    }
+    if (near) near.data.el.setAttribute('scale', '1.08 1.08 1');
   },
 
   _onHandPress: function () {
@@ -397,12 +294,6 @@ AFRAME.registerComponent('victory-ui', {
     }
   },
 
-  /**
-   * Класс-цель для десктоп-курсора добавляется только когда плашка показана.
-   * THREE-raycaster игнорирует visible, поэтому скрытые кнопки победы иначе
-   * перехватывают луч поверх стартового меню (общая worldPosition). Курсор
-   * пересоздаётся на victory/return-to-menu и заново читает классы.
-   */
   _setClickable: function (on) {
     for (var i = 0; i < this._buttons.length; i++) {
       var el = this._buttons[i].data.el;
@@ -419,7 +310,7 @@ AFRAME.registerComponent('victory-ui', {
     if (this._root) this._root.setAttribute('visible', false);
     for (var i = 0; i < this._buttons.length; i++) {
       this._buttons[i].data.el.setAttribute('scale', '1 1 1');
-      this._redrawButton(this._buttons[i].data, this._buttons[i].normalBg);
+      this._setPlaneSrc(this._buttons[i].data.el, this._buttons[i].normalSrc);
     }
     if (typeof window.disableDesktopUiCursor === 'function') {
       window.disableDesktopUiCursor();
@@ -456,8 +347,12 @@ AFRAME.registerComponent('victory-ui', {
     if (this._shown) this._hidePanel();
   },
 
-  _onVictory: function () {
+  _showPanel: function (mode) {
     if (!this._root) return;
+    this._mode = mode === 'defeat' ? 'defeat' : 'victory';
+    var src = this._mode === 'defeat' ? this._panelDefeatSrc : this._panelVictorySrc;
+    this._setPlaneSrc(this._panelEl, src);
+
     this._shown = true;
     this._nearBtn = null;
     this._nearHintLogged = false;
@@ -469,6 +364,17 @@ AFRAME.registerComponent('victory-ui', {
     if (typeof window.enableDesktopUiCursor === 'function') {
       window.enableDesktopUiCursor();
     }
-    console.log('[victory-ui] ПОБЕДА — «Заново» или «В главное меню»');
+    var title = this._mode === 'defeat'
+      ? (((CONFIG.defeat && CONFIG.defeat.ui) || {}).titleText || 'DEFEAT')
+      : (this.cfg.titleText || 'VICTORY');
+    console.log('[victory-ui] ' + title + ' — PNG panel');
+  },
+
+  _onVictory: function () {
+    this._showPanel('victory');
+  },
+
+  _onDefeat: function () {
+    this._showPanel('defeat');
   },
 });

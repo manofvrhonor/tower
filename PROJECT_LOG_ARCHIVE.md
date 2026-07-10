@@ -36,6 +36,8 @@
 | wrist-travel-remote, live travel menu, cascade lock | 66 | forced slo-mo; time-lock travel/victory |
 | locationPools, stash/restore, victory/quota live machine | 67 | bat.enabled false; time-lock all quotas |
 | cyan balls fade, junk/decoy per loc, next-slot ghost, loop-timer plan | 68 | phase5_loop_timer.plan; deflect hand/grip |
+| loop-timer, defeat UI, wrist hide in menu | 69 | M:SS:CC; duration 3:00; Quest QA ✅ |
+| travel PNG timeline, end panels, no text overlay | 70 | comic не в меню; подписи только в PNG |
 
 ## Хронология (одной строкой)
 
@@ -61,7 +63,9 @@
 | 66 | ✅ | Пульт прыжка + живое меню эпох, cascade/time-lock — Quest QA |
 | 67 | ✅ | Пер-локационные пулы, stash/restore, победа/квота от машины, bat off |
 | 68 | ✅ | Фаза 5 старт: cyan-шары, пулы, призрак, deflect; план таймера петли |
-| → | — | **Таймер петли** — `.cursor/plans/phase5_loop_timer.plan.md` |
+| 69 | ✅ | Таймер петли + DEFEAT + wrist hide в меню — Quest QA |
+| 70 | ✅ | PNG end/travel меню: таймлайн, без text-overlay; comic — преамбула позже |
+| → | — | **hazardLevel → шары** (Фаза 5); comic-преамбула travel |
 
 ---
 
@@ -1395,3 +1399,61 @@
 **Таймер петли** — план `phase5_loop_timer.plan.md`.
 
 **Commit сессии:** `24e3ff9`
+
+---
+
+## Сессия 69 — Таймер петли + DEFEAT + wrist hide ✅
+
+**Дата:** 2026-07-09
+
+### Сделано
+
+- **`loop-timer.js`:** один таймер на забег; UI на `#rightHand` рядом с пультом; `remaining -= dt * getScale()`; travel не сбрасывает; 0 → `defeat`.
+- **Config:** `loopTimer.durationSec: 180` (3:00); формат `M:SS:CC` (сотые в 2× мельче); warn < 30 с.
+- **Defeat:** `victory-freeze` + `victory-ui` заголовок DEFEAT; Restart / Main Menu; пульт блокируется.
+- **Wrist hide в меню:** карманы / пульт скрыты до `game-started` (не светятся сквозь чёрный veil); таймер тоже.
+- **Quest QA ✅:** slo-mo тик, travel без сброса, поражение на 0.
+
+### Не трогать
+
+- Бита — только по явному запросу (`CONFIG.bat.enabled: false`).
+
+### Файлы
+
+`loop-timer.js`, `config.js`, `index.html`, `victory-freeze.js`, `victory-ui.js`, `wrist-inventory.js`, `wrist-travel-remote.js`, `.cursor/plans/phase5_loop_timer.plan.md`, `CURRENT_TASK.md`, `PROJECT_LOG*.md`, `PROJECT_START.md`.
+
+### Следующая сессия
+
+**hazardLevel → число/скорость шаров** (Фаза 5).
+
+**Commit сессии:** _(по запросу)_
+
+---
+
+## Сессия 70 — PNG end/travel меню (таймлайн, без text-overlay) ✅
+
+**Дата:** 2026-07-10
+
+### Сделано
+
+- **Victory/defeat PNG:** панели `assets/ui/end/`; размер 1.20×0.80 м (1536×1024); кнопки 0.40×0.09 м; `btnBottomPad`.
+- **Travel-меню:** comic **не** внутри меню (преамбула отдельно, ещё не сделана); панель как end; горизонтальный таймлайн Прошлое → Настоящее → Будущее + линия + маркер «вы тут»; Close внизу.
+- **Без text-overlay:** подписи эпох/«Закрыть» только в PNG (`_locSrc` + `_makeImagePlane`); canvas-текст поверх кнопок убран (двойной текст).
+- **Assets:** `assets/ui/travel/` (`btn_past_*`, `btn_present_*`, `btn_future_*`, `btn_close_*`, `marker_here.png`, `panel_travel.png`); превью `_preview/preview_travel_menu.png`.
+
+### Не трогать
+
+- Бита — только по явному запросу (`CONFIG.bat.enabled: false`).
+- Comic first/rebuilt **не** вшивать в travel-меню — отдельная преамбула до меню.
+
+### Файлы
+
+`config.js`, `travel-ui.js`, `victory-ui.js`, `assets/ui/end/`, `assets/ui/travel/`, `assets/ui/_preview/`, `CURRENT_TASK.md`, `PROJECT_LOG*.md`, `PROJECT_START.md`.
+
+### Следующая сессия
+
+1. **hazardLevel → число/скорость шаров** (Фаза 5).
+2. Comic-преамбула (1–2 кадра) → затем travel-меню.
+3. Quest QA travel (нет двойного текста, размер = victory).
+
+**Commit сессии:** _(по запросу)_

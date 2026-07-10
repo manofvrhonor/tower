@@ -24,16 +24,20 @@ AFRAME.registerComponent('wrist-inventory', {
     this._rayEndLocal = new THREE.Vector3();
     this._handsBound = false;
 
+    this._uiVisible = false;
     this._onHandRelease = this._onHandRelease.bind(this);
     this._onRightPress = this._onRightPress.bind(this);
-    this._onReset = this._onReset.bind(this);
+    this._onGameStarted = this._onGameStarted.bind(this);
+    this._onReturnToMenu = this._onReturnToMenu.bind(this);
 
-    this.el.sceneEl.addEventListener('game-started', this._onReset);
-    this.el.sceneEl.addEventListener('return-to-menu', this._onReset);
+    this.el.sceneEl.addEventListener('game-started', this._onGameStarted);
+    this.el.sceneEl.addEventListener('return-to-menu', this._onReturnToMenu);
 
     this._buildSlotAnchors();
     var i;
     for (i = 0; i < this._slotCount; i++) this._slots.push(null);
+    // Как руки за чёрным veil: карманы не светятся в стартовом меню.
+    this._setUiVisible(false);
   },
 
   play: function () {
@@ -46,13 +50,14 @@ AFRAME.registerComponent('wrist-inventory', {
 
   remove: function () {
     this._unbindHandListeners();
-    this.el.sceneEl.removeEventListener('game-started', this._onReset);
-    this.el.sceneEl.removeEventListener('return-to-menu', this._onReset);
+    this.el.sceneEl.removeEventListener('game-started', this._onGameStarted);
+    this.el.sceneEl.removeEventListener('return-to-menu', this._onReturnToMenu);
     this._clearSlotRefs();
     this._disposeSlotVisuals();
   },
 
   tick: function () {
+    if (!this._uiVisible) return;
     this._refreshRayTarget();
     var i;
     for (i = 0; i < this._slots.length; i++) {
@@ -395,6 +400,7 @@ AFRAME.registerComponent('wrist-inventory', {
   },
 
   _onHandRelease: function (evt) {
+    if (!this._uiVisible) return;
     var handEl = evt.currentTarget;
     var grab = handEl && handEl.components['physx-grab'];
     var partEl = grab && grab.hitEl;
@@ -412,6 +418,7 @@ AFRAME.registerComponent('wrist-inventory', {
   },
 
   _onRightPress: function () {
+    if (!this._uiVisible) return;
     var grab = this._rightGrabComp();
     if (grab && grab.hitEl) return;
 
@@ -626,8 +633,22 @@ AFRAME.registerComponent('wrist-inventory', {
     }
   },
 
-  _onReset: function () {
+  _setUiVisible: function (on) {
+    this._uiVisible = !!on;
+    var i;
+    for (i = 0; i < this._slotEls.length; i++) {
+      if (this._slotEls[i]) this._slotEls[i].setAttribute('visible', on);
+    }
+  },
+
+  _onGameStarted: function () {
     this._clearSlotRefs();
+    this._setUiVisible(true);
+  },
+
+  _onReturnToMenu: function () {
+    this._clearSlotRefs();
+    this._setUiVisible(false);
   },
 
   getStoredCount: function () {
