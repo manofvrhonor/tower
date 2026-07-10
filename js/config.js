@@ -1164,6 +1164,26 @@ const CONFIG = {
     // Смещение панели на камере (boot/start поверх чёрного veil).
     cameraZ: -0.65,
     cameraY: 0,
+    // Start comic после кнопки Start (comic-slides, sequence start).
+    // preamble sparks → карточка из пояса → hold+sway → улёт вдаль → следующая.
+    startAnim: {
+      sparksMs: 2000,
+      flyInMs: 1000,
+      holdMs: 7000,
+      flyOutMs: 900,
+      startScale: 0.08,
+      arcRotZ: -18,
+      arcRotY: 12,
+      spinTurns: 0.35,
+      waistY: 0.95,
+      flyOutDist: 2.4,
+      flyOutScale: 0.04,
+      swayRotX: 2.5,
+      swayRotY: 3.5,
+      swayRotZ: 2,
+      swayPosX: 0.008,
+      swayPosY: 0.006,
+    },
     // Boot-интро до меню (boot-intro.js). Таймлайн суммарно ~9 с.
     // 0–2 dark → 2–7 sparks → bg → sphere → logo+sway → hold → menu.
     // Без flash / darkOut — сразу в меню (искры остаются).
@@ -1309,7 +1329,8 @@ const CONFIG = {
       },
       start: {
         folder: 'assets/ui/comic/start/',
-        files: ['01.png', '02.png', '03.png'],
+        files: ['01.png', '02.png', '03.png', '04.png', '05.png', '06.png', '07.png'],
+        animated: true,
       },
       travelPresentPast: {
         folder: 'assets/ui/comic/travel/present_to_past/',

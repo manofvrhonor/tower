@@ -828,8 +828,7 @@ AFRAME.registerComponent('game-menu', {
     this._startFinished = false;
     this._disableDesktopCursor();
     if (this._root) this._root.setAttribute('visible', false);
-    var vfx = this._getBackdropVfx();
-    if (vfx) vfx.setMenuActive(false);
+    // Искры гасит comic-slides после start-анимации (не здесь).
 
     var self = this;
     var veil = this._getVeil();
@@ -854,17 +853,29 @@ AFRAME.registerComponent('game-menu', {
     var comic = this.el.sceneEl && this.el.sceneEl.components['comic-slides'];
     if (comic && typeof comic.playSequence === 'function') {
       comic.playSequence('start', afterComics);
-      // Запасной выход, если слайды зависли.
       setTimeout(function () {
         if (!self._startFinished) {
           console.warn('[game-menu] start comics timeout → force finish');
           if (comic && comic.isShowing && comic.isShowing()) comic.hide(true);
           finish();
         }
-      }, ((CONFIG.comic && CONFIG.comic.slideDurationMs) || 8000) * 4 + 2000);
+      }, self._startComicsTimeoutMs());
     } else {
       afterComics();
     }
+  },
+
+  /** sparks + N×(flyIn+hold+flyOut) + запас. */
+  _startComicsTimeoutMs: function () {
+    var comic = (typeof CONFIG !== 'undefined' && CONFIG.comic) || {};
+    var anim = comic.startAnim || {};
+    var files = (comic.sequences && comic.sequences.start && comic.sequences.start.files) || [];
+    var n = files.length || 6;
+    var sparks = anim.sparksMs !== undefined ? anim.sparksMs : 2000;
+    var flyIn = anim.flyInMs !== undefined ? anim.flyInMs : 1000;
+    var hold = anim.holdMs !== undefined ? anim.holdMs : 7000;
+    var flyOut = anim.flyOutMs !== undefined ? anim.flyOutMs : 900;
+    return sparks + n * (flyIn + hold + flyOut) + 5000;
   },
 
   /** После boot-intro — показать меню сложности. */

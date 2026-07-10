@@ -8,21 +8,19 @@ alwaysApply: true
 
 # CURRENT_TASK.md — Текущая задача
 
-## Задача: Start comic-карточки
+## Задача: PNG эпох / QA
 
-**Статус:** с.77 закрыта — boot + кнопка restart в меню. Дальше: start.
+**Статус:** с.78 закрыта — start comic ✅ (7 кадров, сцена ок). Дальше: PNG эпох.
 
 ### Working Context
 
-- Boot ✅ (с.74–77): `boot-intro` + `boot-energy-sphere` + restart из меню.
-- Меню: `icon_restart_on/off` слева от шестерёнки → `boot-intro.replayIntro()`.
-- comic-slides: sequences `start` / travel / victory — нужна доработка **start**-карточек.
+- Start comic ✅: sparks → 7 PNG из пояса, cross без паузы, trigger скип.
+- `CONFIG.comic.startAnim` + `sequences.start` 01–07.
 
 ### Чек-лист
 
-1. [ ] Start comic-карточки (арт / таймлайн / интеграция)
-2. [ ] PNG эпох 300×90 (если ещё не заменены)
-3. [ ] Quest QA jump+victory / boot (по желанию)
+1. [ ] PNG эпох 300×90 (если ещё не заменены)
+2. [ ] Quest QA jump/victory/boot/start (по желанию)
 
 ### Не трогать без запроса
 
@@ -32,3 +30,4 @@ alwaysApply: true
 - Метод comic/boot не называть `play()` (lifecycle A-Frame).
 - 3D-сфера + clip/mask для boot-орба (с.74).
 - Рост орба через scale entity с R>1 заранее (с.75 — только `setOrbRadius`).
+- Пауза между улётом и влётом start-карточек (с.78).

@@ -45,6 +45,7 @@
 | boot polish sway / UV-radius / no flash | 75 | setOrbRadius; не scale entity с R>1 заранее |
 | boot back-cards, sparks 5s, sway fade | 76 | depthWrite основной; start 90°; L↑ R↓ drift |
 | menu restart boot button | 77 | icon_restart; replayIntro; слева от gear |
+| start comic anim waist→slot, 7 PNG | 78 | startAnim; cross flyOut+flyIn; не пауза между кадрами |
 
 ## Хронология (одной строкой)
 
@@ -79,7 +80,8 @@
 | 75 | ✅ | boot polish: sway bg/logo, орб UV-radius×1.15, без flash/darkOut, hold 4с |
 | 76 | ✅ | boot back-cards + depth/delays/sway; sparks 5с — **boot закрыт** |
 | 77 | ✅ | кнопка restart boot в меню (слева от gear) |
-| → | — | **start comic-карточки**; PNG эпох; QA |
+| 78 | ✅ | start comic: sparks → 7 кадров из пояса, cross без паузы — сцена ок |
+| → | — | **PNG эпох 300×90**; Quest QA по желанию |
 
 ---
 
@@ -1672,3 +1674,32 @@
 
 1. **Start comic-карточки.**
 2. PNG эпох / Quest QA (по желанию).
+
+---
+
+## Сессия 78 — start comic анимация + 7 PNG ✅
+
+**Дата:** 2026-07-11
+
+### Сделано
+
+- После Start: тёмный veil + искры ~2 с → 7 карточек.
+- Анимация `startAnim`: вылет **от пояса** → слот + sway 7 с → улёт вдаль.
+- Смена кадров **без паузы**: улёт и влёт следующей параллельно (`_plane` + `_planeOut`).
+- Trigger / Space — скип кадра. Travel/victory без этой анимации.
+- Арт `assets/ui/comic/start/01–07.png`. Сцена ок (подтверждение пользователя).
+
+### Не трогать
+
+- Пауза между улётом и влётом следующей (с.78 — убрали специально).
+- `play()` на comic/boot; бита; canvas-текст travel/end.
+- 3D-сфера + clip/mask boot-орба; рост орба через scale entity (с.74–75).
+
+### Файлы
+
+`comic-slides.js`, `game-menu.js`, `config.js`, `assets/ui/comic/start/`, `CURRENT_TASK.md`, `PROJECT_LOG*.md`, `PROJECT_START.md`.
+
+### Следующая сессия
+
+1. PNG эпох 300×90 (если ещё не заменены).
+2. Quest QA jump/victory/boot/start (по желанию).
