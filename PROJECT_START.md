@@ -39,7 +39,7 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 ## Где мы
 
 - Этапы 0–8 (MVP) ✅. Стильная игра: Фазы **0–3 ✅** (outside-scenery, floor-fog, HDR sky).
-- **Сейчас:** **Фаза 5** (с.69–73: таймер, travel UI, hazardLevel, comic-slides). **Дальше:** арт comic / PNG эпох; QA jump+victory.
+- **Сейчас:** **Фаза 5** + **boot-intro** ✅ (с.74–76). **Дальше:** start comic-карточки; PNG эпох; QA.
 - **Дальше:** [мастер-план](.cursor/plans/tower_stylish_game_c39f4c3b.plan.md) → Фаза 5 / 6.
 - Мастер-план: `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md`
 - **План Фазы 4:** `.cursor/plans/phase4_locations.plan.md`
@@ -121,6 +121,9 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 | 71 | Wrist home/gear, always-open, Quest crash fix, menu ×2 ✅ | travel-ui, wrist-travel-remote, config, aaf467c |
 | 72 | hazardLevel → число/скорость шаров, Quest QA ✅ | ball-wave-manager, red-ball, config |
 | 73 | comic-slides boot/start/travel/victory + hazardLevel + marker | comic-slides, game-menu, assets/ui/comic |
+| 74 | boot-intro + UV-орб в рамке комикса (Phase Collapse) | boot-intro, boot-energy-sphere, config |
+| 75 | boot polish: sway, орб UV-radius, без flash/darkOut | boot-intro, boot-energy-sphere, config |
+| 76 | boot back-cards + polish (depth, delays, sway fade) | boot-intro, config, boot/logo assets |
 
 ---
 
@@ -167,6 +170,8 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 - ❌ Canvas/текст-оверлей поверх PNG-кнопок travel/end — двойной текст (с.70)
 - ❌ Comic-кадры внутри travel-меню — только преамбула до меню (с.70)
 - ❌ Называть API `comic-slides` методом `play()` — lifecycle A-Frame (с.73 → `playSequence`)
+- ❌ Boot-орб как 3D ShaderMaterial-сфера + clippingPlanes/matrix-mask «в рамку комикса» — не режет; **→ плоскость = размер комикса + круг в UV** (`boot-energy-sphere`, с.74)
+- ❌ Рост boot-орба через `scale` entity при R>1 заранее — круг сразу «срезан»; **→ `setOrbRadius` в UV** (полный круг пока R≤1, обрезка у края картинки, с.75)
 - ❌ Пересоздавать travel PNG-плоскости / `texture.dispose()` на каждый open/close — Quest Link crash (с.71)
 
 **Сборка / машина (Фаза 3.5B, с.57 ADR-24):**

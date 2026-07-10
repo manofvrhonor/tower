@@ -41,6 +41,9 @@
 | wrist home/gear, always-open, Quest Link crash fix | 71 | reuse textures; menu ×2 VR; commit aaf467c |
 | hazardLevel balls count/speed, travel restart | 72 | hazardByLevel; Quest QA ✅ |
 | comic-slides boot/start/jump/victory, marker X | 73 | slideDurationMs; не play(); светлые stubs |
+| boot-intro, boot-energy-sphere UV-orb | 74 | не 3D clip/mask; плоскость=комикс; Phase Collapse |
+| boot polish sway / UV-radius / no flash | 75 | setOrbRadius; не scale entity с R>1 заранее |
+| boot back-cards, sparks 5s, sway fade | 76 | depthWrite основной; start 90°; L↑ R↓ drift |
 
 ## Хронология (одной строкой)
 
@@ -71,7 +74,10 @@
 | 71 | ✅ | Wrist home/gear/confirm, always-open, Quest Link crash fix, menu ×2 |
 | 72 | ✅ | hazardLevel → число/скорость шаров; restart волн на travel |
 | 73 | ✅ | comic-slides (boot/start/travel/victory) + marker «вы тут» + hazardLevel |
-| → | — | **hazardLevel → шары** (Фаза 5); comic-преамбула travel |
+| 74 | ✅ | boot-intro: dark→sparks→комикс+UV-орб→лого→flash→меню |
+| 75 | ✅ | boot polish: sway bg/logo, орб UV-radius×1.15, без flash/darkOut, hold 4с |
+| 76 | ✅ | boot back-cards + depth/delays/sway; sparks 5с — **boot закрыт** |
+| → | — | **start comic-карточки**; PNG эпох; QA |
 
 ---
 
@@ -1554,3 +1560,92 @@
 2. Quest QA jump + victory comics.
 
 **Commit сессии:** `95203e0`
+
+---
+
+## Сессия 74 — boot-intro (до меню) ✅
+
+**Дата:** 2026-07-10
+
+### Сделано
+
+- **boot-intro.js:** таймлайн dark 2с → sparks fade → `logo_bg` (влет ×2 медленнее, 2 оборота Z) → charge → logo `01` scale → hold → flash → dark → `game-menu.showFromBoot()`.
+- **Скип:** trigger / Space / Enter / click.
+- **boot-energy-sphere.js:** отдельный материал; **орб = плоскость размера комикса + круг в UV** (вписан в высоту панели). Child комикса + логотип — крутятся вместе со влётом.
+- **Не сработало (откат подхода):** matrix-mask и `clippingPlanes` на 3D ShaderMaterial-сфере — визуально не резали за рамку.
+- **comic-slides:** автостарт bootLogo/bootStory убран (boot ведёт `boot-intro`).
+- **menu-backdrop-vfx:** старт тёмный + `fadeMenuSparks`.
+- Название на титуле: **Phase Collapse** (арт `boot/logo/`).
+
+### Не трогать
+
+- Возвращать 3D-сферу + clip/mask «как купол» без явного запроса — уже пробовали, не режет.
+- `play()` на comic/boot компонентах (A-Frame lifecycle).
+- Бита; canvas-текст travel/end.
+
+### Файлы
+
+`boot-intro.js`, `boot-energy-sphere.js`, `comic-slides.js`, `menu-backdrop-vfx.js`, `game-menu.js`, `config.js`, `index.html`, `assets/ui/comic/boot/logo/`, `CURRENT_TASK.md`, `PROJECT_LOG*.md`, `PROJECT_START.md`.
+
+### Следующая сессия
+
+1. Доработка / polish boot-intro (тайминги, вид орба, QA).
+2. По желанию: арт comic / PNG эпох; Quest QA jump+victory.
+
+---
+
+## Сессия 75 — boot polish ✅
+
+**Дата:** 2026-07-10
+
+### Сделано
+
+- Таймлайн без **flash** / **darkOut** → сразу меню; hold **4 с**.
+- Bg: влёт scale+Z+1 оборот + тихое sway; лого: scale + 3D sway.
+- Орб: появляется за 1 с до конца влёта фона; рост через **`setOrbRadius`** (0 → `circleRadius×1.15`).
+- Пока R≤1 — полный круг; обрезка только у края картинки. Узор мягче (меньше сетки `bandArms`).
+- Принципы анимации: ease, arcs, overshoot, follow-through, secondary action.
+
+### Не трогать
+
+- Рост орба через `scale` entity при заранее R>1 (сразу «срезанный» круг).
+- 3D-сфера + clip/mask (с.74).
+- `play()` на comic/boot; бита; canvas-текст travel/end.
+
+### Файлы
+
+`boot-intro.js`, `boot-energy-sphere.js`, `config.js`, `CURRENT_TASK.md`, `PROJECT_LOG*.md`, `PROJECT_START.md`.
+
+### Следующая сессия
+
+1. PNG эпох 300×90 / арт comic.
+2. Quest QA jump + victory (и boot по желанию).
+
+---
+
+## Сессия 76 — boot back-cards + финальный polish ✅
+
+**Дата:** 2026-07-10
+
+### Сделано
+
+- Задние карточки `logo_bg_back` / `logo_bg_back2`: влёт из центра (+1 м Z), старт 90°, разъезд на половинки, L выше / R ниже.
+- Задержки: L +0.5 с, R +1 с; без полного spin; после прилёта sway + дрейф L↑/R↓ с fade-in (без рывка).
+- Основной: `depthWrite` — задние не просвечивают; лого `depthTest: false`.
+- Орб: `setOrbRadius` 0→×1.15; sparks **5 с**; hold 4 с; без flash/darkOut.
+- Boot polish закрыт.
+
+### Не трогать
+
+- Рост орба через `scale` entity при R>1 заранее (с.75).
+- 3D-сфера + clip/mask (с.74).
+- `play()` на comic/boot; бита; canvas-текст travel/end.
+
+### Файлы
+
+`boot-intro.js`, `boot-energy-sphere.js`, `config.js`, `index.html`, `assets/ui/comic/boot/logo/`, `comic-slides.js`, `game-menu.js`, `menu-backdrop-vfx.js`, `CURRENT_TASK.md`, `PROJECT_LOG*.md`, `PROJECT_START.md`.
+
+### Следующая сессия
+
+1. **Start comic-карточки.**
+2. PNG эпох / Quest QA (по желанию).

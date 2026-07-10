@@ -1,11 +1,12 @@
 /* global AFRAME, CONFIG, THREE */
 
 /**
- * comic-slides — PNG-слайды (boot / start / travel / victory).
+ * comic-slides — PNG-слайды (start / travel / victory).
  *
  * CONFIG.comic.slideDurationMs — единое время смены.
  * sequences[].files — список PNG в папке (01.png…).
  * API: playSequence(id, onDone), playSequenceChain([ids], onDone).
+ * Boot до меню — boot-intro.js (не этот компонент).
  * Плоскость в мире как game-menu (не на камере). Не называть метод play().
  */
 AFRAME.registerComponent('comic-slides', {
@@ -21,7 +22,6 @@ AFRAME.registerComponent('comic-slides', {
     this._plane = null;
     this._handEls = [];
     this._ignoreTriggerUntil = 0;
-    this._bootDone = false;
     this._chain = null;
     this._chainIdx = 0;
     this._renderOrder = 55;
@@ -34,25 +34,6 @@ AFRAME.registerComponent('comic-slides', {
     this._exposeApi();
 
     this.el.sceneEl.addEventListener('return-to-menu', this._onCancel);
-
-    var self = this;
-    var startBoot = function () {
-      if (self._bootDone) return;
-      self._bootDone = true;
-      console.log('[comic-slides] boot start');
-      self.playSequenceChain(['bootLogo', 'bootStory'], function () {
-        console.log('[comic-slides] boot done → menu');
-        var menu = self.el.sceneEl.components['game-menu'];
-        if (menu && typeof menu.showFromBoot === 'function') menu.showFromBoot();
-      });
-    };
-
-    if (this.el.sceneEl.hasLoaded) setTimeout(startBoot, 200);
-    else {
-      this.el.sceneEl.addEventListener('loaded', function () {
-        setTimeout(startBoot, 200);
-      });
-    }
   },
 
   remove: function () {

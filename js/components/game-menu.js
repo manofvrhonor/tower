@@ -20,7 +20,7 @@ AFRAME.registerComponent('game-menu', {
     this.carouselCfg = this.cfg.carousel || {};
     this.startCfg = this.cfg.startBtn || {};
     this.gearCfg = this.cfg.gearBtn || {};
-    // Скрыто до конца boot-comic (logo → story); showFromBoot() открывает.
+    // Скрыто до конца boot-intro; showFromBoot() открывает.
     this._visible = false;
     this._starting = false;
     this._pulseT = 0;
@@ -847,10 +847,10 @@ AFRAME.registerComponent('game-menu', {
     }
   },
 
-  /** После boot logo+story — показать меню сложности. */
+  /** После boot-intro — показать меню сложности. */
   showFromBoot: function () {
     this._show();
-    console.log('[game-menu] show after boot comic');
+    console.log('[game-menu] show after boot intro');
   },
 
   _hide: function () {

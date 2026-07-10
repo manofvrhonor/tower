@@ -1164,8 +1164,141 @@ const CONFIG = {
     // Смещение панели на камере (boot/start поверх чёрного veil).
     cameraZ: -0.65,
     cameraY: 0,
+    // Boot-интро до меню (boot-intro.js). Таймлайн суммарно ~9 с.
+    // 0–2 dark → 2–7 sparks → bg → sphere → logo+sway → hold → menu.
+    // Без flash / darkOut — сразу в меню (искры остаются).
+    boot: {
+      folder: 'assets/ui/comic/boot/logo/',
+      bgFile: 'logo_bg.png',
+      logoFile: '01.png',
+      darkMs: 2000,
+      sparksFadeMs: 5000,
+      bgFlyMs: 2000,
+      sphereChargeMs: 1000,
+      logoScaleMs: 1000,
+      holdMs: 4000,
+      panelWidth: 2.40,
+      panelHeight: 1.60,
+      logoWidth: 1.35,
+      logoHeight: 1.35,
+      // Орб = плоскость размера панели; круг вписан в высоту (не вылезает за комикс).
+      sphereRadius: 0.80,
+      sphereZ: 0.03,
+      // Орб: mesh всегда = панель; растёт радиус в UV (0 → circleRadius*orbScale).
+      // Пока R≤1 — полный круг; R>1 — обрезается краем картинки.
+      sphereStartScale: 0,
+      sphereOrbScale: 1.15,
+      sphereAppearEarlyMs: 1000,
+      logoZ: 0.04,
+      // Комикс: из центра, scale + дуга + обороты вокруг Z + лёгкий Z-влет.
+      bgStartScale: 0.08,
+      bgStartZ: 0.35,
+      bgArcRotZ: -22,
+      bgArcRotY: 14,
+      bgSpinTurns: 1,
+      // Задние комиксы (слева/справа, 70%, торчат половинки).
+      bgBackFile: 'logo_bg_back.png',
+      bgBackFile2: 'logo_bg_back2.png',
+      bgBackScale: 0.84,
+      bgBackZ: -0.06,
+      // Старт на 1 м дальше основного по Z; к концу — разъезд + лёгкий угол (L выше, R ниже).
+      bgBackStartZExtra: 1.0,
+      bgBackEndYL: 0.18,
+      bgBackEndYR: -0.18,
+      bgBackEndRotXL: -8,
+      bgBackEndRotXR: 8,
+      bgBackEndRotYL: 12,
+      bgBackEndRotYR: -12,
+      bgBackEndRotZL: 6,
+      bgBackEndRotZR: -6,
+      // Старт ребром (90°), небольшой проворот к финальному углу.
+      bgBackStartRotYL: 90,
+      bgBackStartRotYR: -90,
+      // Задержка влёта относительно основного.
+      bgBackDelayLMs: 500,
+      bgBackDelayRMs: 1000,
+      bgBackSwayRotX: 4.5,
+      bgBackSwayRotY: 6,
+      bgBackSwayRotZ: 3.5,
+      bgBackSwayPosX: 0.014,
+      bgBackSwayPosY: 0.02,
+      // Медленный дрейф после прилёта: L вверх, R вниз (м/с, потолок).
+      bgBackDriftSpeed: 0.035,
+      bgBackDriftMax: 0.16,
+      // Плавный вход в качку после прилёта (мс) — без рывка.
+      bgBackSwayFadeMs: 700,
+      // Тихое покачивание комикса после/к концу влёта (градусы / метры).
+      bgSwayRotX: 2.5,
+      bgSwayRotY: 3.5,
+      bgSwayRotZ: 2,
+      bgSwayPosX: 0.008,
+      bgSwayPosY: 0.006,
+      // Покачивание лого после влёта (градусы / метры).
+      logoSwayRotX: 7,
+      logoSwayRotY: 10,
+      logoSwayRotZ: 5,
+      logoSwayPosX: 0.012,
+      logoSwayPosY: 0.01,
+      /**
+       * Материал boot-energy-sphere (только boot-intro).
+       *
+       * Слои шейдера:
+       * - color / glowColor / coreColor — база лент, свечение, ядро/вспышки
+       * - baseOpacity — общий множитель прозрачности
+       * - voidOpacity — «пустые» зоны между лентами (ниже = контрастнее)
+       * - bandOpacity — непрозрачность плазменных лент
+       * - coreGlow — сила мягкого ядра (fbm)
+       * - noiseScale — масштаб шума по сфере
+       * - scrollSpeed — скорость течения узора
+       * - bandArms — число «рук»/лент по окружности
+       * - bandSharpness — острота лент (выше = тоньше/резче)
+       * - bandContrast — контраст ridged-шума лент
+       * - flowWarp — искажение потока (турбулентность)
+       * - fresnelPower / fresnelStrength — светящийся обод
+       * - rimSoft — ширина размытия обода (выше = мягче край)
+       * - edgeFade — насколько гасится жёсткий силуэт (0..1)
+       * - maskSoft — мягкая обрезка по рамке комикса (метры)
+       * - maskCropY / maskCropX — резать сверху-снизу / по бокам
+       * - sparkleStrength / sparkleScale — редкие вспышки в шейдере
+       * - energyTint — насколько glow вмешивается в цвет лент
+       * Пульс яркости/скорости дополнительно крутит boot-intro через
+       * setIntensity / setPulseDrive (не эти поля).
+       */
+      sphere: {
+        color: '#0ec8e8',
+        glowColor: '#9effff',
+        coreColor: '#ffffff',
+        baseOpacity: 0.88,
+        voidOpacity: 0.10,
+        bandOpacity: 0.82,
+        coreGlow: 1.55,
+        // Крупнее шум + сильнее warp → меньше «сетки», больше плазмы.
+        noiseScale: 2.2,
+        scrollSpeed: 0.9,
+        bandArms: 2.2,
+        bandSharpness: 1.25,
+        bandContrast: 1.35,
+        flowWarp: 1.45,
+        fresnelPower: 2.2,
+        fresnelStrength: 1.15,
+        rimSoft: 0.62,
+        edgeFade: 0.72,
+        // Круг в UV: 1 = касается верха/низа. Финал = circleRadius * sphereOrbScale.
+        circleRadius: 0.98,
+        maskSoft: 0.08,
+        maskCropY: true,
+        maskCropX: true,
+        sparkleStrength: 0.28,
+        sparkleScale: 14.0,
+        energyTint: 0.88,
+        widthSegments: 48,
+        heightSegments: 32,
+        renderOrder: 56,
+      },
+    },
     sequences: {
       // files[] — явный список (без 404-проб). Можно дописать 04.png и т.д.
+      // bootLogo/bootStory — не автостарт; boot-intro использует folder/bg/logo напрямую.
       bootLogo: {
         folder: 'assets/ui/comic/boot/logo/',
         files: ['01.png'],

@@ -59,6 +59,14 @@ AFRAME.registerComponent('assembly-sphere-visual', {
       v = tv;
       shape = this.data.shape || tv.shape || 'cylinder';
       height = tv.height !== undefined ? tv.height : 0.045;
+    } else if (preset === 'boot') {
+      var boot = (typeof CONFIG !== 'undefined' && CONFIG.comic && CONFIG.comic.boot) || {};
+      var bv = boot.sphere || {};
+      R = this.data.radius > 0 ? this.data.radius
+        : (boot.sphereRadius !== undefined ? boot.sphereRadius : 0.16);
+      v = bv;
+      shape = this.data.shape || 'sphere';
+      height = R * 2;
     } else if (this.data.radius > 0) {
       R = this.data.radius;
     }

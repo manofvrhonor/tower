@@ -8,26 +8,28 @@ alwaysApply: true
 
 # CURRENT_TASK.md — Текущая задача
 
-## Задача: (следующая)
+## Задача: Start comic-карточки
 
-**Статус:** с.73 закрыта — hazardLevel + comic-slides (boot/start/travel/victory).
+**Статус:** с.76 закрыта — boot polish + задние карточки. Дальше: start.
 
 ### Working Context
 
-- hazardLevel → шары ✅ (с.72–73).
-- Comic: `comic-slides.js` + `CONFIG.comic.slideDurationMs`; PNG в `assets/ui/comic/`.
-- Маркер «вы тут» ездит по X над текущей эпохой ✅.
-- Quest QA comic/start — частично (светлые stubs); полный прогон travel/victory — по желанию.
+- Boot ✅ (с.74–76): `boot-intro` + `boot-energy-sphere`.
+- Поток: dark → sparks 5с → bg + backL/R → орб UV-radius → logo+sway → hold → меню.
+- Задние: `logo_bg_back` / `logo_bg_back2`, 84%, старт 90°, дрейф L↑/R↓, depthWrite у основного.
+- comic-slides: sequences `start` / travel / victory уже есть; нужна доработка **start**-карточек.
 
-### Чек-лист (следующая сессия)
+### Чек-лист
 
-1. [ ] PNG эпох 300×90 (если ещё не заменены)
-2. [ ] Арт вместо stub comic (по папкам `assets/ui/comic/`)
-3. [ ] Quest QA: jump comics + victory comics
+1. [ ] Start comic-карточки (арт / таймлайн / интеграция)
+2. [ ] PNG эпох 300×90 (если ещё не заменены)
+3. [ ] Quest QA jump+victory / boot (по желанию)
 
 ### Не трогать без запроса
 
 - Бита / `ball-bat` (выключена).
 - Canvas-текст поверх PNG-кнопок travel/end.
 - Пересоздание travel PNG на каждый open/close (с.71).
-- Метод компонента comic не называть `play()` (lifecycle A-Frame).
+- Метод comic/boot не называть `play()` (lifecycle A-Frame).
+- 3D-сфера + clip/mask для boot-орба (с.74).
+- Рост орба через scale entity с R>1 заранее (с.75 — только `setOrbRadius`).

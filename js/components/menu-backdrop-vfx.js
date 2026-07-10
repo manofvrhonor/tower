@@ -19,6 +19,8 @@ AFRAME.registerComponent('menu-backdrop-vfx', {
     this._explodeCb = null;
     this._travelOrbitCb = null;
     this._sparks = [];
+    this._opacityMult = 1;
+    this._fade = null;
     this._center = new THREE.Vector3(0, 1.6, 0);
     this._tmp = new THREE.Vector3();
     this._root = new THREE.Group();
@@ -36,7 +38,8 @@ AFRAME.registerComponent('menu-backdrop-vfx', {
 
     this.el.sceneEl.object3D.add(this._root);
     this._buildSparks();
-    this.setMenuActive(true);
+    // Старт тёмный — boot-intro сам fade-in; меню включает через setMenuActive.
+    this.setMenuActive(false);
   },
 
   remove: function () {
@@ -49,9 +52,37 @@ AFRAME.registerComponent('menu-backdrop-vfx', {
 
   setMenuActive: function (on) {
     if (on) this.stopTravelOrbit();
+    this._fade = null;
     this._active = !!on && !this._exploding && !this._travelOrbit;
     this._root.visible = this._active;
-    if (this._active) this._resetSparkPositions();
+    if (this._active) {
+      this._opacityMult = 1;
+      this._resetSparkPositions();
+    } else {
+      this._opacityMult = 0;
+    }
+  },
+
+  /** Плавное появление/гашение искр (boot-intro). on=true → орбита + fade. */
+  fadeMenuSparks: function (toOpacity, durationMs, callback) {
+    var to = Math.max(0, Math.min(1, toOpacity !== undefined ? toOpacity : 1));
+    var dur = (durationMs !== undefined ? durationMs : 2000) / 1000;
+    if (to > 0.01) {
+      this.stopTravelOrbit();
+      this._exploding = false;
+      if (!this._active) {
+        this._active = true;
+        this._root.visible = true;
+        this._resetSparkPositions();
+      }
+    }
+    this._fade = {
+      from: this._opacityMult,
+      to: to,
+      t: 0,
+      dur: Math.max(0.05, dur),
+      cb: callback || null,
+    };
   },
 
   playStartTransition: function (callback, durationMs) {
@@ -131,6 +162,7 @@ AFRAME.registerComponent('menu-backdrop-vfx', {
 
   tick: function (time, delta) {
     var dt = (delta || 16) / 1000;
+    if (this._fade) this._tickFade(dt);
     if (this._exploding) {
       this._tickExplode(dt);
       return;
@@ -141,6 +173,22 @@ AFRAME.registerComponent('menu-backdrop-vfx', {
     }
     if (!this._active) return;
     this._tickOrbit(dt, time);
+  },
+
+  _tickFade: function (dt) {
+    var f = this._fade;
+    if (!f) return;
+    f.t += dt;
+    var u = Math.min(1, f.t / f.dur);
+    this._opacityMult = f.from + (f.to - f.from) * u;
+    if (u < 1) return;
+    this._fade = null;
+    this._opacityMult = f.to;
+    if (f.to <= 0.01) {
+      this._active = false;
+      this._root.visible = false;
+    }
+    if (f.cb) f.cb();
   },
 
   _cameraWorldPos: function (out) {
@@ -292,12 +340,13 @@ AFRAME.registerComponent('menu-backdrop-vfx', {
 
   _tickOrbit: function (dt, time) {
     var t = time * 0.001;
+    var mult = this._opacityMult !== undefined ? this._opacityMult : 1;
     var i;
     for (i = 0; i < this._sparks.length; i++) {
       var s = this._sparks[i];
       s.angle += s.angSpeed * dt;
       this._placeOrbit(s, t);
-      s.sprite.material.opacity = 0.4 + 0.4 * Math.sin(t * 2.2 + s.twPhase);
+      s.sprite.material.opacity = mult * (0.4 + 0.4 * Math.sin(t * 2.2 + s.twPhase));
     }
   },
 
