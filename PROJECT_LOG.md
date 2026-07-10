@@ -569,7 +569,7 @@ ADR-16; мгновенный scale ломал slo-mo/realtime ветки.
 
 - **MVP ✅** (с.29–31): меню, сложность, купол R=2 m, Quest-прогон без блокеров.
 - **Стильная игра:** Фазы 0–3 ✅, **3.5B ✅** `ba9ecdd`.
-- **Сейчас:** **Фаза 5** (с.69 таймер ✅; с.70–71 travel PNG + wrist home/gear, always-open, Quest crash fix ✅). **Дальше:** hazardLevel → шары; comic-преамбула travel.
+- **Сейчас:** **Фаза 5** (с.69–73: таймер, travel, hazardLevel, comic-slides). **Дальше:** арт comic / PNG эпох.
 - **Дальше:** `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md` (Фаза 5).
 - **Не делаем:** VR-виньетка slo-mo. **Пропускаем:** захват «отлёт при тряске» (с.29).
 - **Тест:** Quest Link + localhost.

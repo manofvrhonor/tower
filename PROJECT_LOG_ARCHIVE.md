@@ -39,6 +39,8 @@
 | loop-timer, defeat UI, wrist hide in menu | 69 | M:SS:CC; duration 3:00; Quest QA ✅ |
 | travel PNG timeline, end panels, no text overlay | 70 | comic не в меню; подписи только в PNG |
 | wrist home/gear, always-open, Quest Link crash fix | 71 | reuse textures; menu ×2 VR; commit aaf467c |
+| hazardLevel balls count/speed, travel restart | 72 | hazardByLevel; Quest QA ✅ |
+| comic-slides boot/start/jump/victory, marker X | 73 | slideDurationMs; не play(); светлые stubs |
 
 ## Хронология (одной строкой)
 
@@ -67,6 +69,8 @@
 | 69 | ✅ | Таймер петли + DEFEAT + wrist hide в меню — Quest QA |
 | 70 | ✅ | PNG end/travel меню: таймлайн, без text-overlay; comic — преамбула позже |
 | 71 | ✅ | Wrist home/gear/confirm, always-open, Quest Link crash fix, menu ×2 |
+| 72 | ✅ | hazardLevel → число/скорость шаров; restart волн на travel |
+| 73 | ✅ | comic-slides (boot/start/travel/victory) + marker «вы тут» + hazardLevel |
 | → | — | **hazardLevel → шары** (Фаза 5); comic-преамбула travel |
 
 ---
@@ -1491,3 +1495,60 @@
 3. PNG эпох 300×90 (если ещё не заменены).
 
 **Commit сессии:** `aaf467c`
+
+---
+
+## Сессия 72 — hazardLevel → число/скорость шаров ✅
+
+**Дата:** 2026-07-10
+
+### Сделано
+
+- **`CONFIG.balls.hazardByLevel`:** lvl 1/2/3 → countBonus 0/1/2, speedScale ×1.0/1.2/1.4.
+- **`ball-wave-manager`:** N = ballCount + bonus; float speed × scale; `dataset.waveSpeedScale`; на `location-changed` — restart пула.
+- **`red-ball`:** подлёт `incomingSpeed × waveSpeedScale`.
+- **Quest QA ✅** — Easy+present=1 / past=2 / future=3; future быстрее; travel без краша.
+
+### Не трогать
+
+- Бита — только по явному запросу.
+- Canvas-текст поверх PNG travel/end.
+- Пересоздавать travel PNG на каждый open/close.
+
+### Файлы
+
+`config.js`, `ball-wave-manager.js`, `red-ball.js`, `CURRENT_TASK.md`, `PROJECT_LOG*.md`, `PROJECT_START.md`.
+
+### Следующая сессия
+
+1. **Comic-преамбула → travel-меню.**
+2. PNG эпох 300×90 (если ещё не заменены).
+
+---
+
+## Сессия 73 — comic-slides + hazardLevel + marker ✅
+
+**Дата:** 2026-07-10
+
+### Сделано
+
+- **hazardLevel → шары:** `CONFIG.balls.hazardByLevel`; count/speed; restart волн на travel; Quest QA ✅ (с.72).
+- **comic-slides.js:** единый плеер; `CONFIG.comic.slideDurationMs`; sequences boot/start/travel/victory; не `play()` (A-Frame lifecycle).
+- **Поток:** logo → story → меню → Start → start-слайды → игра; travel-ready; jump present↔past/future; victory до плашки.
+- **PNG stubs:** `assets/ui/comic/**` (светлый фон, читаемо на чёрном veil).
+- **Маркер «вы тут»:** сдвиг только по X над текущей эпохой.
+- **Start:** после слайдов `veil.setMenuMode(false)` + `startGame` (без зависания reveal).
+
+### Не трогать
+
+- Называть API comic-компонента `play()` — ломает A-Frame.
+- Бита; canvas-текст на travel/end; dispose travel PNG на open/close.
+
+### Файлы
+
+`comic-slides.js`, `config.js`, `game-menu.js`, `travel-ui.js`, `victory-ui.js`, `ball-wave-manager.js`, `red-ball.js`, `index.html`, `assets/ui/comic/`, `CURRENT_TASK.md`, `PROJECT_LOG*.md`, `PROJECT_START.md`.
+
+### Следующая сессия
+
+1. PNG эпох 300×90 / арт comic.
+2. Quest QA jump + victory comics.

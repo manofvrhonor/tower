@@ -371,6 +371,14 @@ AFRAME.registerComponent('victory-ui', {
   },
 
   _onVictory: function () {
+    var self = this;
+    var comic = this.el.sceneEl && this.el.sceneEl.components['comic-slides'];
+    if (comic && typeof comic.playSequence === 'function') {
+      comic.playSequence('victory', function () {
+        self._showPanel('victory');
+      });
+      return;
+    }
     this._showPanel('victory');
   },
 

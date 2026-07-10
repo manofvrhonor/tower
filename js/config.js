@@ -625,6 +625,14 @@ const CONFIG = {
     speedMultiplierMin: 2.0,
     speedMultiplierMax: 3.0,
 
+    // Фаза 5: угроза по эпохе (location.hazardLevel).
+    // Число шаров = ballCount (сложность) + countBonus; скорость × speedScale.
+    hazardByLevel: {
+      1: { countBonus: 0, speedScale: 1.0 },
+      2: { countBonus: 1, speedScale: 1.2 },
+      3: { countBonus: 2, speedScale: 1.4 },
+    },
+
     linearDamping:  0.03,
     angularDamping: 0.05,
 
@@ -1145,6 +1153,58 @@ const CONFIG = {
     FLOAT_INSIDE: 9,
   },
 
+  // === Comic-слайды (единый плеер comic-slides.js) ===
+  // ВАЖНО: slideDurationMs — ОДНО место для времени смены ВСЕХ слайдов.
+  // Папки: 01.png, 02.png… подряд; сколько файлов по порядку — столько и показываем.
+  comic: {
+    slideDurationMs: 8000,
+    panelWidth: 2.40,
+    panelHeight: 1.60,
+    maxSlidesPerFolder: 20,
+    // Смещение панели на камере (boot/start поверх чёрного veil).
+    cameraZ: -0.65,
+    cameraY: 0,
+    sequences: {
+      // files[] — явный список (без 404-проб). Можно дописать 04.png и т.д.
+      bootLogo: {
+        folder: 'assets/ui/comic/boot/logo/',
+        files: ['01.png'],
+      },
+      bootStory: {
+        folder: 'assets/ui/comic/boot/story/',
+        files: ['01.png', '02.png', '03.png'],
+      },
+      start: {
+        folder: 'assets/ui/comic/start/',
+        files: ['01.png', '02.png', '03.png'],
+      },
+      travelPresentPast: {
+        folder: 'assets/ui/comic/travel/present_to_past/',
+        files: ['01.png', '02.png', '03.png'],
+      },
+      travelPastFuture: {
+        folder: 'assets/ui/comic/travel/past_to_future/',
+        files: ['01.png', '02.png', '03.png'],
+      },
+      travelReadyFirst: {
+        folder: 'assets/ui/comic/travel/ready_first/',
+        files: ['01.png', '02.png'],
+      },
+      travelReadyRebuilt: {
+        folder: 'assets/ui/comic/travel/ready_rebuilt/',
+        files: ['01.png', '02.png'],
+      },
+      victory: {
+        folder: 'assets/ui/comic/victory/',
+        files: ['01.png', '02.png', '03.png'],
+      },
+    },
+    travelRoutes: {
+      'present>past': 'travelPresentPast',
+      'past>future':  'travelPastFuture',
+    },
+  },
+
   // === Меню и режимы сложности (сессия 29) ===
   game: {
     defaultDifficulty: 'medium',
@@ -1475,8 +1535,9 @@ const CONFIG = {
       hubYMax: 1.15,
       hubBobAmp: 0.08,
     },
+
     // travel-ui.js — то же меню с пульта и после auto.
-    // Comic (first/rebuilt) — ОТДЕЛЬНАЯ преамбула ДО меню (ещё не подключена); в меню не входит.
+    // Comic travel-ready / jump — CONFIG.comic + comic-slides.js.
     // Размер панели = victory/defeat (1536×1024 → 1.20×0.80 м).
     ui: {
       handPressRadius: 0.18,

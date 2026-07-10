@@ -20,7 +20,8 @@ AFRAME.registerComponent('game-menu', {
     this.carouselCfg = this.cfg.carousel || {};
     this.startCfg = this.cfg.startBtn || {};
     this.gearCfg = this.cfg.gearBtn || {};
-    this._visible = true;
+    // Скрыто до конца boot-comic (logo → story); showFromBoot() открывает.
+    this._visible = false;
     this._starting = false;
     this._pulseT = 0;
     this._hoverPulseT = 0;
@@ -54,6 +55,7 @@ AFRAME.registerComponent('game-menu', {
 
   play: function () {
     this._facePlayer();
+    // Курсор / меню — только после boot (showFromBoot) или return-to-menu.
     if (this._visible && typeof window.enableDesktopUiCursor === 'function') {
       window.enableDesktopUiCursor();
     }
@@ -562,6 +564,7 @@ AFRAME.registerComponent('game-menu', {
     this._root = document.createElement('a-entity');
     this._root.setAttribute('id', 'game-menu-root');
     this._root.setAttribute('position', pos.x + ' ' + pos.y + ' ' + pos.z);
+    this._root.setAttribute('visible', false);
 
     this._carouselRoot = document.createElement('a-entity');
     this._carouselRoot.setAttribute('position', '0 ' + carouselY + ' 0');
@@ -802,34 +805,52 @@ AFRAME.registerComponent('game-menu', {
   _onStart: function () {
     if (!this._visible || this._starting) return;
     this._starting = true;
+    this._startFinished = false;
     this._disableDesktopCursor();
     if (this._root) this._root.setAttribute('visible', false);
+    var vfx = this._getBackdropVfx();
+    if (vfx) vfx.setMenuActive(false);
 
     var self = this;
-    var vfx = this._getBackdropVfx();
     var veil = this._getVeil();
 
     var finish = function () {
+      if (self._startFinished) return;
+      self._startFinished = true;
+      if (veil && typeof veil.setMenuMode === 'function') {
+        veil.setMenuMode(false);
+      }
       self._hide();
-      if (typeof window.startGame === 'function') {
-        window.startGame();
-      }
+      if (typeof window.startGame === 'function') window.startGame();
       self._starting = false;
+      console.log('[game-menu] → game started');
     };
 
-    var reveal = function () {
-      if (veil) {
-        veil.revealWorld(finish);
-      } else {
-        finish();
-      }
+    var afterComics = function () {
+      // Без revealWorld/explode — они давали вечный чёрный экран.
+      finish();
     };
 
-    if (vfx) {
-      vfx.playStartTransition(reveal);
+    var comic = this.el.sceneEl && this.el.sceneEl.components['comic-slides'];
+    if (comic && typeof comic.playSequence === 'function') {
+      comic.playSequence('start', afterComics);
+      // Запасной выход, если слайды зависли.
+      setTimeout(function () {
+        if (!self._startFinished) {
+          console.warn('[game-menu] start comics timeout → force finish');
+          if (comic && comic.isShowing && comic.isShowing()) comic.hide(true);
+          finish();
+        }
+      }, ((CONFIG.comic && CONFIG.comic.slideDurationMs) || 8000) * 4 + 2000);
     } else {
-      reveal();
+      afterComics();
     }
+  },
+
+  /** После boot logo+story — показать меню сложности. */
+  showFromBoot: function () {
+    this._show();
+    console.log('[game-menu] show after boot comic');
   },
 
   _hide: function () {

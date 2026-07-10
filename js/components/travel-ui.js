@@ -3,7 +3,9 @@
 /**
  * travel-ui — меню прыжка эпох (Фаза 4+).
  *
- * Одно меню: пульт и auto (после travel-ready). Comic-преамбула — отдельно, не здесь.
+ * Одно меню: пульт и auto (после travel-ready).
+ * Auto: comic-slides (travelReady*) → затем это меню. Пульт — сразу меню.
+ * Прыжок present→past / past→future: comic jump-папки между veil и travelTo.
  * Панель = размер victory/defeat. Таймлайн: Прошлое — Настоящее — Будущее.
  * Над текущей эпохой — маркер «вы тут». Внизу: домик | Закрыть | шестерёнка.
  * Домик → confirm → returnToMenu. Шестерёнка → wireframe (как game-menu).
@@ -132,6 +134,10 @@ AFRAME.registerComponent('travel-ui', {
 
   openMenu: function (opts) {
     if (!this._root || this._isBlocked()) return;
+    // Пульт во время comic — закрыть преамбулу и показать меню.
+    if (typeof window.isComicSlidesOpen === 'function' && window.isComicSlidesOpen()) {
+      if (typeof window.hideComicSlides === 'function') window.hideComicSlides();
+    }
     this._shown = true;
     this._nearBtn = null;
     this._nearHintLogged = false;
@@ -491,16 +497,13 @@ AFRAME.registerComponent('travel-ui', {
           },
         });
       })(info.id, eraEl, normalSrc, hoverSrc, enabled && !isCurrent);
-
-      if (isCurrent) {
-        var markerSrc = this._assetUrl(this.assets.hereMarker || 'marker_here.png');
-        var marker = this._makeImagePlane(markerSrc, markerW, markerH);
-        // По центру панели (не над кнопкой эпохи).
-        marker.setAttribute('position', '0 0 0.008');
-        this._contentRoot.appendChild(marker);
-        this._hereMarkerEl = marker;
-      }
     }
+
+    // Маркер «вы тут» — один раз; позицию ставим после регистрации кнопок.
+    var markerSrc = this._assetUrl(this.assets.hereMarker || 'marker_here.png');
+    var marker = this._makeImagePlane(markerSrc, markerW, markerH);
+    this._contentRoot.appendChild(marker);
+    this._hereMarkerEl = marker;
 
     var closeIdle = this._assetUrl(this.assets.closeIdle || 'btn_close_idle.png');
     var closeHover = this._assetUrl(this.assets.closeHover || 'btn_close_hover.png');
@@ -556,6 +559,7 @@ AFRAME.registerComponent('travel-ui', {
     });
 
     this._menuButtons = this._buttons.slice();
+    this._positionHereMarker();
   },
 
   /** Обновить состояния эпох без пересоздания plane/текстур. */
@@ -589,11 +593,40 @@ AFRAME.registerComponent('travel-ui', {
     }
 
     if (this._hereMarkerEl) {
-      this._hereMarkerEl.setAttribute('visible', true);
+      this._positionHereMarker();
     }
     this._refreshWireframeButton();
     this._buttons = this._menuButtons.slice();
     this._nearBtn = null;
+  },
+
+  /** Сдвинуть маркер «вы тут» по X над активной эпохой (Y как раньше — центр панели). */
+  _positionHereMarker: function () {
+    if (!this._hereMarkerEl) return;
+
+    var currentId = null;
+    if (typeof window.getActiveLocationId === 'function') {
+      currentId = window.getActiveLocationId();
+    }
+
+    var x = 0;
+    var found = false;
+    var i;
+    for (i = 0; i < this._menuButtons.length; i++) {
+      var entry = this._menuButtons[i];
+      if (entry.kind !== 'location' || !entry.locationId) continue;
+      if (entry.locationId !== currentId) continue;
+      var pos = entry.data.el.getAttribute('position');
+      if (pos) {
+        x = typeof pos === 'object' ? pos.x : parseFloat(String(pos).split(' ')[0]);
+        if (!isFinite(x)) x = 0;
+      }
+      found = true;
+      break;
+    }
+
+    this._hereMarkerEl.setAttribute('position', x + ' 0 0.008');
+    this._hereMarkerEl.setAttribute('visible', !!found);
   },
 
   _showConfirmExit: function () {
@@ -797,6 +830,8 @@ AFRAME.registerComponent('travel-ui', {
     var trans = this._getTravelTransition();
     var veil = this._getVeil();
     var vfx = this._getBackdropVfx();
+    var fromId = typeof window.getActiveLocationId === 'function'
+      ? window.getActiveLocationId() : null;
 
     var finishReveal = function () {
       self._busy = false;
@@ -813,7 +848,7 @@ AFRAME.registerComponent('travel-ui', {
       }
     };
 
-    var runSparks = function () {
+    var afterJumpComic = function () {
       if (vfx) {
         vfx.playTravelTransition(doTravel);
       } else {
@@ -821,10 +856,21 @@ AFRAME.registerComponent('travel-ui', {
       }
     };
 
+    var playJumpComic = function () {
+      var comic = self.el.sceneEl && self.el.sceneEl.components['comic-slides'];
+      var seqId = comic && typeof comic.sequenceForTravel === 'function'
+        ? comic.sequenceForTravel(fromId, destId) : null;
+      if (seqId && comic && typeof comic.playSequence === 'function') {
+        comic.playSequence(seqId, afterJumpComic);
+      } else {
+        afterJumpComic();
+      }
+    };
+
     if (veil) {
-      veil.coverWorld(runSparks, trans.coverDurationMs || 450);
+      veil.coverWorld(playJumpComic, trans.coverDurationMs || 450);
     } else {
-      runSparks();
+      playJumpComic();
     }
   },
 
@@ -846,11 +892,23 @@ AFRAME.registerComponent('travel-ui', {
   _onTravelReady: function (evt) {
     var d = evt.detail || {};
     this._nextHint = d.nextLocationId || null;
-    // Comic-преамбула (first/rebuilt) — отдельный шаг позже; сразу меню как с пульта.
-    this.openMenu({
+    var opts = {
       source: 'auto',
       nextLocationId: d.nextLocationId || null,
-    });
+    };
+    var self = this;
+    var comicKey = d.comicKey || 'first';
+    var seqId = comicKey === 'rebuilt' ? 'travelReadyRebuilt' : 'travelReadyFirst';
+    var comic = this.el.sceneEl && this.el.sceneEl.components['comic-slides'];
+    if (comic && typeof comic.playSequence === 'function') {
+      comic.playSequence(seqId, function () {
+        self.openMenu(opts);
+      });
+      console.log('[travel-ui] travel-ready — comic then menu',
+        '(next:', this._nextHint || '?', '| key:', comicKey, ')');
+      return;
+    }
+    this.openMenu(opts);
     console.log('[travel-ui] travel-ready — menu',
       '(next:', this._nextHint || '?', ')');
   },

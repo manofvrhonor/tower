@@ -51,6 +51,8 @@ AFRAME.registerComponent('red-ball', {
       } else {
         this._waveMode = false;
       }
+      var ss = parseFloat(this.el.dataset.waveSpeedScale);
+      this._waveSpeedScale = (isFinite(ss) && ss > 0) ? ss : 1;
       // Wave: старт с нулевого fade — догоним в первом tick по дистанции.
       this._fadeT = 0;
       this._applyFadeVisual(0);
@@ -88,6 +90,14 @@ AFRAME.registerComponent('red-ball', {
     var max = this.cfg.speedMultiplierMax !== undefined ? this.cfg.speedMultiplierMax : 3.0;
     if (max < min) { var t = min; min = max; max = t; }
     return min + Math.random() * (max - min);
+  },
+
+  /** Скорость подлёта волны × hazard speedScale (dataset от менеджера). */
+  _waveIncomingSpeed: function () {
+    var w = this.cfg.waves || {};
+    var base = w.incomingSpeed !== undefined ? w.incomingSpeed : 1.4;
+    var scale = this._waveSpeedScale !== undefined ? this._waveSpeedScale : 1;
+    return base * scale;
   },
 
   /** Новый цикл: случайно 0/1/2 пропуска отскока до разворота к куполу. */
@@ -770,8 +780,7 @@ AFRAME.registerComponent('red-ball', {
       if (this._waveMode) {
         // Волна: летим по прицелу к столу со скоростью подлёта (мировая, prev=1.0).
         dx = this._waveAim.x; dy = this._waveAim.y; dz = this._waveAim.z;
-        var w = cfg.waves || {};
-        sp = w.incomingSpeed !== undefined ? w.incomingSpeed : 1.4;
+        sp = this._waveIncomingSpeed();
       } else {
         var rnd = this._randomUnitVector();
         dx = rnd.x; dy = rnd.y; dz = rnd.z;
@@ -929,8 +938,7 @@ AFRAME.registerComponent('red-ball', {
     var dl = Math.sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z) || 1;
     dir.x /= dl; dir.y /= dl; dir.z /= dl;
 
-    var w = this.cfg.waves || {};
-    var sp = w.incomingSpeed !== undefined ? w.incomingSpeed : 1.4;
+    var sp = this._waveIncomingSpeed();
 
     try {
       rb.setLinearVelocity({ x: dir.x * sp, y: dir.y * sp, z: dir.z * sp }, false);

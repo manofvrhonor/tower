@@ -3,11 +3,11 @@
 /**
  * ball-wave-manager.js — Этап 6 «атомы времени» (волны угроз, вариант D).
  *
- * Менеджер пула красных шаров. Спавнит N (= CONFIG.balls.count, из сложности)
- * шаров ЗА туманом — на сфере радиуса waves.spawnRadius > fogDome.radius, в
- * случайном направлении от центра комнаты, с углом места из [pitchMin, pitchMax]
- * (чтобы атака шла сверху/сбоку, а не из-под пола). Каждому шару задаётся точка-цель
- * на сборке (стол) и направление подлёта с cone-разбросом — кладутся в dataset.
+ * Менеджер пула красных шаров. Спавнит N шаров ЗА туманом — на сфере
+ * радиуса waves.spawnRadius > fogDome.radius. N = ballCount (сложность)
+ * + hazardByLevel[location.hazardLevel].countBonus. Скорость float и
+ * подлёта × speedScale той же таблицы. При location-changed пул
+ * перезапускается под новую эпоху.
  *
  * При «выходе шара из игры» (улетел за despawnRadius / отбит наружу) red-ball шлёт
  * на сцену 'ball-retired' → менеджер удаляет шар и через respawnDelayMs спавнит
@@ -15,11 +15,6 @@
  *
  * Гейт: CONFIG.balls.waves.enabled. Если false — менеджер пассивен, шарами
  * управляет старый spawn-red-balls.js (выбор пути — в game-lifecycle.js).
- *
- * ⚠️ Поведение ПОДЛЁТА шара (использование dataset-прицела, состояния
- * incoming|active|retiring, отключение floorEscape/homing, деспавн, эмит
- * 'ball-retired') реализуется в red-ball.js — микро-шаг 3. Здесь только
- * размещение, учёт пула и респавн.
  *
  * window API: ballWaveManager { startWaves, stopWaves, spawnOne, getActiveCount }.
  */
@@ -39,11 +34,31 @@
     return !!wavesCfg().enabled;
   }
 
-  /** Сколько шаров держать активными: сложность (CONFIG.balls.count) → fallback waves.maxActive. */
+  /** Параметры угрозы текущей эпохи (fallback hazardLevel=1). */
+  function hazardParams() {
+    var balls = (typeof CONFIG !== 'undefined' && CONFIG.balls) || {};
+    var table = balls.hazardByLevel || {};
+    var level = 1;
+    if (typeof window.getActiveLocation === 'function') {
+      var loc = window.getActiveLocation();
+      if (loc && loc.hazardLevel !== undefined) level = loc.hazardLevel;
+    }
+    var row = table[level] || table[1] || {};
+    return {
+      level: level,
+      countBonus: row.countBonus !== undefined ? row.countBonus : 0,
+      speedScale: row.speedScale !== undefined ? row.speedScale : 1,
+    };
+  }
+
+  /** Сколько шаров держать: сложность + hazard bonus → fallback waves.maxActive. */
   function targetCount() {
     var balls = (typeof CONFIG !== 'undefined' && CONFIG.balls) || {};
-    if (balls.count !== undefined) return balls.count;
-    return wavesCfg().maxActive !== undefined ? wavesCfg().maxActive : 3;
+    var base = balls.count !== undefined
+      ? balls.count
+      : (wavesCfg().maxActive !== undefined ? wavesCfg().maxActive : 3);
+    var n = base + hazardParams().countBonus;
+    return n < 1 ? 1 : n;
   }
 
   function speedMult() {
@@ -51,7 +66,8 @@
     var min = balls.speedMultiplierMin !== undefined ? balls.speedMultiplierMin : 2.0;
     var max = balls.speedMultiplierMax !== undefined ? balls.speedMultiplierMax : 3.0;
     if (max < min) { var t = min; min = max; max = t; }
-    return min + Math.random() * (max - min);
+    var scale = hazardParams().speedScale;
+    return (min + Math.random() * (max - min)) * scale;
   }
 
   /** CSV-строки слоёв для physx-material шара волны (слой WAVE_BALL). */
@@ -144,6 +160,7 @@
     var sa = computeSpawnAndAim();
     var radius = balls.radius !== undefined ? balls.radius : 0.04;
     var mass = balls.mass !== undefined ? balls.mass : 2.0;
+    var hz = hazardParams();
 
     _seq++;
     var el = document.createElement('a-entity');
@@ -158,11 +175,12 @@
     el.setAttribute('float-motion-trail', '');
     el.object3D.scale.set(0.001, 0.001, 0.001);
 
-    // Метаданные для red-ball (микро-шаг 3): режим волны и направление подлёта.
+    // Метаданные для red-ball: режим волны, прицел, масштаб скорости эпохи.
     el.dataset.waveMode = '1';
     el.dataset.waveAimX = sa.aim.x.toFixed(4);
     el.dataset.waveAimY = sa.aim.y.toFixed(4);
     el.dataset.waveAimZ = sa.aim.z.toFixed(4);
+    el.dataset.waveSpeedScale = String(hz.speedScale);
 
     root.appendChild(el);
     _active.push(el);
@@ -191,13 +209,21 @@
     _timers.push(id);
   }
 
+  /** Прыжок эпохи → новый пул под hazardLevel (только если волны уже бегут). */
+  function onLocationChanged() {
+    if (!_running || !isEnabled()) return;
+    startWaves();
+  }
+
   function startWaves() {
     if (!isEnabled()) return false;
     stopWaves();
     _running = true;
     var n = targetCount();
+    var hz = hazardParams();
     for (var i = 0; i < n; i++) spawnOne();
-    console.log('[ball-wave-manager] waves started:', n);
+    console.log('[ball-wave-manager] waves started:', n,
+      '| hazard:', hz.level, 'bonus:', hz.countBonus, 'speed×', hz.speedScale);
     return true;
   }
 
@@ -213,6 +239,7 @@
     var scene = document.querySelector('a-scene');
     if (!scene) { setTimeout(attachListener, 100); return; }
     scene.addEventListener('ball-retired', onBallRetired);
+    scene.addEventListener('location-changed', onLocationChanged);
   }
   attachListener();
 
