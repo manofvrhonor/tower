@@ -172,6 +172,7 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 - ❌ Canvas/текст-оверлей поверх PNG-кнопок travel/end — двойной текст (с.70)
 - ❌ Comic-кадры внутри travel-меню — только преамбула до меню (с.70)
 - ❌ Называть API `comic-slides` методом `play()` — lifecycle A-Frame (с.73 → `playSequence`)
+- ❌ Пауза между улётом и влётом следующей start-карточки — cross параллельно (с.78)
 - ❌ Boot-орб как 3D ShaderMaterial-сфера + clippingPlanes/matrix-mask «в рамку комикса» — не режет; **→ плоскость = размер комикса + круг в UV** (`boot-energy-sphere`, с.74)
 - ❌ Рост boot-орба через `scale` entity при R>1 заранее — круг сразу «срезан»; **→ `setOrbRadius` в UV** (полный круг пока R≤1, обрезка у края картинки, с.75)
 - ❌ Пересоздавать travel PNG-плоскости / `texture.dispose()` на каждый open/close — Quest Link crash (с.71)
