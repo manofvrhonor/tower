@@ -8,26 +8,24 @@ alwaysApply: true
 
 # CURRENT_TASK.md — Текущая задача
 
-## Задача: travel wrist — home/gear + always-open
+## Задача: hazardLevel → шары (+ comic-преамбула travel)
 
-**Статус:** пульт открывает меню в любой момент игры. Ждём QA.
+**Статус:** с.71 закрыта — wrist travel (home/gear, always-open, Quest crash fix, ×2). Дальше Фаза 5: hazardLevel.
 
 ### Working Context
 
-- Пульт открывает меню в любой момент после Start.
-- **Фикс Quest Link crash:** travel-ui больше не уничтожает/перезагружает PNG на каждый open/close.
-- Слоты эпох 300×90 — PNG пользователь переделает.
-- Дальше: `hazardLevel` → шары; comic-преамбула.
+- Таймер ✅ (с.69). Travel/end PNG + wrist home/gear ✅ (с.70–71).
+- Пульт открывает меню всегда после Start; PNG не пересоздавать на open/close.
+- Следующее: `hazardLevel` → число/скорость шаров; затем comic-преамбула → travel-меню.
 
-### Чек-лист
+### Чек-лист (следующая сессия)
 
-1. [ ] Quest: открыть/закрыть wrist-меню 3+ раз подряд — Link не падает
-2. [ ] Пульт сразу после Start; домик/шестерёнка работают
-3. [ ] Эпохи disabled до unlock
-4. [ ] hazardLevel → число/скорость шаров
-5. [ ] Comic-преамбула → travel-меню
+1. [ ] hazardLevel → число/скорость шаров
+2. [ ] Comic-преамбула → travel-меню
+3. [ ] PNG эпох 300×90 (если ещё не заменены)
 
 ### Не трогать без запроса
 
 - Бита / `ball-bat` (выключена).
-- Canvas-текст поверх PNG-кнопок travel/end (подписи эпох).
+- Canvas-текст поверх PNG-кнопок travel/end.
+- Пересоздание travel PNG на каждый open/close (с.71).

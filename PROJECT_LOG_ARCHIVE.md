@@ -38,6 +38,7 @@
 | cyan balls fade, junk/decoy per loc, next-slot ghost, loop-timer plan | 68 | phase5_loop_timer.plan; deflect hand/grip |
 | loop-timer, defeat UI, wrist hide in menu | 69 | M:SS:CC; duration 3:00; Quest QA ✅ |
 | travel PNG timeline, end panels, no text overlay | 70 | comic не в меню; подписи только в PNG |
+| wrist home/gear, always-open, Quest Link crash fix | 71 | reuse textures; menu ×2 VR; commit aaf467c |
 
 ## Хронология (одной строкой)
 
@@ -65,6 +66,7 @@
 | 68 | ✅ | Фаза 5 старт: cyan-шары, пулы, призрак, deflect; план таймера петли |
 | 69 | ✅ | Таймер петли + DEFEAT + wrist hide в меню — Quest QA |
 | 70 | ✅ | PNG end/travel меню: таймлайн, без text-overlay; comic — преамбула позже |
+| 71 | ✅ | Wrist home/gear/confirm, always-open, Quest Link crash fix, menu ×2 |
 | → | — | **hazardLevel → шары** (Фаза 5); comic-преамбула travel |
 
 ---
@@ -1456,4 +1458,36 @@
 2. Comic-преамбула (1–2 кадра) → затем travel-меню.
 3. Quest QA travel (нет двойного текста, размер = victory).
 
-**Commit сессии:** _(по запросу)_
+**Commit сессии:** _(вошло в aaf467c, с.71)_
+
+---
+
+## Сессия 71 — Wrist travel: home/gear, always-open, Quest crash fix ✅
+
+**Дата:** 2026-07-10
+
+### Сделано
+
+- **Home / gear на travel-меню:** домик → confirm «выйти в главное меню?» → `returnToMenu`; шестерёнка → wireframe (как game-menu).
+- **Always-open:** пульт открывает меню в любой момент после Start (не только `hasAnyTravelTarget` / travel-ready); эпохи disabled, пока нельзя прыгнуть.
+- **Quest Link crash fix:** не уничтожать/перезагружать PNG на каждый open/close; `_refreshEraButtons`; без ручного `texture.dispose()`.
+- **Layout:** слоты эпох 300×90 (PNG под размер); sci-fi `panel_travel`; marker 202×374 по центру; меню в VR **×2** (2.40×1.60 м).
+- **Assets:** `icon_home_*`, `icon_gear_*`, `panel_confirm_exit`, `btn_confirm_*`, превью compose.
+
+### Не трогать
+
+- Пересоздавать travel PNG-плоскости на каждый open/close (Quest Link).
+- Canvas-текст поверх PNG-кнопок travel/end.
+- Бита — только по явному запросу.
+
+### Файлы
+
+`travel-ui.js`, `wrist-travel-remote.js`, `config.js`, `assets/ui/travel/`, `assets/ui/_preview/`, `CURRENT_TASK.md`, `PROJECT_LOG*.md`, `PROJECT_START.md` (+ в том же коммите loop-timer/end UI с.69–70).
+
+### Следующая сессия
+
+1. **hazardLevel → число/скорость шаров** (Фаза 5).
+2. Comic-преамбула → travel-меню.
+3. PNG эпох 300×90 (если ещё не заменены).
+
+**Commit сессии:** `aaf467c`
