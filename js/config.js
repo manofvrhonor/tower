@@ -360,7 +360,7 @@ const CONFIG = {
       right: {
         magnet: { position: { x: 0, y: -0.08, z: -0.01 }, rotation: { x: 0, y: 0, z: 0 } },
       },
-      // Якорь grab = #*HandCollider (colliderLocal); snap + VFX на collider. redAbove — только visual offset.
+      // Якорь grab/VFX = #*HandCollider (без коллизий с миром). Захват contact — HandBody.
       grab: {
         colliderLocal: {
           position: { x: 0, y: 0, z: 0 },
@@ -907,15 +907,10 @@ const CONFIG = {
       ],
     },
 
-    // Снеп-цепочка вдоль локальной оси ring_inner. Детали крепятся
-    // последовательно (A→B→C→D→E) с фиксированным шагом — собранное
-    // получается вытянутым устройством. Позы подгоняются на глаз на ПК.
-    //   axis         — локальная ось ring_inner, вдоль которой растёт цепочка.
-    //   step         — грубое расстояние между соседними стадиями, м.
-    //   originOffset — сдвиг всей цепочки от центра ring_inner (симметрия), м.
-    //   stages[i]    — база = originOffset + i*step по axis;
-    //                  position {x,y,z} — точный сдвиг стадии (м, локально ring_inner);
-    //                  rotation, role — опц.
+    // Снеп-цепочка вдоль локальной оси ring_inner. A→B→C→D→E→F.
+    // F = тот же folder `attach`, что A (крепления начала/конца).
+    // Ветки parent+digit (C1–C3) — assemblyChain.branchSlots, не ось.
+    //   axis / step / originOffset / stages[i].position — как раньше.
     assemblyChain: {
       axis: 'z',
       step: 0.12,
@@ -926,7 +921,22 @@ const CONFIG = {
         { id: 'C', folder: 'core',   role: 'core', rotation: { x: 0, y: 0, z: 0 }, position: { x: 0, y: 0, z: -0.03 } },
         { id: 'D', folder: 'drum',   rotation: { x: 0, y: 0, z: 0 }, position: { x: 0, y: 0, z: -0.13 } },
         { id: 'E', folder: 'end',    rotation: { x: 0, y: 0, z: 0 }, position: { x: 0, y: 0, z: -0.14 } },
+        { id: 'F', folder: 'attach', rotation: { x: 0, y: 0, z: 0 }, position: { x: 0, y: 0, z: -0.14 } },
       ],
+      // Parent+digit: слот виден/снепается только после parent на машине.
+      // Диск веток в плоскости XY (вокруг оси Z цепочки). radius — от C; y — сдвиг вдоль Z.
+      // stub — цветной куб (пока без GLB). Принцип переносим на B/D позже.
+      branchSlots: [
+        { id: 'C1', parentId: 'C', angleDeg: 0,   radius: 0.14, y: 0.02 },
+        { id: 'C2', parentId: 'C', angleDeg: 120, radius: 0.14, y: 0.02 },
+        { id: 'C3', parentId: 'C', angleDeg: 240, radius: 0.14, y: 0.02 },
+      ],
+      stubSize: 0.08,
+      stubColors: {
+        C1: '#ff6688',
+        C2: '#66ff88',
+        C3: '#6688ff',
+      },
     },
 
     // GLB-машина: корневые модели (грузит machine-rig.js).
@@ -970,13 +980,11 @@ const CONFIG = {
   // Runtime: rollAssemblySession() в init-session.js (не править вручную).
   session: null,
 
-  // Локации-эпохи (Фаза 4, ADR-25). start: true — стартовая эпоха.
-  // stageIds — какие стадии assemblyChain собираются здесь (квота снепа).
-  // partsToComplete — порог travel-ready (= stageIds.length). unlocks — следующая эпоха.
-  // sceneryHeightMult — множитель высоты домов (outside-scenery).
-  // scenery.primaryWalls / backgroundWalls — JPG в assets/textures/outside-buildings/.
-  // fogTint — зарезервировано; купол/туман пока без смены по эпохе.
-  // Небо: assets/hdri/{id}.* или base.*. Старые partIds — в parts[] (не рантайм v1).
+  // Локации-эпохи (Фаза 4, ADR-25 / ADR-26).
+  // stageIds / partsToComplete — дефолт; при старте игры перезаписываются
+  // из CONFIG.assemblyRoutes[difficulty.routeId].quotaStages (не путать со spawn).
+  // spawn деталей эпохи — только route.spawn → locationPools.
+  // Якоря всех маршрутов: A@present, F@past, E@future, C1/C2/C3 по одной на эпоху.
   locations: [
     {
       id: 'present', label: 'Настоящее', start: true,
@@ -1042,6 +1050,76 @@ const CONFIG = {
       unlocks: null,
     },
   ],
+
+  // Маршруты сложности (ADR-26). spawn ≠ quotaStages.
+  // C1–C3 и F не в квоте. Easy→L1 … Hardcore→L5.
+  assemblyRoutes: {
+    L1: {
+      label: 'Sequential',
+      spawn: {
+        present: ['A', 'B', 'C1'],
+        past:    ['C', 'D', 'C2', 'F'],
+        future:  ['E', 'C3'],
+      },
+      quotaStages: {
+        present: ['A', 'B'],
+        past:    ['C', 'D'],
+        future:  ['E'],
+      },
+    },
+    L2: {
+      label: 'Carry F',
+      spawn: {
+        present: ['A', 'B', 'C1'],
+        past:    ['C', 'F', 'C2'],
+        future:  ['D', 'E', 'C3'],
+      },
+      quotaStages: {
+        present: ['A', 'B'],
+        past:    ['C'],
+        future:  ['E'],
+      },
+    },
+    L3: {
+      label: 'Split chain',
+      spawn: {
+        present: ['A', 'C1'],
+        past:    ['B', 'C', 'F', 'C2'],
+        future:  ['D', 'E', 'C3'],
+      },
+      quotaStages: {
+        present: ['A'],
+        past:    ['B', 'C'],
+        future:  ['E'],
+      },
+    },
+    L4: {
+      label: 'Tangled',
+      spawn: {
+        present: ['A', 'D', 'C1'],
+        past:    ['B', 'F', 'C2'],
+        future:  ['C', 'E', 'C3'],
+      },
+      quotaStages: {
+        present: ['A'],
+        past:    ['B'],
+        future:  ['E'],
+      },
+    },
+    L5: {
+      label: 'Mirror tangle',
+      spawn: {
+        present: ['A', 'C', 'C1'],
+        past:    ['B', 'F', 'C2'],
+        future:  ['D', 'E', 'C3'],
+      },
+      quotaStages: {
+        present: ['A'],
+        past:    ['B'],
+        future:  ['E'],
+      },
+    },
+  },
 
   // Детали. kind: 'mechanism' — важные (снепятся в слоты), 'junk' — мусор (помехи).
   // Деталь можно унести в другую локацию (механика переноса — Фаза 4).
@@ -1132,7 +1210,7 @@ const CONFIG = {
    *   GRAVITY_CUBE — кубик в режиме гравитации (Шаг 4).
    *   GRABBED_CUBE — кубик, схваченный рукой.
    *   BALL         — красные шары (Этап 6).
-   *   HAND         — сфера коллайдера руки.
+   *   HAND         — слой руки (tip без коллизий с миром; кулак HandBody).
    *   BAT          — бита (Этап 7); всегда бьётся o WORLD/кольца, не DOME.
    *   FLOAT_INSIDE — куб внутри сферы ядра: float без g, проходит сквozь DOME.
    */
@@ -1364,21 +1442,33 @@ const CONFIG = {
     defaultDifficulty: 'medium',
     // Порядок карусели меню (game-menu.js).
     difficultyOrder: ['easy', 'normal', 'medium', 'hard', 'hardcore'],
-    // Фаза 4: во всех режимах пустая машина (preAssembled: []).
-    // junkPerLocation / decoyPerLocation — на КАЖДУЮ эпоху (не сумма на игру).
-    // Hardcore: ringInnerSpinMult.
+    // ADR-26: routeId → assemblyRoutes (разный пазл). Давление — balls/junk/timer/spin.
     difficulties: {
-      easy:     { label: 'Easy',     ballCount: 1, preAssembled: [], junkPerLocation: 4, decoyPerLocation: 3 },
-      normal:   { label: 'Normal',   ballCount: 2, preAssembled: [], junkPerLocation: 6, decoyPerLocation: 4 },
-      medium:   { label: 'Medium',   ballCount: 3, preAssembled: [], junkPerLocation: 6, decoyPerLocation: 4 },
-      hard:     { label: 'Hard',     ballCount: 4, preAssembled: [], junkPerLocation: 8, decoyPerLocation: 5 },
+      easy: {
+        label: 'Easy', routeId: 'L1',
+        ballCount: 1, preAssembled: [], junkPerLocation: 4, decoyPerLocation: 3,
+        durationSec: 180,
+      },
+      normal: {
+        label: 'Normal', routeId: 'L2',
+        ballCount: 2, preAssembled: [], junkPerLocation: 6, decoyPerLocation: 4,
+        durationSec: 180,
+      },
+      medium: {
+        label: 'Medium', routeId: 'L3',
+        ballCount: 3, preAssembled: [], junkPerLocation: 6, decoyPerLocation: 4,
+        durationSec: 180,
+      },
+      hard: {
+        label: 'Hard', routeId: 'L4',
+        ballCount: 4, preAssembled: [], junkPerLocation: 8, decoyPerLocation: 5,
+        durationSec: 150,
+      },
       hardcore: {
-        label: 'Hardcore',
-        ballCount: 5,
-        preAssembled: [],
-        junkPerLocation: 8,
-        decoyPerLocation: 5,
+        label: 'Hardcore', routeId: 'L5',
+        ballCount: 5, preAssembled: [], junkPerLocation: 8, decoyPerLocation: 5,
         ringInnerSpinMult: 2.2,
+        durationSec: 120,
       },
     },
     // Общие отступы VR-плашек (game-menu, victory-ui) — menu-ui-layout.js.

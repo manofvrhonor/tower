@@ -1,20 +1,11 @@
 /* global CONFIG */
 
 /**
- * init-session.js — случайная снеп-цепочка A→B→C→D→E на каждую игру.
+ * init-session.js — снеп-цепочка A→F + ветки C1–C3, пулы по assemblyRoutes.
  *
- * rollAssemblySession(): по одной случайной GLB из каждой папки стадии
- * (attach/box/core/drum/end) → упорядоченная цепочка вдоль оси ring_inner
- * (CONFIG.machine.assemblyChain). Сложность задаёт, какие стадии уже стоят
- * (preAssembled, несбиваемые).
- *
- * Пер-эпоха: locationPools[locId] = { stages, junkItems }.
- * junkPerLocation / decoyPerLocation — на КАЖДУЮ эпоху (difficulties).
- * Нехватка GLB → повтор из пула (без цветных кубов).
- * Decoy никогда не берёт файлы из snap-схемы сессии.
- *
- * Вызывается из game-lifecycle spawnWorld(), не при load. Manifest
- * предзагружается при старте страницы.
+ * rollAssemblySession(): GLB по stages оси; stub-кубы для branchSlots;
+ * spawn/quota из CONFIG.assemblyRoutes[difficulty.routeId].
+ * quotaStages → locations[].stageIds (travel); spawn → locationPools.
  */
 (function () {
   var manifestCache = null;
@@ -67,6 +58,17 @@
     return game.difficulties && game.difficulties[id];
   }
 
+  function getRoute(preset) {
+    var routes = (typeof CONFIG !== 'undefined' && CONFIG.assemblyRoutes) || {};
+    var id = (preset && preset.routeId) || 'L1';
+    var route = routes[id];
+    if (!route) {
+      console.error('[init-session] unknown routeId:', id);
+      return null;
+    }
+    return { id: id, route: route };
+  }
+
   /** Поза стадии i: originOffset + i*step по chain.axis + опц. stages[i].position. */
   function stagePose(chain, i) {
     var axis = (chain.axis || 'z').toLowerCase();
@@ -82,6 +84,20 @@
     }
     var rot = st.rotation || { x: 0, y: 0, z: 0 };
     return { position: pos, rotation: { x: rot.x || 0, y: rot.y || 0, z: rot.z || 0 } };
+  }
+
+  /** Локальный сдвиг ветки от parent (диск XY вокруг Z цепочки). */
+  function branchLocalOffset(br) {
+    var rad = ((br.angleDeg || 0) * Math.PI) / 180;
+    var r = br.radius !== undefined ? br.radius : 0.14;
+    return {
+      position: {
+        x: Math.cos(rad) * r,
+        y: Math.sin(rad) * r,
+        z: br.y || 0,
+      },
+      rotation: { x: 0, y: 0, z: br.angleDeg || 0 },
+    };
   }
 
   function getLocations() {
@@ -101,10 +117,6 @@
     };
   }
 
-  /**
-   * Взять count элементов из pool с повторами (циклически), каждый раз shuffle.
-   * pool: [{ path, file }, ...]
-   */
   function takeWithRepeats(pool, count) {
     var out = [];
     if (!pool.length || count <= 0) return out;
@@ -117,15 +129,64 @@
     return out;
   }
 
+  /** Применить quotaStages маршрута к CONFIG.locations (travel gate). */
+  function applyRouteQuotas(route) {
+    var locs = getLocations();
+    var qs = (route && route.quotaStages) || {};
+    var i;
+    for (i = 0; i < locs.length; i++) {
+      var loc = locs[i];
+      var ids = qs[loc.id] || [];
+      loc.stageIds = ids.slice();
+      loc.partsToComplete = ids.length;
+    }
+  }
+
   /**
-   * Пер-локационные пулы: stages эпохи + junk + decoy на каждую эпоху.
-   * schemeFileKeys — map «folder/file» snap-схемы; decoy их не берёт.
+   * Dev-assert антитупик: квота стартовой эпохи ⊆ spawn старта;
+   * ветки C1-C3 и F не в квотах.
    */
-  function buildLocationPools(stages, leftovers, preset, schemeFileKeys) {
+  function assertRouteNoSoftlock(routeId, route) {
+    var locs = getLocations();
+    var start = null;
+    var i;
+    for (i = 0; i < locs.length; i++) {
+      if (locs[i].start) { start = locs[i].id; break; }
+    }
+    if (!start) start = 'present';
+    var spawn = route.spawn || {};
+    var quota = route.quotaStages || {};
+    var startSpawn = spawn[start] || [];
+    var startQuota = quota[start] || [];
+    for (i = 0; i < startQuota.length; i++) {
+      if (startSpawn.indexOf(startQuota[i]) < 0) {
+        console.error('[init-session] softlock?', routeId,
+          'quota', startQuota[i], 'not in spawn', start);
+      }
+    }
+    var banned = { C1: 1, C2: 1, C3: 1, F: 1 };
+    var locId;
+    for (locId in quota) {
+      if (!Object.prototype.hasOwnProperty.call(quota, locId)) continue;
+      var arr = quota[locId] || [];
+      for (i = 0; i < arr.length; i++) {
+        if (banned[arr[i]]) {
+          console.error('[init-session] softlock?', routeId,
+            locId, 'quota must not include', arr[i]);
+        }
+      }
+    }
+  }
+
+  /**
+   * Пер-локационные пулы по route.spawn (не по stageIds квоты).
+   */
+  function buildLocationPools(stages, leftovers, preset, schemeFileKeys, route) {
     var locs = getLocations();
     var sc = spawnCfg();
     var mc = machineCfg();
     var junkFolder = mc.junkPath || 'assets/models/junk/';
+    var spawnMap = (route && route.spawn) || {};
 
     var junkPer = preset.junkPerLocation !== undefined
       ? preset.junkPerLocation
@@ -138,7 +199,6 @@
       return { path: junkFolder, file: f };
     });
 
-    // Decoy: leftover + любые stage-GLB, кроме файлов текущей snap-схемы.
     var decoyPool = [];
     var seen = {};
     function addDecoyCandidate(folder, file) {
@@ -179,10 +239,12 @@
 
     for (li = 0; li < locs.length; li++) {
       var loc = locs[li];
+      var spawnIds = spawnMap[loc.id] || loc.stageIds || [];
       var locStages = [];
-      for (si = 0; si < (loc.stageIds || []).length; si++) {
-        var st = stageById[loc.stageIds[si]];
+      for (si = 0; si < spawnIds.length; si++) {
+        var st = stageById[spawnIds[si]];
         if (st) locStages.push(st);
+        else console.warn('[init-session] spawn id missing stage:', spawnIds[si]);
       }
 
       var locJunk = [];
@@ -233,6 +295,14 @@
       return false;
     }
 
+    var routeWrap = getRoute(preset);
+    if (!routeWrap) return false;
+    var routeId = routeWrap.id;
+    var route = routeWrap.route;
+
+    assertRouteNoSoftlock(routeId, route);
+    applyRouteQuotas(route);
+
     var preSet = {};
     (preset.preAssembled || []).forEach(function (id) { preSet[id] = true; });
 
@@ -271,6 +341,43 @@
         preAssembled: !!preSet[stCfg.id],
         position: pose.position,
         rotation: pose.rotation,
+        isBranch: false,
+        stub: false,
+      });
+    }
+
+    var stageById = {};
+    stages.forEach(function (s) { stageById[s.stageId] = s; });
+
+    var branches = chain.branchSlots || [];
+    var stubColors = chain.stubColors || {};
+    var stubSize = chain.stubSize !== undefined ? chain.stubSize : 0.08;
+    var bi;
+    for (bi = 0; bi < branches.length; bi++) {
+      var br = branches[bi];
+      var parent = stageById[br.parentId];
+      if (!parent) {
+        console.error('[init-session] branch parent missing:', br.parentId, br.id);
+        return false;
+      }
+      var bPose = branchLocalOffset(br);
+      stages.push({
+        stageId: br.id,
+        order: 100 + bi,
+        parentOrder: parent.order,
+        parentId: br.parentId,
+        role: 'branch',
+        partId: 'run_' + br.id,
+        slotId: 'slot_' + br.id,
+        model: null,
+        colliderModel: null,
+        preAssembled: false,
+        position: bPose.position,
+        rotation: bPose.rotation,
+        isBranch: true,
+        stub: true,
+        stubColor: stubColors[br.id] || '#ffe066',
+        stubSize: stubSize,
       });
     }
 
@@ -279,9 +386,15 @@
         id: s.slotId,
         stageId: s.stageId,
         order: s.order,
+        parentId: s.parentId || null,
+        parentOrder: s.parentOrder !== undefined ? s.parentOrder : null,
+        isBranch: !!s.isBranch,
         acceptPartId: s.partId,
         role: s.role,
         model: s.model,
+        stub: !!s.stub,
+        stubColor: s.stubColor || null,
+        stubSize: s.stubSize,
         position: s.position,
         rotation: s.rotation,
       };
@@ -290,7 +403,7 @@
     var partsById = {};
     stages.forEach(function (s) { partsById[s.partId] = s; });
 
-    var built = buildLocationPools(stages, leftovers, preset, schemeFileKeys);
+    var built = buildLocationPools(stages, leftovers, preset, schemeFileKeys, route);
 
     CONFIG.session = {
       stages: stages,
@@ -298,6 +411,7 @@
       partsById: partsById,
       junkItems: built.junkItems,
       locationPools: built.locationPools,
+      routeId: routeId,
     };
 
     var preIds = stages.filter(function (s) { return s.preAssembled; })
@@ -309,10 +423,14 @@
       if (!p) continue;
       poolLog.push(locs[i].id + ':' +
         p.stages.map(function (s) { return s.stageId; }).join('') +
-        '+j' + p.junkItems.length);
+        '+j' + p.junkItems.length +
+        '/q' + (locs[i].stageIds || []).join(''));
     }
-    console.log('[init-session] roll — chain:',
-      stages.map(function (s) { return s.stageId; }).join(''),
+    console.log('[init-session] roll — route:', routeId,
+      '| chain:', stages.filter(function (s) { return !s.isBranch; })
+        .map(function (s) { return s.stageId; }).join(''),
+      '| branches:', stages.filter(function (s) { return s.isBranch; })
+        .map(function (s) { return s.stageId; }).join(''),
       '| files:', pickedFiles.join(', '),
       '| pre:', preIds.join('') || '(none)',
       '| perLoc junk:', built.junkPerLocation, 'decoy:', built.decoyPerLocation,

@@ -19,8 +19,9 @@
  *
  * Бита (ball-bat): dynamic + Fixed joint, слой BAT не меняется.
  *
- * Якорь joint (3.5A): snap + collider + joint target = #*HandCollider (grab.colliderLocal);
+ * Якорь joint (3.5A): snap + joint target = #*HandCollider (grab.colliderLocal);
  * Fixed joint. Ось фронта — hands.grab.attachAxis (local collider).
+ * Захват (contactbegin): #*HandBody (кулак); шар tip без коллизий с миром.
  * Реализация: смена SimulationFilterData на каждом shape кубика.
  *   word0 = битовая маска "к каким слоям я принадлежу" (один бит на слой)
  *   word1 = битовая маска "с какими слоями сталкиваюсь" (несколько битов)
@@ -63,8 +64,10 @@ AFRAME.registerComponent('physx-grab', {
   play: function () {
     var el = this.el;
     this._handCollider = el.querySelector('[id$="HandCollider"]');
-    if (this._handCollider) {
-      this._handCollider.addEventListener('contactbegin', this.onHit);
+    // Сенсор захвата — кулак; tip-шар только якорь joint/магнита.
+    this._grabSensor = el.querySelector('[id$="HandBody"]') || this._handCollider;
+    if (this._grabSensor) {
+      this._grabSensor.addEventListener('contactbegin', this.onHit);
     }
     el.addEventListener('gripdown', this.onGripClose);
     el.addEventListener('gripup', this.onGripOpen);
@@ -76,8 +79,8 @@ AFRAME.registerComponent('physx-grab', {
 
   pause: function () {
     var el = this.el;
-    if (this._handCollider) {
-      this._handCollider.removeEventListener('contactbegin', this.onHit);
+    if (this._grabSensor) {
+      this._grabSensor.removeEventListener('contactbegin', this.onHit);
     }
     el.removeEventListener('gripdown', this.onGripClose);
     el.removeEventListener('gripup', this.onGripOpen);
@@ -110,9 +113,11 @@ AFRAME.registerComponent('physx-grab', {
     // Time-locked / preAssembled — не хватаем (иначе joint срывает co-rotation).
     if (this._isTimeLockedPart(hitEl)) return;
     if (!hitEl || hitEl.is(this.GRABBED_STATE) || !this.grabbing || this.hitEl) { return; }
+    if (!this._handCollider) return;
     hitEl.addState(this.GRABBED_STATE);
     this.hitEl = hitEl;
-    this.addJoint(hitEl, evt.target, evt);
+    // Joint/snap всегда на tip (#*HandCollider), даже если contact с HandBody.
+    this.addJoint(hitEl, this._handCollider, evt);
   },
 
   _isTimeLockedPart: function (el) {

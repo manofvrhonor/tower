@@ -224,6 +224,10 @@
   /** Радиус clamp: spawnRadius из сессии → кэш _COL → fallback. */
   function bodyRadiusForStage(stage, size) {
     if (stage.spawnRadius !== undefined) return stage.spawnRadius;
+    if (stage.stub) {
+      var stubSize = stage.stubSize !== undefined ? stage.stubSize : size;
+      return stubSize / 2;
+    }
     if (stage.colliderModel && typeof getCachedColliderRadius === 'function') {
       var cached = getCachedColliderRadius(stage.colliderModel);
       if (cached !== null) return cached;
@@ -303,6 +307,9 @@
   }
 
   function spawnStagePart(stage, position, mass, matStr, root, bodyRadius, locId) {
+    if (stage.stub) {
+      return spawnStubStagePart(stage, position, mass, matStr, root, bodyRadius, locId);
+    }
     var el = document.createElement('a-entity');
     el.setAttribute('id', 'part-' + stage.partId);
     el.setAttribute('position', position.x + ' ' + position.y + ' ' + position.z);
@@ -319,12 +326,35 @@
     el.dataset.partId = stage.partId;
     el.dataset.partRole = stage.role || '';
     tagHomeLocation(el, locId);
-    // Предустановленная деталь (сложность): сразу снеп в свой слот + несбиваемая.
     if (stage.preAssembled) {
       el.dataset.startSnapped = 'true';
       el.dataset.startSlot = stage.slotId;
       el.dataset.fixed = 'true';
     }
+    root.appendChild(el);
+    tagSpawnRadius(el, bodyRadius);
+    return el;
+  }
+
+  /** Parent+digit stub: цветной куб без GLB (C1–C3). */
+  function spawnStubStagePart(stage, position, mass, matStr, root, bodyRadius, locId) {
+    var size = stage.stubSize !== undefined ? stage.stubSize : 0.08;
+    var color = stage.stubColor || '#ffe066';
+    var el = document.createElement('a-entity');
+    el.setAttribute('id', 'part-' + stage.partId);
+    el.setAttribute('geometry',
+      'primitive: box; width: ' + size + '; height: ' + size + '; depth: ' + size);
+    el.setAttribute('material', 'color: ' + color);
+    el.setAttribute('position', position.x + ' ' + position.y + ' ' + position.z);
+    el.setAttribute('physx-body', 'type: dynamic; mass: ' + mass + '; emitCollisionEvents: true');
+    el.setAttribute('physx-material', matStr);
+    el.setAttribute('floating-cube', '');
+    el.setAttribute('float-motion-trail', '');
+    el.dataset.isTarget = 'true';
+    el.dataset.partId = stage.partId;
+    el.dataset.partRole = stage.role || 'branch';
+    el.dataset.stub = 'true';
+    tagHomeLocation(el, locId);
     root.appendChild(el);
     tagSpawnRadius(el, bodyRadius);
     return el;

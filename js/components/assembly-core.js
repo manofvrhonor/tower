@@ -5,7 +5,10 @@
  *
  * Читает CONFIG.session.assemblySlots (rollAssemblySession) или fallback
  * CONFIG.mechanisms[<mechanism>]. Призраки: wireframe по GLB слота или box.
- * Виден только призрак следующей стадии (A→B→C…); остальные скрыты.
+ * Ось A→F: виден призрак следующей стадии. Ветки parent+digit (C1–C3):
+ * дети слота parent через pivot; крутятся с ring_inner и со спином C.
+ * Занятый parent: скрываем только ghost-контент, корень остаётся visible
+ * (иначе Three.js прячет и C*).
  *
  * Шаг 1.3: учёт занятости слотов и мировая поза для снепа (floating-cube).
  */
@@ -77,7 +80,7 @@ AFRAME.registerComponent('assembly-core', {
   _clear: function () {
     for (var i = 0; i < this._slotMeshes.length; i++) {
       var m = this._slotMeshes[i];
-      this._group.remove(m);
+      if (m.parent) m.parent.remove(m);
       m.traverse(function (child) {
         if (child.geometry) child.geometry.dispose();
         if (child.material) {
@@ -90,6 +93,16 @@ AFRAME.registerComponent('assembly-core', {
       });
     }
     this._slotMeshes.length = 0;
+    // Pivot-ы веток (пустые Group на parent-слотах).
+    if (this._branchPivots) {
+      var pid;
+      for (pid in this._branchPivots) {
+        if (!Object.prototype.hasOwnProperty.call(this._branchPivots, pid)) continue;
+        var piv = this._branchPivots[pid];
+        if (piv && piv.parent) piv.parent.remove(piv);
+      }
+      this._branchPivots = {};
+    }
   },
 
   _readSlotVisual: function () {
@@ -127,6 +140,9 @@ AFRAME.registerComponent('assembly-core', {
     slotRoot.userData.role = slot.role || '';
     slotRoot.userData.order = slot.order !== undefined ? slot.order : 0;
     slotRoot.userData.stageId = slot.stageId || null;
+    slotRoot.userData.isBranch = !!slot.isBranch;
+    slotRoot.userData.parentId = slot.parentId || null;
+    slotRoot.userData.parentOrder = slot.parentOrder !== undefined ? slot.parentOrder : null;
     return slotRoot;
   },
 
@@ -144,6 +160,7 @@ AFRAME.registerComponent('assembly-core', {
     });
     var fill = new THREE.Mesh(boxGeo, fillMat);
     fill.renderOrder = vis.renderOrder - 1;
+    fill.userData.isGhostContent = true;
     slotRoot.add(fill);
 
     var lineMat = new THREE.LineBasicMaterial({
@@ -155,6 +172,7 @@ AFRAME.registerComponent('assembly-core', {
     });
     var lines = new THREE.LineSegments(edges, lineMat);
     lines.renderOrder = vis.renderOrder;
+    lines.userData.isGhostContent = true;
     slotRoot.add(lines);
   },
 
@@ -167,6 +185,7 @@ AFRAME.registerComponent('assembly-core', {
       depthWrite: false,
     });
 
+    root.userData.isGhostContent = true;
     root.traverse(function (node) {
       if (!node.isMesh || !node.geometry) return;
 
@@ -180,10 +199,12 @@ AFRAME.registerComponent('assembly-core', {
       });
       node.renderOrder = vis.renderOrder - 1;
       node.frustumCulled = false;
+      node.userData.isGhostContent = true;
 
       var edges = new THREE.EdgesGeometry(node.geometry);
       var lines = new THREE.LineSegments(edges, lineMat.clone());
       lines.renderOrder = vis.renderOrder;
+      lines.userData.isGhostContent = true;
       node.add(lines);
     });
   },
@@ -210,19 +231,29 @@ AFRAME.registerComponent('assembly-core', {
     });
   },
 
-  _buildSlotGhost: function (slot, vis) {
+  _buildSlotGhost: function (slot, vis, parentObj) {
     var slotRoot = this._makeSlotRoot(slot);
     var part = this._findPart(slot.acceptPartId);
     var modelUrl = slot.model || (part && part.model);
     var self = this;
-    var fallbackSize = this.data.slotSize;
+    var fallbackSize = (slot.stubSize !== undefined ? slot.stubSize : null) || this.data.slotSize;
+    var branchVis = vis;
+    if (slot.stub && slot.stubColor) {
+      branchVis = {
+        color: slot.stubColor,
+        opacity: vis.opacity,
+        renderOrder: vis.renderOrder,
+        fillOpacity: vis.fillOpacity,
+      };
+    }
 
-    this._group.add(slotRoot);
+    var attachTo = parentObj || this._group;
+    attachTo.add(slotRoot);
     this._slotMeshes.push(slotRoot);
 
-    if (!modelUrl) {
-      this._addBoxGhost(slotRoot, fallbackSize, vis);
-      return;
+    if (!modelUrl || slot.stub) {
+      this._addBoxGhost(slotRoot, fallbackSize, branchVis);
+      return slotRoot;
     }
 
     this._loadGhostScene(modelUrl, function (scene) {
@@ -233,17 +264,62 @@ AFRAME.registerComponent('assembly-core', {
       self._applyGhostMaterials(scene, vis);
       slotRoot.add(scene);
     });
+    return slotRoot;
+  },
+
+  _branchPivotFor: function (parentSlotRoot, parentStageId) {
+    if (!this._branchPivots) this._branchPivots = {};
+    var existing = this._branchPivots[parentStageId];
+    if (existing) return existing;
+    var piv = new THREE.Group();
+    piv.name = 'branch-pivot-' + parentStageId;
+    piv.userData.isBranchPivot = true;
+    parentSlotRoot.add(piv);
+    this._branchPivots[parentStageId] = piv;
+    return piv;
+  },
+
+  /** Скрыть/показать только призрак слота, не трогая branch-pivot (дети C*). */
+  _setGhostContentVisible: function (slotRoot, on) {
+    var i;
+    for (i = 0; i < slotRoot.children.length; i++) {
+      var ch = slotRoot.children[i];
+      if (ch.userData && ch.userData.isBranchPivot) continue;
+      ch.visible = !!on;
+    }
+  },
+
+  _hasBranchPivot: function (stageId) {
+    return !!(this._branchPivots && stageId && this._branchPivots[stageId]);
   },
 
   _buildSlots: function () {
     this._clear();
     this._occupied = {};
+    this._branchPivots = {};
     var slots = this._getSlots();
     var vis = this._readSlotVisual();
+    var byStage = {};
     var i;
 
+    // Сначала ось — нужны mesh parent для веток.
     for (i = 0; i < slots.length; i++) {
-      this._buildSlotGhost(slots[i], vis);
+      if (slots[i].isBranch) continue;
+      var mainRoot = this._buildSlotGhost(slots[i], vis, this._group);
+      if (slots[i].stageId) byStage[slots[i].stageId] = mainRoot;
+    }
+
+    // Ветки — дети parent-слота через pivot (крутятся со спином C).
+    for (i = 0; i < slots.length; i++) {
+      if (!slots[i].isBranch) continue;
+      var parentRoot = byStage[slots[i].parentId];
+      if (!parentRoot) {
+        console.warn('[assembly-core] branch without parent slot:', slots[i].id);
+        this._buildSlotGhost(slots[i], vis, this._group);
+        continue;
+      }
+      var piv = this._branchPivotFor(parentRoot, slots[i].parentId);
+      this._buildSlotGhost(slots[i], vis, piv);
     }
 
     this._updateGhostVisibility();
@@ -253,8 +329,43 @@ AFRAME.registerComponent('assembly-core', {
   },
 
   /**
-   * Показать призрак только следующей незанятой стадии (nextRequiredOrder).
-   * Занятые и «будущие» слоты скрыты — игрок видит одну подсказку за раз.
+   * Синхрон pivot веток с core-спином parent (part-entity._spinGroup).
+   */
+  tick: function () {
+    if (!this._branchPivots) return;
+    var pid;
+    for (pid in this._branchPivots) {
+      if (!Object.prototype.hasOwnProperty.call(this._branchPivots, pid)) continue;
+      var piv = this._branchPivots[pid];
+      if (!piv) continue;
+      var parentMesh = null;
+      var i;
+      for (i = 0; i < this._slotMeshes.length; i++) {
+        if (this._slotMeshes[i].userData.stageId === pid &&
+            !this._slotMeshes[i].userData.isBranch) {
+          parentMesh = this._slotMeshes[i];
+          break;
+        }
+      }
+      if (!parentMesh) continue;
+      var el = this._occupied[parentMesh.userData.slotId];
+      if (!el || el === true || !el.components) {
+        piv.quaternion.set(0, 0, 0, 1);
+        continue;
+      }
+      var pe = el.components['part-entity'];
+      if (pe && pe._spinGroup) {
+        piv.quaternion.copy(pe._spinGroup.quaternion);
+      } else {
+        piv.quaternion.set(0, 0, 0, 1);
+      }
+    }
+  },
+
+  /**
+   * Ось: призрак следующей незанятой стадии.
+   * Ветки: призраки после parent; корень parent с ветками НЕ hidden целиком
+   * (иначе Three.js гасит детей C* вместе с C).
    */
   _updateGhostVisibility: function () {
     var next = this.nextRequiredOrder();
@@ -262,12 +373,41 @@ AFRAME.registerComponent('assembly-core', {
     for (i = 0; i < this._slotMeshes.length; i++) {
       var m = this._slotMeshes[i];
       var sid = m.userData.slotId;
+      var stageId = m.userData.stageId;
+
       if (this._occupied[sid]) {
-        m.visible = false;
+        if (!m.userData.isBranch && this._hasBranchPivot(stageId)) {
+          // Parent занят, но корень остаётся visible — на нём висят C*.
+          m.visible = true;
+          this._setGhostContentVisible(m, false);
+        } else {
+          m.visible = false;
+        }
         continue;
       }
-      m.visible = next !== null && (m.userData.order || 0) === next;
+
+      if (m.userData.isBranch) {
+        var showBr = this._isStageOccupied(m.userData.parentId);
+        m.visible = showBr;
+        if (showBr) this._setGhostContentVisible(m, true);
+        continue;
+      }
+
+      var showMain = next !== null && (m.userData.order || 0) === next;
+      m.visible = showMain;
+      this._setGhostContentVisible(m, showMain);
     }
+  },
+
+  _isStageOccupied: function (stageId) {
+    if (!stageId) return false;
+    var i;
+    for (i = 0; i < this._slotMeshes.length; i++) {
+      var m = this._slotMeshes[i];
+      if (m.userData.stageId !== stageId) continue;
+      return !!this._occupied[m.userData.slotId];
+    }
+    return false;
   },
 
   _meshById: function (slotId) {
@@ -278,13 +418,13 @@ AFRAME.registerComponent('assembly-core', {
   },
 
   /**
-   * Наименьший order среди незанятых слотов — единственная стадия, куда
-   * сейчас разрешён снеп (последовательный гейтинг A→B→C→D→E).
+   * Наименьший order среди незанятых слотов оси (без веток).
    */
   nextRequiredOrder: function () {
     var next = null;
     for (var i = 0; i < this._slotMeshes.length; i++) {
       var m = this._slotMeshes[i];
+      if (m.userData.isBranch) continue;
       if (this._occupied[m.userData.slotId]) continue;
       var o = m.userData.order || 0;
       if (next === null || o < next) next = o;
@@ -316,14 +456,32 @@ AFRAME.registerComponent('assembly-core', {
       CONFIG.assembly.snapPosTolerance !== undefined)
       ? CONFIG.assembly.snapPosTolerance : 0.05;
 
-    // Гейтинг: снеп разрешён только в следующую по порядку стадию.
+    var branchMesh = null;
+    var i;
+    for (i = 0; i < this._slotMeshes.length; i++) {
+      var bm = this._slotMeshes[i];
+      if (!bm.userData.isBranch) continue;
+      if (partId && bm.userData.acceptPartId && bm.userData.acceptPartId !== partId) continue;
+      branchMesh = bm;
+      break;
+    }
+
+    if (branchMesh) {
+      if (this._occupied[branchMesh.userData.slotId]) return null;
+      if (!this._isStageOccupied(branchMesh.userData.parentId)) return null;
+      branchMesh.getWorldPosition(this._tmpVec);
+      if (this._tmpVec.distanceTo(worldPos) > tol) return null;
+      return this._slotPose(branchMesh);
+    }
+
     var required = this.nextRequiredOrder();
     if (required === null) return null;
 
     var best = null;
     var bestDist = tol;
-    for (var i = 0; i < this._slotMeshes.length; i++) {
+    for (i = 0; i < this._slotMeshes.length; i++) {
       var m = this._slotMeshes[i];
+      if (m.userData.isBranch) continue;
       if (this._occupied[m.userData.slotId]) continue;
       if ((m.userData.order || 0) !== required) continue;
       if (partId && m.userData.acceptPartId && m.userData.acceptPartId !== partId) {
@@ -348,8 +506,8 @@ AFRAME.registerComponent('assembly-core', {
   },
 
   /**
-   * Занятые слоты с order > afterOrder (для каскада A→ снимает B+).
-   * Сортировка по order убыв. — сначала кончик цепочки.
+   * Каскад: слоты оси с order > afterOrder + ветки parentOrder > afterOrder
+   * или parentOrder === afterOrder (дети снимаемого parent).
    */
   getOccupiedAboveOrder: function (afterOrder) {
     var out = [];
@@ -359,7 +517,15 @@ AFRAME.registerComponent('assembly-core', {
       var sid = m.userData.slotId;
       if (!this._occupied[sid]) continue;
       var o = m.userData.order || 0;
-      if (o > afterOrder) {
+      var include = false;
+      if (m.userData.isBranch) {
+        var po = m.userData.parentOrder;
+        if (po === null || po === undefined) po = -1;
+        include = po > afterOrder || po === afterOrder;
+      } else {
+        include = o > afterOrder;
+      }
+      if (include) {
         out.push({
           slotId: sid,
           el: this._occupied[sid],

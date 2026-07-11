@@ -2,7 +2,8 @@
  * hand-body-collider — compound kinematic collider на объём кулака (Фаза 3.5A).
  *
  * rotation из CONFIG запекается в position/size (PhysX convex не всегда
- * подхватывает rotation дочерних a-box). Захват — только #*HandCollider.
+ * подхватывает rotation дочерних a-box). Захват (contact) — #*HandBody;
+ * joint target — #*HandCollider (tip без коллизий с миром).
  */
 AFRAME.registerComponent('hand-body-collider', {
   schema: {
@@ -151,7 +152,7 @@ AFRAME.registerComponent('hand-body-collider', {
     this._physxReady = true;
 
     this.el.setAttribute('physx-material', matStr);
-    this.el.setAttribute('physx-body', 'type: kinematic');
+    this.el.setAttribute('physx-body', 'type: kinematic; emitCollisionEvents: true');
 
     function rebuildWhenReady() {
       var bodyComp = self.el.components['physx-body'];

@@ -158,12 +158,12 @@
                 wrist-inventory>
         <a-entity id="leftHandBody" hand-body-collider="hand: left"></a-entity>
         <a-entity id="leftMagnet" hand-magnet-vfx="hand: left">
+          <!-- Якорь grab/joint/VFX — без коллизий с миром (захват → HandBody). -->
           <a-sphere id="leftHandCollider"
                     radius="0.01"
                     visible="false"
-                    data-physx-hidden-collider
-                    physx-body="type: kinematic; emitCollisionEvents: true"
-                    physx-material="collisionLayers: 6; collidesWithLayers: 2, 3, 4, 5, 7">
+                    physx-body="type: kinematic"
+                    physx-material="collisionLayers: 6; collidesWithLayers: 6">
           </a-sphere>
         </a-entity>
       </a-entity>
@@ -176,12 +176,12 @@
                 loop-timer>
         <a-entity id="rightHandBody" hand-body-collider="hand: right"></a-entity>
         <a-entity id="rightMagnet" hand-magnet-vfx="hand: right">
+          <!-- Якорь grab/joint/VFX — без коллизий с миром (захват → HandBody). -->
           <a-sphere id="rightHandCollider"
                     radius="0.01"
                     visible="false"
-                    data-physx-hidden-collider
-                    physx-body="type: kinematic; emitCollisionEvents: true"
-                    physx-material="collisionLayers: 6; collidesWithLayers: 2, 3, 4, 5, 7">
+                    physx-body="type: kinematic"
+                    physx-material="collisionLayers: 6; collidesWithLayers: 6">
           </a-sphere>
         </a-entity>
       </a-entity>

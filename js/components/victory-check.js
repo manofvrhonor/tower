@@ -3,9 +3,8 @@
 /**
  * victory-check — победа при полной сборке машины (все слоты сессии заняты).
  *
- * Не зависит от текущей эпохи: собрал ABCDE в Past с принесённой E — тоже победа.
- * Порядок/набор слотов задаёт rollAssemblySession (сейчас A→E; позже может быть
- * другой chain на сложности). Travel-ready по квоте эпохи — отдельно в location-manager.
+ * Не зависит от текущей эпохи: собрал всё в Past с принесённой F — тоже победа.
+ * Слоты: ось A→F + ветки C1–C3 (9). Travel-ready — location-manager + route quotas.
  */
 AFRAME.registerComponent('victory-check', {
   schema: {},

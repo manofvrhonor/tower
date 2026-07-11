@@ -24,8 +24,13 @@
     }
     currentDifficulty = id;
     if (CONFIG.balls) CONFIG.balls.count = preset.ballCount;
+    if (CONFIG.loopTimer && preset.durationSec !== undefined) {
+      CONFIG.loopTimer.durationSec = preset.durationSec;
+    }
     console.log('[game-lifecycle] difficulty:', id,
+      'route:', preset.routeId || '(none)',
       '— balls:', preset.ballCount,
+      'timer:', preset.durationSec !== undefined ? preset.durationSec : '(default)',
       'pre-assembled:', (preset.preAssembled || []).join('') || '(none)',
       'junk/loc:', preset.junkPerLocation !== undefined ? preset.junkPerLocation : preset.junkCount,
       'decoy/loc:', preset.decoyPerLocation);

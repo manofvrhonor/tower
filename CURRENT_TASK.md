@@ -8,19 +8,20 @@ alwaysApply: true
 
 # CURRENT_TASK.md — Текущая задача
 
-## Задача: PNG эпох / QA
+## Задача: Quest QA маршрутов L1–L5
 
-**Статус:** с.79 — travel/victory comics по 1 слайду ✅. Комиксами пока закончили. Дальше: PNG эпох.
+**Статус:** с.80 закрыта — Difficulty A–F + C1–C3 + routes + tip без коллизий ✅. Дальше: Quest QA.
 
 ### Working Context
 
-- Start comic ✅ (с.78). Travel/victory: `files: ['01.png']` только.
-- Финальный арт: ready_first/rebuilt, present_to_past, past_to_future, victory — `01.png`.
+- Ось A→F; ветки C1–C3 (дети C, диск XY, крутятся со спином C).
+- Routes L1–L5; spawn ≠ quota. Tip `#*HandCollider` — только якорь; захват с HandBody.
 
 ### Чек-лист
 
-1. [ ] PNG эпох 300×90 (если ещё не заменены)
-2. [ ] Quest QA jump/victory/boot/start (по желанию)
+1. [ ] Quest QA: Easy→Hardcore (без тупика; C* после C; F после E)
+2. [ ] Захват кулаком + магнит/joint ок
+3. [ ] Подкрутить radius/углы C1–C3 при необходимости
 
 ### Не трогать без запроса
 
@@ -31,3 +32,4 @@ alwaysApply: true
 - 3D-сфера + clip/mask для boot-орба (с.74).
 - Рост орба через scale entity с R>1 заранее (с.75 — только `setOrbRadius`).
 - Пауза между улётом и влётом start-карточек (с.78).
+- Ролл пулов / decoy под C* (replay v2).

@@ -41,6 +41,8 @@
 | wrist home/gear, always-open, Quest Link crash fix | 71 | reuse textures; menu ×2 VR; commit aaf467c |
 | hazardLevel balls count/speed, travel restart | 72 | hazardByLevel; Quest QA ✅ |
 | comic-slides boot/start/jump/victory, marker X | 73 | slideDurationMs; не play(); светлые stubs |
+| difficulty routes L1–L5, A–F, C1–C3 | 80 | assemblyRoutes; parent+digit; spawn≠quota |
+
 | boot-intro, boot-energy-sphere UV-orb | 74 | не 3D clip/mask; плоскость=комикс; Phase Collapse |
 | boot polish sway / UV-radius / no flash | 75 | setOrbRadius; не scale entity с R>1 заранее |
 | boot back-cards, sparks 5s, sway fade | 76 | depthWrite основной; start 90°; L↑ R↓ drift |
@@ -82,7 +84,8 @@
 | 77 | ✅ | кнопка restart boot в меню (слева от gear) |
 | 78 | ✅ | start comic: sparks → 7 кадров из пояса, cross без паузы — сцена ок |
 | 79 | ✅ | travel/victory comics по 1 слайду + финальный арт — комиксы на паузе |
-| → | — | **PNG эпох 300×90**; Quest QA по желанию |
+| 80 | ✅ | Difficulty A–F + C1–C3 + L1–L5; tip без коллизий (захват HandBody) |
+| → | — | Quest QA маршрутов L1–L5 + захват кулаком |
 
 ---
 
@@ -1723,5 +1726,31 @@
 
 ### Следующая сессия
 
-1. PNG эпох 300×90 (если ещё не заменены).
-2. Quest QA jump/victory/boot/start (по желанию).
+1. ~~PNG эпох 300×90~~ ✅.
+2. ~~Quest QA jump/victory/boot/start~~ ✅ (пользователь).
+3. Следующая задача — по запросу.
+
+---
+
+## Сессия 80 — Difficulty A–F + C1–C3 + routes L1–L5 ✅ (код)
+
+**Дата:** 2026-07-11 / 2026-07-12
+
+### Сделано
+
+- Ось **A→F** (F = `attach` как A); ветки **C1–C3** (stub-кубы, parent+digit).
+- `CONFIG.assemblyRoutes` L1–L5; `difficulties[].routeId` + `durationSec`.
+- spawn ≠ quotaStages; assert антитупик; квоты пишутся в `locations` при roll.
+- `assembly-core`: ветки — дети слота C через pivot + спин C; занятый parent не гасит C* (`ghost content` hide).
+- Диск веток в плоскости **XY** (вокруг Z цепочки).
+- Tip `#*HandCollider`: без коллизий с миром; захват `contactbegin` с **HandBody**; joint/VFX на tip.
+- ADR-26; победа = 9 слотов.
+
+### Файлы
+
+`js/config.js`, `js/init-session.js`, `js/components/assembly-core.js`, `js/spawn-floating-cubes.js`, `js/game-lifecycle.js`, `js/components/victory-check.js`, `js/components/physx-grab.js`, `js/components/hand-body-collider.js`, `index.html`, `CURRENT_TASK.md`, `PROJECT_LOG*.md`, `PROJECT_START.md`.
+
+### Следующая сессия
+
+1. Quest QA: Easy→Hardcore без тупика; C* после C; F после E; захват кулаком.
+2. Подкрутка радиуса/углов C1–C3 при необходимости.

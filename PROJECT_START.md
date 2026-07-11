@@ -39,7 +39,7 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 ## Где мы
 
 - Этапы 0–8 (MVP) ✅. Стильная игра: Фазы **0–3 ✅** (outside-scenery, floor-fog, HDR sky).
-- **Сейчас:** **Фаза 5** + boot/start comics ✅ + travel/victory по 1 слайду ✅ (с.79). **Дальше:** PNG эпох 300×90 / QA.
+- **Сейчас:** с.80 ✅ ADR-26 (L1–L5, C1–C3, tip без коллизий). **Дальше:** Quest QA маршрутов.
 - **Дальше:** [мастер-план](.cursor/plans/tower_stylish_game_c39f4c3b.plan.md) → Фаза 5 / 6.
 - Мастер-план: `.cursor/plans/tower_stylish_game_c39f4c3b.plan.md`
 - **План Фазы 4:** `.cursor/plans/phase4_locations.plan.md`
@@ -73,6 +73,7 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 | 23 | GLB vis + _COL collider | part-entity, parts[].colliderModel |
 | 24 | GLB-машина, снеп-цепочка A→E, ring_inner spin | machine-rig, assembly-core, init-session |
 | 25 | Фаза 4: эпохи, прыжок, запястье | location-manager, travel-ui, wrist-inventory |
+| 26 | Сложности L1–L5: A–F + C1–C3 parent+digit | assemblyRoutes, init-session, assembly-core |
 
 ---
 
@@ -127,6 +128,7 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 | 77 | menu restart-boot button (слева от gear) | game-menu, boot-intro, config, icon_restart |
 | 78 | start comic: waist fly + cross, 7 PNG ✅ | comic-slides, game-menu, config, start/01–07 |
 | 79 | travel/victory comics → 1 слайд + финальный арт ✅ | config sequences, comic travel/victory PNG |
+| 80 | Difficulty A–F + C1–C3 + L1–L5; tip без коллизий | assemblyRoutes, assembly-core, physx-grab |
 
 ---
 
@@ -180,7 +182,7 @@ SUPERHOT slo-mo (`timeScale`). **MVP ✅.** Сейчас: **стильная и�
 
 **Сборка / машина (Фаза 3.5B, с.57 ADR-24):**
 - ❌ Возвращать cyan `orbit-ring` как зону сборки/коллизию — заменено GLB-машиной (`machine-rig`)
-- ❌ Случайные слоты «на столе» / `sideCount` для сборки — снеп-цепочка A→E (`assemblyChain`)
+- ❌ Случайные слоты «на столе» / `sideCount` для сборки — снеп-цепочка A→F (`assemblyChain`); ветки только parent+digit (ADR-26)
 - ❌ Крутить physx-body core напрямую — whole-assembly rotation; **схема** (`#assembly-core`, не physx-body) реперентится под `#machine-ring-inner`
 - ❌ **DOM-реперент снепнутой ДЕТАЛИ под `#assembly-core`** — рушит physx-тело (`disconnectedCallback` → «table index out of bounds», деталь теряет kinematic и улетает). Co-rotation детали: kinematic + `_followSlot` (поза слота каждый кадр), с.58 ADR-24 v2
 - ❌ **Convex `_COL.glb` на `#machine-ring` / `#machine-ring-inner`** — сплошая hull-пробка, блокирует центр; не static/kinematic sync (с.59–60). **→ сегменты** (`orbit-ring`), ADR-24 с.60
