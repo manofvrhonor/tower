@@ -1334,23 +1334,23 @@ const CONFIG = {
       },
       travelPresentPast: {
         folder: 'assets/ui/comic/travel/present_to_past/',
-        files: ['01.png', '02.png', '03.png'],
+        files: ['01.png'],
       },
       travelPastFuture: {
         folder: 'assets/ui/comic/travel/past_to_future/',
-        files: ['01.png', '02.png', '03.png'],
+        files: ['01.png'],
       },
       travelReadyFirst: {
         folder: 'assets/ui/comic/travel/ready_first/',
-        files: ['01.png', '02.png'],
+        files: ['01.png'],
       },
       travelReadyRebuilt: {
         folder: 'assets/ui/comic/travel/ready_rebuilt/',
-        files: ['01.png', '02.png'],
+        files: ['01.png'],
       },
       victory: {
         folder: 'assets/ui/comic/victory/',
-        files: ['01.png', '02.png', '03.png'],
+        files: ['01.png'],
       },
     },
     travelRoutes: {

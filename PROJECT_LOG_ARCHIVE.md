@@ -81,6 +81,7 @@
 | 76 | ✅ | boot back-cards + depth/delays/sway; sparks 5с — **boot закрыт** |
 | 77 | ✅ | кнопка restart boot в меню (слева от gear) |
 | 78 | ✅ | start comic: sparks → 7 кадров из пояса, cross без паузы — сцена ок |
+| 79 | ✅ | travel/victory comics по 1 слайду + финальный арт — комиксы на паузе |
 | → | — | **PNG эпох 300×90**; Quest QA по желанию |
 
 ---
@@ -1698,6 +1699,27 @@
 ### Файлы
 
 `comic-slides.js`, `game-menu.js`, `config.js`, `assets/ui/comic/start/`, `CURRENT_TASK.md`, `PROJECT_LOG*.md`, `PROJECT_START.md`.
+
+### Следующая сессия
+
+1. PNG эпох 300×90 (если ещё не заменены).
+2. Quest QA jump/victory/boot/start (по желанию).
+
+---
+
+## Сессия 79 — travel/victory comics по 1 слайду ✅
+
+**Дата:** 2026-07-11
+
+### Сделано
+
+- `CONFIG.comic.sequences`: travelReadyFirst/Rebuilt, travelPresentPast, travelPastFuture, victory — только `01.png`.
+- Обновлён финальный арт тех же `01.png`.
+- Комиксами пока закончили.
+
+### Файлы
+
+`js/config.js`, `assets/ui/comic/travel/*/01.png`, `assets/ui/comic/victory/01.png`, `CURRENT_TASK.md`, `PROJECT_LOG*.md`, `PROJECT_START.md`.
 
 ### Следующая сессия
 

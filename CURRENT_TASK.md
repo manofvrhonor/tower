@@ -10,12 +10,12 @@ alwaysApply: true
 
 ## Задача: PNG эпох / QA
 
-**Статус:** с.78 закрыта — start comic ✅ (7 кадров, сцена ок). Дальше: PNG эпох.
+**Статус:** с.79 — travel/victory comics по 1 слайду ✅. Комиксами пока закончили. Дальше: PNG эпох.
 
 ### Working Context
 
-- Start comic ✅: sparks → 7 PNG из пояса, cross без паузы, trigger скип.
-- `CONFIG.comic.startAnim` + `sequences.start` 01–07.
+- Start comic ✅ (с.78). Travel/victory: `files: ['01.png']` только.
+- Финальный арт: ready_first/rebuilt, present_to_past, past_to_future, victory — `01.png`.
 
 ### Чек-лист
 
